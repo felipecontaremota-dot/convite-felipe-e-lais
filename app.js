@@ -23,28 +23,3 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('pageshow',()=>{last=performance.now();if(playing){cancelAnimationFrame(frame);frame=requestAnimationFrame(tick);}});
 
 pose('felipe',0);pose('lais',0);
-
-function buildWalk(id,parts){
- const ns='http://www.w3.org/2000/svg';
- const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 512 512');svg.classList.add('walk-rig');svg.setAttribute('aria-hidden','true');
- const defs=document.createElementNS(ns,'defs');svg.append(defs);
- const mask=document.createElementNS(ns,'mask');mask.id=id+'-body';mask.setAttribute('maskUnits','userSpaceOnUse');mask.innerHTML='<rect width="512" height="512" fill="white"/><rect y="240" width="512" height="272" fill="black"/>';defs.append(mask);
- function texture(){const im=document.createElementNS(ns,'image');im.setAttribute('href','assets/'+id+'.webp');im.setAttribute('width','1536');im.setAttribute('height','1024');im.setAttribute('y','-512');return im;}
- const body=texture();body.setAttribute('mask','url(#'+mask.id+')');
- const groups=[];
- parts.forEach((part,i)=>{const clip=document.createElementNS(ns,'clipPath');clip.id=id+'-part-'+i;const polygon=document.createElementNS(ns,'polygon');polygon.setAttribute('points',part.points);clip.append(polygon);defs.append(clip);const cut=polygon.cloneNode();cut.setAttribute('fill','black');mask.append(cut);const g=document.createElementNS(ns,'g');g.classList.add('limb',part.kind);g.style.transformOrigin=part.origin;const image=texture();image.setAttribute('clip-path','url(#'+clip.id+')');g.append(image);groups.push(g);});
- groups.filter((g,i)=>parts[i].behind).forEach(g=>svg.append(g));svg.append(body);groups.filter((g,i)=>!parts[i].behind).forEach(g=>svg.append(g));$(id).append(svg);
-}
-buildWalk('felipe',[
- {kind:'leg-back',origin:'275px 260px',points:'257,235 295,257 269,320 230,400 226,438 238,463 212,486 140,475 140,440 191,352 234,290',behind:true},
- {kind:'leg-front',origin:'285px 250px',points:'277,237 312,236 332,308 369,379 413,425 457,427 462,477 365,497 327,428 283,362 248,299'},
- {kind:'arm-back',origin:'224px 146px',points:'190,180 237,185 222,235 220,276 210,312 174,310 171,270 181,218',behind:true},
- {kind:'arm-front',origin:'327px 152px',points:'321,178 350,167 380,204 423,235 441,260 420,278 384,256 346,228 325,210'}
-]);
-buildWalk('lais',[
- {kind:'hair-sway',origin:'331px 62px',points:'323,33 352,40 345,83 319,134 298,182 262,214 244,193 260,139 285,93',behind:true},
- {kind:'leg-back',origin:'362px 247px',points:'335,233 376,251 355,306 320,365 292,427 289,452 309,472 292,497 230,492 235,451 273,374 307,293',behind:true},
- {kind:'leg-front',origin:'375px 247px',points:'367,230 400,242 411,306 456,389 489,433 529,438 542,477 457,497 423,445 382,371 339,295'},
- {kind:'arm-back',origin:'337px 154px',points:'306,183 340,194 326,234 319,276 306,310 275,305 281,258 292,215',behind:true},
- {kind:'arm-front',origin:'412px 162px',points:'397,180 430,182 450,216 479,237 502,261 484,280 457,263 424,235 403,218'}
-]);
