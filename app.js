@@ -28,7 +28,7 @@ function buildWalk(id,parts){
  const ns='http://www.w3.org/2000/svg';
  const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 512 512');svg.classList.add('walk-rig');svg.setAttribute('aria-hidden','true');
  const defs=document.createElementNS(ns,'defs');svg.append(defs);
- const mask=document.createElementNS(ns,'mask');mask.id=id+'-body';mask.setAttribute('maskUnits','userSpaceOnUse');mask.innerHTML='<rect width="512" height="512" fill="white"/>';defs.append(mask);
+ const mask=document.createElementNS(ns,'mask');mask.id=id+'-body';mask.setAttribute('maskUnits','userSpaceOnUse');mask.innerHTML='<rect width="512" height="512" fill="white"/><rect y="240" width="512" height="272" fill="black"/>';defs.append(mask);
  function texture(){const im=document.createElementNS(ns,'image');im.setAttribute('href','assets/'+id+'.webp');im.setAttribute('width','1536');im.setAttribute('height','1024');im.setAttribute('y','-512');return im;}
  const body=texture();body.setAttribute('mask','url(#'+mask.id+')');
  const groups=[];
