@@ -5,12 +5,11 @@ const FELIPE_POSES = { idle: 0, map: 1, point: 2, unsure: 3 };
 const LAIS_POSES = { idle: 0, amused: 2, map: 3, confident: 5 };
 const EMPTY_STATE = {
   action: 'still', dialogue: null, narration: '', notification: '',
-  phase: null, sign: false, mapHolder: '',
+  phase: null, counter: '', sign: false, mapHolder: '',
   felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle,
   felipeWalking: false, laisWalking: false
 };
 
-// Add scene-04 here later: give it a duration, an initial state and timed state patches.
 const scenes = [
   {
     id: 'intro', duration: 3000,
@@ -51,6 +50,25 @@ const scenes = [
       { at: 15800, state: { dialogue: ['Laís', 'Pronto. Agora chegamos.'], mapHolder: 'lais', laisPose: LAIS_POSES.map } },
       { at: 17000, state: { action: 'exit', dialogue: null, felipeWalking: true, laisWalking: true, laisPose: LAIS_POSES.confident } }
     ]
+  },
+  {
+    id: 'phases', duration: 17000,
+    state: { action: 'phase-02-card', phase: ['FASE 02', ''] },
+    events: [
+      { at: 700, state: { action: 'help-lais', phase: null, felipePose: FELIPE_POSES.point, laisPose: LAIS_POSES.amused } },
+      { at: 2800, state: { action: 'phase-03-card', phase: ['FASE 03', ''], felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle } },
+      { at: 3500, state: { action: 'help-felipe', phase: null, felipePose: FELIPE_POSES.unsure, laisPose: LAIS_POSES.confident } },
+      { at: 5500, state: { action: 'phase-04-card', phase: ['FASE 04', ''], felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle } },
+      { at: 6200, state: { action: 'lost-left', phase: null, sign: true, mapHolder: 'felipe', felipePose: FELIPE_POSES.map, laisPose: LAIS_POSES.confident } },
+      { at: 7000, state: { action: 'lost-right', felipePose: FELIPE_POSES.unsure, laisPose: LAIS_POSES.map } },
+      { at: 8000, state: { action: 'rest', sign: false, mapHolder: '', felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle } },
+      { at: 10100, state: { notification: { icon: '❤', title: 'CONQUISTA DESBLOQUEADA', subtitle: 'PARCERIA' } } },
+      { at: 11300, state: { notification: '', dialogue: ['Felipe', 'Até que a gente funciona bem em equipe.'] } },
+      { at: 13100, state: { dialogue: ['Laís', 'Quando você não está com o mapa.'], laisPose: LAIS_POSES.amused } },
+      { at: 14200, state: { dialogue: ['Felipe', 'Aquilo aconteceu uma vez.'], felipePose: FELIPE_POSES.unsure } },
+      { at: 15100, state: { action: 'counter-look', dialogue: null, counter: 'CONTADOR DE VEZES: 17', laisPose: LAIS_POSES.confident } },
+      { at: 16100, state: { action: 'rest', counter: '', dialogue: ['Felipe', '…mais ou menos.'], laisPose: LAIS_POSES.amused } }
+    ]
   }
 ];
 
@@ -60,6 +78,7 @@ const duration = offset;
 const dom = {
   scene: $('scene'), speech: $('speech'), speaker: $('speaker'), line: $('line'),
   narration: $('narration'), notification: $('notification'), notificationText: $('notification-text'),
+  notificationIcon: $('notification-icon'), notificationSubtitle: $('notification-subtitle'), counter: $('game-counter'),
   phase: $('phase-card'), phaseTitle: $('phase-title'), phaseSubtitle: $('phase-subtitle'),
   sign: $('direction-sign'), felipe: $('felipe'), lais: $('lais'),
   progress: $('progress'), progressbar: document.querySelector('.progress'), clock: $('clock'),
@@ -109,10 +128,18 @@ function applyState(scene, state) {
   }
   dom.narration.textContent = state.narration;
   setVisible(dom.narration, Boolean(state.narration));
-  dom.notificationText.textContent = state.notification;
+  const notification = typeof state.notification === 'string'
+    ? { icon: '✦', title: state.notification, subtitle: '' }
+    : state.notification;
+  dom.notificationIcon.textContent = notification?.icon || '✦';
+  dom.notificationText.textContent = notification?.title || '';
+  dom.notificationSubtitle.textContent = notification?.subtitle || '';
+  setVisible(dom.notificationSubtitle, Boolean(notification?.subtitle));
   setVisible(dom.notification, Boolean(state.notification));
   setVisible(dom.phase, Boolean(state.phase));
   if (state.phase) [dom.phaseTitle.textContent, dom.phaseSubtitle.textContent] = state.phase;
+  dom.counter.textContent = state.counter;
+  setVisible(dom.counter, Boolean(state.counter));
   dom.sign.hidden = !state.sign;
 }
 function render() {
@@ -162,6 +189,7 @@ function resetTimeline() {
   elapsed = 0; renderedKey = ''; noteIndex = 0; noteAt = 0;
   dom.ending.hidden = true; dom.speech.hidden = true; dom.narration.hidden = true;
   dom.notification.hidden = true; dom.phase.hidden = true; dom.sign.hidden = true;
+  dom.counter.hidden = true;
   dom.scene.className = 'scene scene-idle'; dom.scene.dataset.scene = 'idle';
   dom.progress.style.width = '0'; dom.progressbar.setAttribute('aria-valuenow', '0');
 }
