@@ -53,6 +53,8 @@ assert.deepEqual(Array.from(at(4200).phase), ['DIA SEGUINTE', '05/09']);
 assert.equal(at(5200).notification.subtitle, 'PARQUE DA CERVEJA');
 assert.equal(at(6500).action, 'proposal-park');
 assert.equal(at(7600).action, 'proposal-secret-plan');
+assert.equal(at(7600).felipeWalking, false);
+assert.equal(at(7600).laisWalking, false);
 assert.equal(at(8500).indicator, 'SUSPEITA DA LAÍS: 0%');
 assert.equal(at(9400).indicator, 'NÍVEL DE NERVOSISMO: 97%');
 assert.deepEqual(Array.from(at(10300).dialogue), ['Laís', 'Tá tudo bem?']);
@@ -77,9 +79,22 @@ assert.equal(at(29300).notification.title, 'CONTINUA…');
 applyState(proposal, at(16200));
 assert.equal(dom.bouquet.hidden, false);
 assert.equal(dom.assistant.hidden, false);
+assert.equal(dom.felipe.classList.contains('needs-felipe-nervous-sprite'), false);
+assert.equal(dom.felipe.classList.contains('needs-lais-back-sprite'), false);
+assert.equal(dom.lais.classList.contains('needs-lais-back-sprite'), true);
+assert.equal(dom.cast.classList.contains('needs-lais-back-sprite'), false);
+applyState(proposal, at(7600));
+assert.equal(dom.felipe.classList.contains('needs-felipe-nervous-sprite'), true);
+assert.equal(dom.lais.classList.contains('needs-felipe-nervous-sprite'), false);
+assert.equal(dom.cast.classList.contains('needs-felipe-nervous-sprite'), false);
 applyState(proposal, at(25300));
 assert.equal(dom.bouquet.hidden, true);
 assert.equal(dom.assistant.hidden, true);
+assert.equal(dom.lais.classList.contains('needs-couple-kiss-sprite'), false);
+assert.equal(dom.cast.classList.contains('needs-couple-kiss-sprite'), true);
+applyState(proposal, at(26400));
+assert.equal(dom.cast.classList.contains('needs-couple-kiss-sprite'), false);
+assert.equal(dom.cast.classList.contains('needs-couple-dance-sprite'), true);
 start();
 pause();
 assert.equal(dom.scene.classList.contains('paused'), true);
@@ -87,6 +102,9 @@ pause();
 assert.equal(dom.scene.classList.contains('paused'), false);
 applyState(proposal, at(21000));
 resetTimeline();
+for (const actor of [dom.felipe, dom.lais, dom.cast]) {
+  assert.deepEqual([...actor.classList].filter(name => name.startsWith('needs-')), []);
+}
 for (const item of [dom.musicCue, dom.processing, dom.videomaker, dom.violinist, dom.assistant, dom.bouquet, dom.ring]) {
   assert.equal(item.hidden, true);
 }
