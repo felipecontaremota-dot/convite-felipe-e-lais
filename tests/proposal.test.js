@@ -40,12 +40,12 @@ const source = fs.readFileSync('app.js', 'utf8') +
 vm.runInContext(source, context);
 
 const { scenes, duration, weddingDetails, sceneState, applyState, resetTimeline, start, pause, dom } = context.__story;
-assert.deepEqual(Array.from(scenes, scene => scene.id), ['intro', 'meeting', 'duo', 'phases', 'proposal', 'invitation', 'gifts']);
-assert.deepEqual(Array.from(scenes.slice(0, 6), scene => scene.duration), [3000, 21000, 18000, 17000, 30000, 20000]);
-assert.equal(scenes.at(-1).duration, 30000);
-assert.equal(duration, 139000);
+assert.deepEqual(Array.from(scenes, scene => scene.id), ['intro', 'meeting', 'duo', 'phases', 'proposal', 'invitation', 'gifts', 'lais-control']);
+assert.deepEqual(Array.from(scenes.slice(0, 7), scene => scene.duration), [3000, 21000, 18000, 17000, 30000, 20000, 30000]);
+assert.equal(scenes.at(-1).duration, 18000);
+assert.equal(duration, 157000);
 
-const proposal = scenes.at(-3);
+const proposal = scenes.find(scene => scene.id === 'proposal');
 const at = milliseconds => sceneState(proposal, milliseconds);
 assert.equal(at(0).action, 'proposal-trip');
 assert.deepEqual(Array.from(at(1300).phase), ['SEXTA-FEIRA', '04/09']);
@@ -112,7 +112,7 @@ for (const item of [dom.musicCue, dom.processing, dom.videomaker, dom.violinist,
 }
 assert.equal(dom.scene.dataset.scene, 'idle');
 
-const invitation = scenes.at(-2);
+const invitation = scenes.find(scene => scene.id === 'invitation');
 const invitationAt = milliseconds => sceneState(invitation, milliseconds);
 assert.equal(invitation.start, 89000);
 assert.equal(invitationAt(0).action, 'invitation-map');
@@ -146,7 +146,7 @@ assert.equal(dom.invitationMap.hidden, true);
 assert.equal(dom.weddingCard.hidden, true);
 assert.equal(dom.lais.hidden, false);
 
-const gifts = scenes.at(-1);
+const gifts = scenes.find(scene => scene.id === 'gifts');
 const giftsAt = milliseconds => sceneState(gifts, milliseconds);
 assert.equal(gifts.start, 109000);
 assert.equal(giftsAt(0).action, 'gifts-check-exit');
@@ -174,7 +174,8 @@ assert.equal(giftsAt(25900).gift, null);
 assert.deepEqual(Array.from(giftsAt(27000).dialogue), ['Laís', 'Oi.']);
 assert.deepEqual(Array.from(giftsAt(27800).dialogue), ['Felipe', 'Eu estava explicando que não precisa de presente.']);
 assert.deepEqual(Array.from(giftsAt(29000).dialogue), ['Laís', 'Claro.']);
-assert.equal(giftsAt(29700).notification.title, 'CONTINUA…');
+assert.deepEqual(Array.from(giftsAt(29700).dialogue), ['Laís', 'Claro.']);
+assert.equal(giftsAt(29700).notification, '');
 
 applyState(gifts, giftsAt(7200));
 assert.equal(dom.giftDisplay.hidden, false);
@@ -199,4 +200,47 @@ assert.equal(dom.giftDisplay.innerHTML, '');
 assert.equal(dom.giftDisplay.className, 'gift-display');
 assert.equal(dom.lais.hidden, false);
 
-console.log('Cenas 5, 6 e 7: timeline, presentes, pause/continue e replay validados.');
+const control = scenes.find(scene => scene.id === 'lais-control');
+const controlAt = milliseconds => sceneState(control, milliseconds);
+assert.equal(control.start, 139000);
+assert.equal(controlAt(0).action, 'lais-control-caught');
+assert.equal(controlAt(0).felipeVisible, true);
+assert.equal(controlAt(0).laisVisible, true);
+assert.equal(controlAt(0).gift, null);
+assert.equal(controlAt(1000).action, 'lais-control-approach');
+assert.equal(controlAt(1000).futurePoses.includes('needs-lais-grab-collar-sprite'), true);
+assert.equal(controlAt(1000).futurePoses.includes('needs-felipe-dragged-sprite'), true);
+assert.equal(controlAt(2200).action, 'lais-control-drag');
+assert.deepEqual(Array.from(controlAt(3000).dialogue), ['Felipe', 'A passagem pode ser econômica!']);
+assert.equal(controlAt(5000).action, 'lais-control-return');
+assert.equal(controlAt(5000).felipeVisible, false);
+assert.equal(controlAt(5000).laisVisible, true);
+assert.equal(controlAt(6500).action, 'lais-control-fix-hair');
+assert.equal(controlAt(6500).futurePoses.includes('needs-lais-fix-hair-sprite'), true);
+assert.deepEqual(Array.from(controlAt(7600).dialogue), ['Laís', 'Hehehe…']);
+assert.deepEqual(Array.from(controlAt(9000).dialogue), ['Laís', 'Ignora ele, tá?']);
+assert.deepEqual(Array.from(controlAt(10800).dialogue), ['Laís', 'Não precisa de presente.']);
+assert.deepEqual(Array.from(controlAt(12800).dialogue), ['Laís', 'A gente só quer você lá com a gente.']);
+assert.equal(controlAt(14700).action, 'lais-control-point-down');
+assert.equal(controlAt(14700).futurePoses.includes('needs-lais-point-down-sprite'), true);
+assert.deepEqual(Array.from(controlAt(15300).dialogue), ['Laís', 'Só não esquece de confirmar a presença!']);
+assert.equal(controlAt(15300).ctaCue, true);
+assert.equal(controlAt(17400).notification.title, 'CONTINUA…');
+applyState(control, controlAt(3000));
+assert.equal(dom.felipe.hidden, false);
+assert.equal(dom.felipe.classList.contains('needs-felipe-dragged-sprite'), true);
+applyState(control, controlAt(5000));
+assert.equal(dom.felipe.hidden, true);
+assert.equal(dom.lais.hidden, false);
+applyState(control, controlAt(15300));
+assert.equal(dom.ctaCue.hidden, false);
+assert.equal(dom.giftDisplay.hidden, true);
+resetTimeline();
+assert.equal(dom.felipe.hidden, false);
+assert.equal(dom.lais.hidden, false);
+assert.equal(dom.ctaCue.hidden, true);
+for (const actor of [dom.felipe, dom.lais, dom.cast]) {
+  assert.deepEqual([...actor.classList].filter(name => name.startsWith('needs-')), []);
+}
+
+console.log('Cenas 5 a 8: timeline, presentes, controle da Laís, pause/continue e replay validados.');

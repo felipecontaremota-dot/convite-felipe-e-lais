@@ -15,7 +15,8 @@ const EMPTY_STATE = {
   assistant: false, bouquet: false, ring: false, futurePoses: [],
   felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle,
   felipeWalking: false, laisWalking: false, invitationMap: false,
-  weddingCard: false, laisVisible: true, gift: null
+  weddingCard: false, felipeVisible: true, laisVisible: true, gift: null,
+  ctaCue: false
 };
 
 const scenes = [
@@ -157,8 +158,30 @@ const scenes = [
       { at: 25900, state: { action: 'gifts-caught', gift: null, dialogue: ['Felipe', '…oi, amor.'], felipePose: FELIPE_POSES.unsure, futurePoses: ['needs-felipe-embarrassed-sprite', 'needs-lais-arms-crossed-sprite'] } },
       { at: 27000, state: { dialogue: ['Laís', 'Oi.'] } },
       { at: 27800, state: { dialogue: ['Felipe', 'Eu estava explicando que não precisa de presente.'] } },
-      { at: 29000, state: { dialogue: ['Laís', 'Claro.'] } },
-      { at: 29700, state: { dialogue: null, notification: { icon: '✦', title: 'CONTINUA…', subtitle: '' } } }
+      { at: 29000, state: { dialogue: ['Laís', 'Claro.'] } }
+    ]
+  },
+  {
+    id: 'lais-control', duration: 18000,
+    state: {
+      action: 'lais-control-caught', gift: null,
+      felipeVisible: true, laisVisible: true,
+      felipePose: FELIPE_POSES.unsure, laisPose: LAIS_POSES.confident,
+      futurePoses: ['needs-lais-arms-crossed-sprite', 'needs-felipe-embarrassed-sprite']
+    },
+    events: [
+      { at: 1000, state: { action: 'lais-control-approach', futurePoses: ['needs-lais-grab-collar-sprite', 'needs-felipe-dragged-sprite'] } },
+      { at: 2200, state: { action: 'lais-control-drag' } },
+      { at: 3000, state: { dialogue: ['Felipe', 'A passagem pode ser econômica!'] } },
+      { at: 5000, state: { action: 'lais-control-return', dialogue: null, felipeVisible: false, futurePoses: [] } },
+      { at: 6500, state: { action: 'lais-control-fix-hair', futurePoses: ['needs-lais-fix-hair-sprite'] } },
+      { at: 7600, state: { action: 'lais-control-address-guest', dialogue: ['Laís', 'Hehehe…'], futurePoses: [] } },
+      { at: 9000, state: { dialogue: ['Laís', 'Ignora ele, tá?'] } },
+      { at: 10800, state: { dialogue: ['Laís', 'Não precisa de presente.'] } },
+      { at: 12800, state: { dialogue: ['Laís', 'A gente só quer você lá com a gente.'] } },
+      { at: 14700, state: { action: 'lais-control-point-down', dialogue: null, futurePoses: ['needs-lais-point-down-sprite'] } },
+      { at: 15300, state: { dialogue: ['Laís', 'Só não esquece de confirmar a presença!'], ctaCue: true } },
+      { at: 17400, state: { dialogue: null, notification: { icon: '✦', title: 'CONTINUA…', subtitle: '' } } }
     ]
   }
 ];
@@ -174,6 +197,7 @@ const dom = {
   videomaker: $('proposal-videomaker'), violinist: $('proposal-violinist'),
   assistant: $('proposal-assistant'), bouquet: $('proposal-bouquet'), ring: $('proposal-ring'),
   invitationMap: $('invitation-map'), weddingCard: $('wedding-card'), giftDisplay: $('gift-display'),
+  ctaCue: $('cta-cue'),
   phase: $('phase-card'), phaseTitle: $('phase-title'), phaseSubtitle: $('phase-subtitle'),
   sign: $('direction-sign'), cast: $('cast'), felipe: $('felipe'), lais: $('lais'),
   progress: $('progress'), progressbar: document.querySelector('.progress'), clock: $('clock'),
@@ -234,6 +258,7 @@ function applyState(scene, state) {
   });
   pose(dom.felipe, state.felipePose);
   pose(dom.lais, state.laisPose);
+  setVisible(dom.felipe, state.felipeVisible);
   setVisible(dom.lais, state.laisVisible);
 
   setVisible(dom.speech, Boolean(state.dialogue));
@@ -271,6 +296,7 @@ function applyState(scene, state) {
   dom.giftDisplay.innerHTML = state.gift ? `${giftMarkup[state.gift.type]}<small>${state.gift.label}</small>` : '';
   dom.giftDisplay.className = state.gift ? `gift-display gift-${state.gift.type}-display` : 'gift-display';
   setVisible(dom.giftDisplay, Boolean(state.gift));
+  setVisible(dom.ctaCue, state.ctaCue);
   dom.sign.hidden = !state.sign;
 }
 function render() {
@@ -326,9 +352,9 @@ function resetTimeline() {
   dom.ending.hidden = true; dom.speech.hidden = true; dom.narration.hidden = true;
   dom.notification.hidden = true; dom.phase.hidden = true; dom.sign.hidden = true;
   dom.counter.hidden = true;
-  [dom.musicCue, dom.processing, dom.videomaker, dom.violinist, dom.assistant, dom.bouquet, dom.ring, dom.invitationMap, dom.weddingCard, dom.giftDisplay].forEach(element => { element.hidden = true; });
+  [dom.musicCue, dom.processing, dom.videomaker, dom.violinist, dom.assistant, dom.bouquet, dom.ring, dom.invitationMap, dom.weddingCard, dom.giftDisplay, dom.ctaCue].forEach(element => { element.hidden = true; });
   dom.giftDisplay.innerHTML = ''; dom.giftDisplay.className = 'gift-display';
-  dom.lais.hidden = false;
+  dom.felipe.hidden = false; dom.lais.hidden = false;
   dom.scene.className = 'scene scene-idle'; dom.scene.dataset.scene = 'idle';
   dom.progress.style.width = '0'; dom.progressbar.setAttribute('aria-valuenow', '0');
 }
