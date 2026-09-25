@@ -40,12 +40,12 @@ const source = fs.readFileSync('app.js', 'utf8') +
 vm.runInContext(source, context);
 
 const { scenes, duration, weddingDetails, sceneState, applyState, resetTimeline, start, pause, dom } = context.__story;
-assert.deepEqual(Array.from(scenes, scene => scene.id), ['intro', 'meeting', 'duo', 'phases', 'proposal', 'invitation']);
-assert.deepEqual(Array.from(scenes.slice(0, 5), scene => scene.duration), [3000, 21000, 18000, 17000, 30000]);
-assert.equal(scenes.at(-1).duration, 20000);
-assert.equal(duration, 109000);
+assert.deepEqual(Array.from(scenes, scene => scene.id), ['intro', 'meeting', 'duo', 'phases', 'proposal', 'invitation', 'gifts']);
+assert.deepEqual(Array.from(scenes.slice(0, 6), scene => scene.duration), [3000, 21000, 18000, 17000, 30000, 20000]);
+assert.equal(scenes.at(-1).duration, 30000);
+assert.equal(duration, 139000);
 
-const proposal = scenes.at(-2);
+const proposal = scenes.at(-3);
 const at = milliseconds => sceneState(proposal, milliseconds);
 assert.equal(at(0).action, 'proposal-trip');
 assert.deepEqual(Array.from(at(1300).phase), ['SEXTA-FEIRA', '04/09']);
@@ -112,7 +112,7 @@ for (const item of [dom.musicCue, dom.processing, dom.videomaker, dom.violinist,
 }
 assert.equal(dom.scene.dataset.scene, 'idle');
 
-const invitation = scenes.at(-1);
+const invitation = scenes.at(-2);
 const invitationAt = milliseconds => sceneState(invitation, milliseconds);
 assert.equal(invitation.start, 89000);
 assert.equal(invitationAt(0).action, 'invitation-map');
@@ -135,7 +135,7 @@ assert.equal(invitationAt(16300).action, 'invitation-lais-exit');
 assert.equal(invitationAt(16300).laisWalking, true);
 assert.equal(invitationAt(18000).action, 'invitation-felipe-alone');
 assert.equal(invitationAt(18000).laisVisible, false);
-assert.equal(invitationAt(19500).notification.title, 'CONTINUA…');
+assert.equal(invitationAt(19500).notification, '');
 applyState(invitation, invitationAt(6500));
 assert.equal(dom.speech.dataset.who, 'together');
 assert.equal(dom.speaker.textContent, 'Felipe & Laís');
@@ -146,4 +146,57 @@ assert.equal(dom.invitationMap.hidden, true);
 assert.equal(dom.weddingCard.hidden, true);
 assert.equal(dom.lais.hidden, false);
 
-console.log('Cenas 5 e 6: timeline, conteúdo, pause/continue e replay validados.');
+const gifts = scenes.at(-1);
+const giftsAt = milliseconds => sceneState(gifts, milliseconds);
+assert.equal(gifts.start, 109000);
+assert.equal(giftsAt(0).action, 'gifts-check-exit');
+assert.equal(giftsAt(0).laisVisible, false);
+assert.deepEqual(Array.from(giftsAt(1200).dialogue), ['Felipe', 'Agora que ela saiu…']);
+assert.deepEqual(Array.from(giftsAt(2900).dialogue), ['Felipe', '…vamos falar de um assunto importante.']);
+assert.equal(giftsAt(4500).notification.title, 'PRESENTES');
+assert.deepEqual(Array.from(giftsAt(5700).dialogue), ['Felipe', 'Nada exagerado.']);
+assert.equal(giftsAt(7200).gift.type, 'horse');
+assert.equal(giftsAt(8300).gift.type, 'truck');
+assert.deepEqual(Array.from(giftsAt(8300).dialogue), ['Felipe', 'Esse tipo de cavalinho.']);
+assert.equal(giftsAt(10100).gift.type, 'pharmacy');
+assert.equal(giftsAt(12300).gift.type, 'cattle');
+assert.equal(giftsAt(13700).action, 'gifts-cow-charge');
+assert.deepEqual(Array.from(giftsAt(15100).dialogue), ['Felipe', '…pode ser dez.']);
+assert.equal(giftsAt(16800).gift.type, 'beach-apartment');
+assert.equal(giftsAt(19000).gift.type, 'lottery');
+assert.deepEqual(Array.from(giftsAt(21100).dialogue), ['Felipe', 'Antes do sorteio.']);
+assert.equal(giftsAt(22600).gift.type, 'eurotrip');
+assert.equal(giftsAt(24400).action, 'gifts-lais-return');
+assert.equal(giftsAt(24400).laisVisible, true);
+assert.deepEqual(Array.from(giftsAt(24400).dialogue), ['Felipe', '…com tudo pago.']);
+assert.deepEqual(Array.from(giftsAt(25900).dialogue), ['Felipe', '…oi, amor.']);
+assert.equal(giftsAt(25900).gift, null);
+assert.deepEqual(Array.from(giftsAt(27000).dialogue), ['Laís', 'Oi.']);
+assert.deepEqual(Array.from(giftsAt(27800).dialogue), ['Felipe', 'Eu estava explicando que não precisa de presente.']);
+assert.deepEqual(Array.from(giftsAt(29000).dialogue), ['Laís', 'Claro.']);
+assert.equal(giftsAt(29700).notification.title, 'CONTINUA…');
+
+applyState(gifts, giftsAt(7200));
+assert.equal(dom.giftDisplay.hidden, false);
+assert.match(dom.giftDisplay.innerHTML, /gift-horse/);
+assert.doesNotMatch(dom.giftDisplay.innerHTML, /gift-truck/);
+applyState(gifts, giftsAt(8300));
+assert.match(dom.giftDisplay.innerHTML, /gift-truck/);
+assert.doesNotMatch(dom.giftDisplay.innerHTML, /gift-horse/);
+applyState(gifts, giftsAt(13700));
+assert.match(dom.giftDisplay.innerHTML, /gift-cow-charge/);
+assert.equal(dom.felipe.classList.contains('needs-felipe-cow-scared-sprite'), true);
+applyState(gifts, giftsAt(24400));
+assert.equal(dom.lais.hidden, false);
+assert.equal(dom.lais.classList.contains('needs-lais-arms-crossed-sprite'), true);
+applyState(gifts, giftsAt(25900));
+assert.equal(dom.giftDisplay.hidden, true);
+assert.equal(dom.giftDisplay.innerHTML, '');
+assert.equal(dom.felipe.classList.contains('needs-felipe-embarrassed-sprite'), true);
+resetTimeline();
+assert.equal(dom.giftDisplay.hidden, true);
+assert.equal(dom.giftDisplay.innerHTML, '');
+assert.equal(dom.giftDisplay.className, 'gift-display');
+assert.equal(dom.lais.hidden, false);
+
+console.log('Cenas 5, 6 e 7: timeline, presentes, pause/continue e replay validados.');
