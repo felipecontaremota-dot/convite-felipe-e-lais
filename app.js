@@ -147,6 +147,7 @@ async function enableAudio() {
 }
 function finish() {
   playing = false; cancelAnimationFrame(frame); stopNotes();
+  dom.scene.classList.add('paused');
   dom.speech.hidden = true; dom.ending.hidden = false; dom.pause.disabled = true;
 }
 function tick(now) {
@@ -161,7 +162,7 @@ function resetTimeline() {
   elapsed = 0; renderedKey = ''; noteIndex = 0; noteAt = 0;
   dom.ending.hidden = true; dom.speech.hidden = true; dom.narration.hidden = true;
   dom.notification.hidden = true; dom.phase.hidden = true; dom.sign.hidden = true;
-  dom.scene.className = 'scene scene-intro action-reveal';
+  dom.scene.className = 'scene scene-idle'; dom.scene.dataset.scene = 'idle';
   dom.progress.style.width = '0'; dom.progressbar.setAttribute('aria-valuenow', '0');
 }
 function start() {
@@ -169,6 +170,7 @@ function start() {
   if (music) void enableAudio();
   playing = true; dom.cover.hidden = true; dom.pause.disabled = false;
   dom.pause.innerHTML = 'Ⅱ <span>Pausar</span>'; dom.pause.setAttribute('aria-label', 'Pausar animação');
+  void dom.scene.offsetWidth;
   render(); last = performance.now(); frame = requestAnimationFrame(tick);
 }
 function pause() {
