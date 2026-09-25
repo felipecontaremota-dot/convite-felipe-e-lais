@@ -3,13 +3,19 @@
 const $ = id => document.getElementById(id);
 const FELIPE_POSES = { idle: 0, map: 1, point: 2, unsure: 3 };
 const LAIS_POSES = { idle: 0, amused: 2, map: 3, confident: 5 };
+const weddingDetails = {
+  date: 'A DEFINIR',
+  time: 'A DEFINIR',
+  location: 'A DEFINIR'
+};
 const EMPTY_STATE = {
   action: 'still', dialogue: null, narration: '', notification: '',
   phase: null, counter: '', indicator: '', musicCue: '', processing: false,
   sign: false, mapHolder: '', videomaker: false, violinist: false,
   assistant: false, bouquet: false, ring: false, futurePoses: [],
   felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle,
-  felipeWalking: false, laisWalking: false
+  felipeWalking: false, laisWalking: false, invitationMap: false,
+  weddingCard: false, laisVisible: true
 };
 
 const scenes = [
@@ -104,8 +110,27 @@ const scenes = [
       { at: 24200, state: { action: 'proposal-ring', notification: '', ring: true, futurePoses: ['needs-lais-hand-sprite', 'needs-felipe-kneel-ring-sprite'] } },
       { at: 25300, state: { action: 'proposal-kiss', ring: false, bouquet: false, futurePoses: ['needs-couple-kiss-sprite'] } },
       { at: 26400, state: { action: 'proposal-drone', narration: 'E foi assim que uma viagem virou o começo da nossa próxima fase.', futurePoses: ['needs-couple-dance-sprite'] } },
-      { at: 28200, state: { narration: '', phase: ['PRÓXIMA FASE', '❤️ O CASAMENTO'] } },
-      { at: 29300, state: { phase: null, notification: { icon: '✦', title: 'CONTINUA…', subtitle: '' } } }
+      { at: 28200, state: { narration: '', phase: ['PRÓXIMA FASE', '❤️ O CASAMENTO'] } }
+    ]
+  },
+  {
+    id: 'invitation', duration: 20000,
+    state: {
+      action: 'invitation-map', invitationMap: true,
+      felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle
+    },
+    events: [
+      { at: 1800, state: { notification: { icon: '❤', title: 'NOVA FASE DESBLOQUEADA', subtitle: 'O CASAMENTO' } } },
+      { at: 3300, state: { action: 'invitation-together', invitationMap: false, notification: '', dialogue: ['Felipe', 'Mas essa fase tem uma diferença.'] } },
+      { at: 5200, state: { dialogue: ['Laís', 'Dessa vez…'] } },
+      { at: 6500, state: { dialogue: { speakers: ['Felipe', 'Laís'], line: '…a gente quer você com a gente!' } } },
+      { at: 8200, state: { dialogue: null, weddingCard: true } },
+      { at: 12000, state: { weddingCard: false, dialogue: ['Laís', 'Vou terminar umas coisas.'] } },
+      { at: 13600, state: { dialogue: ['Laís', 'Se comporta.'], laisPose: LAIS_POSES.amused } },
+      { at: 15000, state: { dialogue: ['Felipe', 'Pode deixar.'], felipePose: FELIPE_POSES.unsure } },
+      { at: 16300, state: { action: 'invitation-lais-exit', dialogue: null, laisWalking: true } },
+      { at: 18000, state: { action: 'invitation-felipe-alone', laisWalking: false, laisVisible: false } },
+      { at: 19500, state: { notification: { icon: '✦', title: 'CONTINUA…', subtitle: '' } } }
     ]
   }
 ];
@@ -120,6 +145,7 @@ const dom = {
   musicCue: $('proposal-music-cue'), processing: $('proposal-processing'),
   videomaker: $('proposal-videomaker'), violinist: $('proposal-violinist'),
   assistant: $('proposal-assistant'), bouquet: $('proposal-bouquet'), ring: $('proposal-ring'),
+  invitationMap: $('invitation-map'), weddingCard: $('wedding-card'),
   phase: $('phase-card'), phaseTitle: $('phase-title'), phaseSubtitle: $('phase-subtitle'),
   sign: $('direction-sign'), cast: $('cast'), felipe: $('felipe'), lais: $('lais'),
   progress: $('progress'), progressbar: document.querySelector('.progress'), clock: $('clock'),
@@ -171,12 +197,15 @@ function applyState(scene, state) {
   });
   pose(dom.felipe, state.felipePose);
   pose(dom.lais, state.laisPose);
+  setVisible(dom.lais, state.laisVisible);
 
   setVisible(dom.speech, Boolean(state.dialogue));
   if (state.dialogue) {
-    dom.speaker.textContent = state.dialogue[0];
-    dom.line.textContent = state.dialogue[1];
-    dom.speech.dataset.who = state.dialogue[0];
+    const joint = !Array.isArray(state.dialogue);
+    const speaker = joint ? state.dialogue.speakers.join(' & ') : state.dialogue[0];
+    dom.speaker.textContent = speaker;
+    dom.line.textContent = joint ? state.dialogue.line : state.dialogue[1];
+    dom.speech.dataset.who = joint ? 'together' : speaker;
   }
   dom.narration.textContent = state.narration;
   setVisible(dom.narration, Boolean(state.narration));
@@ -200,6 +229,8 @@ function applyState(scene, state) {
   setVisible(dom.assistant, state.assistant);
   setVisible(dom.bouquet, state.bouquet);
   setVisible(dom.ring, state.ring);
+  setVisible(dom.invitationMap, state.invitationMap);
+  setVisible(dom.weddingCard, state.weddingCard);
   dom.sign.hidden = !state.sign;
 }
 function render() {
@@ -255,7 +286,8 @@ function resetTimeline() {
   dom.ending.hidden = true; dom.speech.hidden = true; dom.narration.hidden = true;
   dom.notification.hidden = true; dom.phase.hidden = true; dom.sign.hidden = true;
   dom.counter.hidden = true;
-  [dom.musicCue, dom.processing, dom.videomaker, dom.violinist, dom.assistant, dom.bouquet, dom.ring].forEach(element => { element.hidden = true; });
+  [dom.musicCue, dom.processing, dom.videomaker, dom.violinist, dom.assistant, dom.bouquet, dom.ring, dom.invitationMap, dom.weddingCard].forEach(element => { element.hidden = true; });
+  dom.lais.hidden = false;
   dom.scene.className = 'scene scene-idle'; dom.scene.dataset.scene = 'idle';
   dom.progress.style.width = '0'; dom.progressbar.setAttribute('aria-valuenow', '0');
 }
@@ -294,4 +326,7 @@ window.addEventListener('pageshow', () => { last = performance.now(); if (playin
 
 dom.progressbar.setAttribute('aria-valuemax', String(duration / 1000));
 dom.clock.textContent = `0:00 / ${formatTime(duration)}`;
+$('wedding-date').textContent = weddingDetails.date;
+$('wedding-time').textContent = weddingDetails.time;
+$('wedding-location').textContent = weddingDetails.location;
 pose(dom.felipe, FELIPE_POSES.idle); pose(dom.lais, LAIS_POSES.idle);

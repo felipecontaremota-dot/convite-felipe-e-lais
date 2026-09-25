@@ -36,15 +36,16 @@ const context = {
 };
 vm.createContext(context);
 const source = fs.readFileSync('app.js', 'utf8') +
-  '\nthis.__story = { scenes, duration, sceneState, applyState, resetTimeline, start, pause, dom };';
+  '\nthis.__story = { scenes, duration, weddingDetails, sceneState, applyState, resetTimeline, start, pause, dom };';
 vm.runInContext(source, context);
 
-const { scenes, duration, sceneState, applyState, resetTimeline, start, pause, dom } = context.__story;
-assert.deepEqual(Array.from(scenes, scene => scene.id), ['intro', 'meeting', 'duo', 'phases', 'proposal']);
-assert.equal(scenes.at(-1).duration, 30000);
-assert.equal(duration, 89000);
+const { scenes, duration, weddingDetails, sceneState, applyState, resetTimeline, start, pause, dom } = context.__story;
+assert.deepEqual(Array.from(scenes, scene => scene.id), ['intro', 'meeting', 'duo', 'phases', 'proposal', 'invitation']);
+assert.deepEqual(Array.from(scenes.slice(0, 5), scene => scene.duration), [3000, 21000, 18000, 17000, 30000]);
+assert.equal(scenes.at(-1).duration, 20000);
+assert.equal(duration, 109000);
 
-const proposal = scenes.at(-1);
+const proposal = scenes.at(-2);
 const at = milliseconds => sceneState(proposal, milliseconds);
 assert.equal(at(0).action, 'proposal-trip');
 assert.deepEqual(Array.from(at(1300).phase), ['SEXTA-FEIRA', '04/09']);
@@ -74,7 +75,8 @@ assert.equal(at(24200).action, 'proposal-ring');
 assert.equal(at(25300).action, 'proposal-kiss');
 assert.equal(at(26400).action, 'proposal-drone');
 assert.match(at(26400).narration, /próxima fase/);
-assert.equal(at(29300).notification.title, 'CONTINUA…');
+assert.deepEqual(Array.from(at(29300).phase), ['PRÓXIMA FASE', '❤️ O CASAMENTO']);
+assert.equal(at(29300).notification, '');
 
 applyState(proposal, at(16200));
 assert.equal(dom.bouquet.hidden, false);
@@ -110,4 +112,38 @@ for (const item of [dom.musicCue, dom.processing, dom.videomaker, dom.violinist,
 }
 assert.equal(dom.scene.dataset.scene, 'idle');
 
-console.log('Cena 5: timeline, conteúdo, pause/continue e replay validados.');
+const invitation = scenes.at(-1);
+const invitationAt = milliseconds => sceneState(invitation, milliseconds);
+assert.equal(invitation.start, 89000);
+assert.equal(invitationAt(0).action, 'invitation-map');
+assert.equal(invitationAt(0).invitationMap, true);
+assert.equal(invitationAt(1800).notification.title, 'NOVA FASE DESBLOQUEADA');
+assert.equal(invitationAt(1800).notification.subtitle, 'O CASAMENTO');
+assert.deepEqual(Array.from(invitationAt(3300).dialogue), ['Felipe', 'Mas essa fase tem uma diferença.']);
+assert.deepEqual(Array.from(invitationAt(5200).dialogue), ['Laís', 'Dessa vez…']);
+assert.deepEqual(Array.from(invitationAt(6500).dialogue.speakers), ['Felipe', 'Laís']);
+assert.equal(invitationAt(6500).dialogue.line, '…a gente quer você com a gente!');
+assert.equal(invitationAt(8200).weddingCard, true);
+assert.deepEqual({ ...weddingDetails }, { date: 'A DEFINIR', time: 'A DEFINIR', location: 'A DEFINIR' });
+assert.equal(get('wedding-date').textContent, 'A DEFINIR');
+assert.equal(get('wedding-time').textContent, 'A DEFINIR');
+assert.equal(get('wedding-location').textContent, 'A DEFINIR');
+assert.deepEqual(Array.from(invitationAt(12000).dialogue), ['Laís', 'Vou terminar umas coisas.']);
+assert.deepEqual(Array.from(invitationAt(13600).dialogue), ['Laís', 'Se comporta.']);
+assert.deepEqual(Array.from(invitationAt(15000).dialogue), ['Felipe', 'Pode deixar.']);
+assert.equal(invitationAt(16300).action, 'invitation-lais-exit');
+assert.equal(invitationAt(16300).laisWalking, true);
+assert.equal(invitationAt(18000).action, 'invitation-felipe-alone');
+assert.equal(invitationAt(18000).laisVisible, false);
+assert.equal(invitationAt(19500).notification.title, 'CONTINUA…');
+applyState(invitation, invitationAt(6500));
+assert.equal(dom.speech.dataset.who, 'together');
+assert.equal(dom.speaker.textContent, 'Felipe & Laís');
+applyState(invitation, invitationAt(18000));
+assert.equal(dom.lais.hidden, true);
+resetTimeline();
+assert.equal(dom.invitationMap.hidden, true);
+assert.equal(dom.weddingCard.hidden, true);
+assert.equal(dom.lais.hidden, false);
+
+console.log('Cenas 5 e 6: timeline, conteúdo, pause/continue e replay validados.');
