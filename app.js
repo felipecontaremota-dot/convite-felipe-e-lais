@@ -5,7 +5,9 @@ const FELIPE_POSES = { idle: 0, map: 1, point: 2, unsure: 3 };
 const LAIS_POSES = { idle: 0, amused: 2, map: 3, confident: 5 };
 const EMPTY_STATE = {
   action: 'still', dialogue: null, narration: '', notification: '',
-  phase: null, counter: '', sign: false, mapHolder: '',
+  phase: null, counter: '', indicator: '', musicCue: '', processing: false,
+  sign: false, mapHolder: '', videomaker: false, violinist: false,
+  assistant: false, bouquet: false, ring: false, futurePoses: [],
   felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.idle,
   felipeWalking: false, laisWalking: false
 };
@@ -69,6 +71,42 @@ const scenes = [
       { at: 15100, state: { action: 'counter-look', dialogue: null, counter: 'CONTADOR DE VEZES: 17', laisPose: LAIS_POSES.confident } },
       { at: 16100, state: { action: 'rest', counter: '', dialogue: ['Felipe', '…mais ou menos.'], laisPose: LAIS_POSES.amused } }
     ]
+  },
+  {
+    id: 'proposal', duration: 30000,
+    state: {
+      action: 'proposal-trip',
+      notification: { icon: '✦', title: 'DESTINO DESBLOQUEADO', subtitle: 'CAMPOS DO JORDÃO' },
+      futurePoses: []
+    },
+    events: [
+      { at: 1300, state: { notification: '', phase: ['SEXTA-FEIRA', '04/09'] } },
+      { at: 2400, state: { action: 'proposal-sunset', phase: ['04/09', 'PÔR DO SOL'] } },
+      { at: 4200, state: { action: 'proposal-next-day', phase: ['DIA SEGUINTE', '05/09'] } },
+      { at: 5200, state: { phase: null, notification: { icon: '✦', title: 'NOVA MISSÃO DESBLOQUEADA', subtitle: 'PARQUE DA CERVEJA' } } },
+      { at: 6500, state: { action: 'proposal-park', notification: '', felipeWalking: true, laisWalking: true } },
+      { at: 7600, state: { action: 'proposal-secret-plan', indicator: 'PLANO SECRETO: EM ANDAMENTO', felipePose: FELIPE_POSES.unsure, futurePoses: ['needs-felipe-nervous-sprite'] } },
+      { at: 8500, state: { indicator: 'SUSPEITA DA LAÍS: 0%', felipePose: FELIPE_POSES.point } },
+      { at: 9400, state: { action: 'proposal-photos', indicator: 'NÍVEL DE NERVOSISMO: 97%', videomaker: true, felipeWalking: false, laisWalking: false, felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.confident } },
+      { at: 10300, state: { dialogue: ['Laís', 'Tá tudo bem?'], laisPose: LAIS_POSES.amused } },
+      { at: 11300, state: { dialogue: ['Felipe', 'Tudo.'], felipePose: FELIPE_POSES.unsure } },
+      { at: 12200, state: { dialogue: null, indicator: 'NÍVEL DE NERVOSISMO: 99%' } },
+      { at: 13200, state: { action: 'proposal-lookout', indicator: '', videomaker: false, violinist: true, musicCue: '🎻 Fly Me to the Moon', laisPose: LAIS_POSES.idle, futurePoses: ['needs-lais-back-sprite'] } },
+      { at: 14200, state: { musicCue: '🎻 La Vie en Rose' } },
+      { at: 15200, state: { musicCue: '🎻 What a Wonderful World' } },
+      { at: 16200, state: { action: 'proposal-bouquet', musicCue: '', assistant: true, bouquet: true, futurePoses: ['needs-lais-back-sprite', 'needs-lais-bouquet-sprite'] } },
+      { at: 17300, state: { action: 'proposal-approach', assistant: false, felipePose: FELIPE_POSES.point } },
+      { at: 18400, state: { action: 'proposal-kneel', dialogue: ['Felipe', 'Laís Lorrane Cariolano Romão…'], felipePose: FELIPE_POSES.unsure, futurePoses: ['needs-lais-bouquet-sprite', 'needs-felipe-kneel-ring-sprite'] } },
+      { at: 19800, state: { dialogue: ['Felipe', 'Você quer casar comigo?'] } },
+      { at: 21000, state: { dialogue: null, processing: true } },
+      { at: 22100, state: { action: 'proposal-yes', processing: false, dialogue: ['Laís', 'LÓGICO, SIM!!!!'], laisPose: LAIS_POSES.amused, futurePoses: ['needs-lais-surprised-sprite', 'needs-felipe-kneel-sprite'] } },
+      { at: 23100, state: { dialogue: null, notification: { icon: '💍', title: 'MISSÃO CONCLUÍDA', subtitle: 'CASAMENTO DESBLOQUEADO' } } },
+      { at: 24200, state: { action: 'proposal-ring', notification: '', ring: true, futurePoses: ['needs-lais-hand-sprite', 'needs-felipe-kneel-ring-sprite'] } },
+      { at: 25300, state: { action: 'proposal-kiss', ring: false, bouquet: false, futurePoses: ['needs-couple-kiss-sprite'] } },
+      { at: 26400, state: { action: 'proposal-drone', narration: 'E foi assim que uma viagem virou o começo da nossa próxima fase.', futurePoses: ['needs-couple-dance-sprite'] } },
+      { at: 28200, state: { narration: '', phase: ['PRÓXIMA FASE', '❤️ O CASAMENTO'] } },
+      { at: 29300, state: { phase: null, notification: { icon: '✦', title: 'CONTINUA…', subtitle: '' } } }
+    ]
   }
 ];
 
@@ -79,6 +117,9 @@ const dom = {
   scene: $('scene'), speech: $('speech'), speaker: $('speaker'), line: $('line'),
   narration: $('narration'), notification: $('notification'), notificationText: $('notification-text'),
   notificationIcon: $('notification-icon'), notificationSubtitle: $('notification-subtitle'), counter: $('game-counter'),
+  musicCue: $('proposal-music-cue'), processing: $('proposal-processing'),
+  videomaker: $('proposal-videomaker'), violinist: $('proposal-violinist'),
+  assistant: $('proposal-assistant'), bouquet: $('proposal-bouquet'), ring: $('proposal-ring'),
   phase: $('phase-card'), phaseTitle: $('phase-title'), phaseSubtitle: $('phase-subtitle'),
   sign: $('direction-sign'), felipe: $('felipe'), lais: $('lais'),
   progress: $('progress'), progressbar: document.querySelector('.progress'), clock: $('clock'),
@@ -117,6 +158,9 @@ function applyState(scene, state) {
   dom.lais.classList.toggle('is-walking', state.laisWalking);
   dom.felipe.classList.toggle('has-map', state.mapHolder === 'felipe');
   dom.lais.classList.toggle('has-map', state.mapHolder === 'lais');
+  [...dom.felipe.classList].filter(name => name.startsWith('needs-felipe-')).forEach(name => dom.felipe.classList.remove(name));
+  [...dom.lais.classList].filter(name => name.startsWith('needs-lais-')).forEach(name => dom.lais.classList.remove(name));
+  state.futurePoses.forEach(name => (name.includes('felipe') ? dom.felipe : dom.lais).classList.add(name));
   pose(dom.felipe, state.felipePose);
   pose(dom.lais, state.laisPose);
 
@@ -138,8 +182,16 @@ function applyState(scene, state) {
   setVisible(dom.notification, Boolean(state.notification));
   setVisible(dom.phase, Boolean(state.phase));
   if (state.phase) [dom.phaseTitle.textContent, dom.phaseSubtitle.textContent] = state.phase;
-  dom.counter.textContent = state.counter;
-  setVisible(dom.counter, Boolean(state.counter));
+  dom.counter.textContent = state.indicator || state.counter;
+  setVisible(dom.counter, Boolean(state.indicator || state.counter));
+  dom.musicCue.textContent = state.musicCue;
+  setVisible(dom.musicCue, Boolean(state.musicCue));
+  setVisible(dom.processing, state.processing);
+  setVisible(dom.videomaker, state.videomaker);
+  setVisible(dom.violinist, state.violinist);
+  setVisible(dom.assistant, state.assistant);
+  setVisible(dom.bouquet, state.bouquet);
+  setVisible(dom.ring, state.ring);
   dom.sign.hidden = !state.sign;
 }
 function render() {
@@ -151,6 +203,9 @@ function render() {
   applyState(scene, sceneState(scene, local));
 }
 function stopNotes() { voices.forEach(voice => { try { voice.stop(); } catch {} }); voices = []; }
+function syncSceneMotion(paused) {
+  dom.scene.getAnimations?.({ subtree: true }).forEach(animation => paused ? animation.pause() : animation.play());
+}
 function note() {
   if (!music || !playing || !audio || audio.state !== 'running') return;
   const now = audio.currentTime;
@@ -175,6 +230,7 @@ async function enableAudio() {
 function finish() {
   playing = false; cancelAnimationFrame(frame); stopNotes();
   dom.scene.classList.add('paused');
+  syncSceneMotion(true);
   dom.speech.hidden = true; dom.ending.hidden = false; dom.pause.disabled = true;
 }
 function tick(now) {
@@ -190,6 +246,7 @@ function resetTimeline() {
   dom.ending.hidden = true; dom.speech.hidden = true; dom.narration.hidden = true;
   dom.notification.hidden = true; dom.phase.hidden = true; dom.sign.hidden = true;
   dom.counter.hidden = true;
+  [dom.musicCue, dom.processing, dom.videomaker, dom.violinist, dom.assistant, dom.bouquet, dom.ring].forEach(element => { element.hidden = true; });
   dom.scene.className = 'scene scene-idle'; dom.scene.dataset.scene = 'idle';
   dom.progress.style.width = '0'; dom.progressbar.setAttribute('aria-valuenow', '0');
 }
@@ -204,6 +261,7 @@ function start() {
 function pause() {
   if (elapsed >= duration || !dom.cover.hidden) return;
   playing = !playing; dom.scene.classList.toggle('paused', !playing);
+  syncSceneMotion(!playing);
   dom.pause.innerHTML = playing ? 'Ⅱ <span>Pausar</span>' : '▶ <span>Continuar</span>';
   dom.pause.setAttribute('aria-label', playing ? 'Pausar animação' : 'Continuar animação');
   if (playing) { last = performance.now(); frame = requestAnimationFrame(tick); if (music) void enableAudio(); }
