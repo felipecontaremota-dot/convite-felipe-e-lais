@@ -85,7 +85,7 @@ const scenes = [
       { at: 4200, state: { action: 'proposal-next-day', phase: ['DIA SEGUINTE', '05/09'] } },
       { at: 5200, state: { phase: null, notification: { icon: '✦', title: 'NOVA MISSÃO DESBLOQUEADA', subtitle: 'PARQUE DA CERVEJA' } } },
       { at: 6500, state: { action: 'proposal-park', notification: '', felipeWalking: true, laisWalking: true } },
-      { at: 7600, state: { action: 'proposal-secret-plan', indicator: 'PLANO SECRETO: EM ANDAMENTO', felipePose: FELIPE_POSES.unsure, futurePoses: ['needs-felipe-nervous-sprite'] } },
+      { at: 7600, state: { action: 'proposal-secret-plan', indicator: 'PLANO SECRETO: EM ANDAMENTO', felipePose: FELIPE_POSES.unsure, felipeWalking: false, laisWalking: false, futurePoses: ['needs-felipe-nervous-sprite'] } },
       { at: 8500, state: { indicator: 'SUSPEITA DA LAÍS: 0%', felipePose: FELIPE_POSES.point } },
       { at: 9400, state: { action: 'proposal-photos', indicator: 'NÍVEL DE NERVOSISMO: 97%', videomaker: true, felipeWalking: false, laisWalking: false, felipePose: FELIPE_POSES.idle, laisPose: LAIS_POSES.confident } },
       { at: 10300, state: { dialogue: ['Laís', 'Tá tudo bem?'], laisPose: LAIS_POSES.amused } },
@@ -121,7 +121,7 @@ const dom = {
   videomaker: $('proposal-videomaker'), violinist: $('proposal-violinist'),
   assistant: $('proposal-assistant'), bouquet: $('proposal-bouquet'), ring: $('proposal-ring'),
   phase: $('phase-card'), phaseTitle: $('phase-title'), phaseSubtitle: $('phase-subtitle'),
-  sign: $('direction-sign'), felipe: $('felipe'), lais: $('lais'),
+  sign: $('direction-sign'), cast: $('cast'), felipe: $('felipe'), lais: $('lais'),
   progress: $('progress'), progressbar: document.querySelector('.progress'), clock: $('clock'),
   cover: $('cover'), ending: $('ending'), pause: $('pause')
 };
@@ -146,6 +146,11 @@ function sceneState(scene, local) {
   return state;
 }
 function setVisible(element, visible) { element.hidden = !visible; }
+function clearFuturePoses() {
+  [dom.felipe, dom.lais, dom.cast].forEach(element => {
+    [...element.classList].filter(name => name.startsWith('needs-')).forEach(name => element.classList.remove(name));
+  });
+}
 function applyState(scene, state) {
   const key = JSON.stringify([scene.id, state]);
   if (key === renderedKey) return;
@@ -158,9 +163,12 @@ function applyState(scene, state) {
   dom.lais.classList.toggle('is-walking', state.laisWalking);
   dom.felipe.classList.toggle('has-map', state.mapHolder === 'felipe');
   dom.lais.classList.toggle('has-map', state.mapHolder === 'lais');
-  [...dom.felipe.classList].filter(name => name.startsWith('needs-felipe-')).forEach(name => dom.felipe.classList.remove(name));
-  [...dom.lais.classList].filter(name => name.startsWith('needs-lais-')).forEach(name => dom.lais.classList.remove(name));
-  state.futurePoses.forEach(name => (name.includes('felipe') ? dom.felipe : dom.lais).classList.add(name));
+  clearFuturePoses();
+  state.futurePoses.forEach(name => {
+    if (name.startsWith('needs-felipe-')) dom.felipe.classList.add(name);
+    if (name.startsWith('needs-lais-')) dom.lais.classList.add(name);
+    if (name.startsWith('needs-couple-')) dom.cast.classList.add(name);
+  });
   pose(dom.felipe, state.felipePose);
   pose(dom.lais, state.laisPose);
 
@@ -243,6 +251,7 @@ function tick(now) {
 function resetTimeline() {
   cancelAnimationFrame(frame); stopNotes();
   elapsed = 0; renderedKey = ''; noteIndex = 0; noteAt = 0;
+  clearFuturePoses();
   dom.ending.hidden = true; dom.speech.hidden = true; dom.narration.hidden = true;
   dom.notification.hidden = true; dom.phase.hidden = true; dom.sign.hidden = true;
   dom.counter.hidden = true;
