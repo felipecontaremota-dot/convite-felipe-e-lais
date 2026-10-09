@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Platform, Text } from "react-native";
 import {
@@ -12,7 +12,7 @@ import {
 import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import { supabase, eventId } from "../../lib/supabase";
-import { requireStaff, savePassword } from "./staffAuth";
+import { requireStaff, savePassword, StaffValidationError } from "./staffAuth";
 function PasswordForm() {
   const app = useApp(),
     feedback = useFeedback();
@@ -73,14 +73,33 @@ export function RecoveryScreen() {
     type?: string;
   }>();
   const [verified, setVerified] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [tokenConsumed, setTokenConsumed] = useState(false),
+    [retryRole, setRetryRole] = useState(false);
   const attempted = useRef<string | null>(null);
   const valid =
     !!supabase &&
     type === "recovery" &&
     typeof token_hash === "string" &&
     /^[A-Za-z0-9_-]{20,512}$/.test(token_hash);
-  const inputError = valid ? "" : "Link de recuperação inválido ou expirado.";
+  const inputError =
+    valid || tokenConsumed ? "" : "Link de recuperação inválido ou expirado.";
+  const validateRole = useCallback(async () => {
+    if (!supabase) return;
+    setError("");
+    setRetryRole(false);
+    try {
+      await requireStaff(supabase, eventId);
+      setVerified(true);
+    } catch (e: unknown) {
+      setError(
+        e instanceof AppError
+          ? e.message
+          : "Não foi possível recuperar o acesso.",
+      );
+      setRetryRole(e instanceof StaffValidationError);
+    }
+  }, []);
   useEffect(() => {
     if (!valid || !supabase || !token_hash || attempted.current === token_hash)
       return;
@@ -96,8 +115,8 @@ export function RecoveryScreen() {
         window.history.replaceState(null, "", window.location.pathname);
       if (result.error)
         throw new AppError("Link de recuperação inválido ou expirado.");
-      await requireStaff(client, eventId);
-      setVerified(true);
+      setTokenConsumed(true);
+      await validateRole();
     })().catch((e: unknown) =>
       setError(
         e instanceof AppError
@@ -105,7 +124,7 @@ export function RecoveryScreen() {
           : "Não foi possível recuperar o acesso.",
       ),
     );
-  }, [token_hash, valid]);
+  }, [token_hash, valid, validateRole]);
   return (
     <Screen title="Recuperar senha">
       {inputError || error ? (
@@ -117,6 +136,12 @@ export function RecoveryScreen() {
       ) : (
         <Text style={styles.text}>Validando recuperação…</Text>
       )}
+      {tokenConsumed && retryRole ? (
+        <Button
+          title="Tentar validar acesso novamente"
+          onPress={validateRole}
+        />
+      ) : null}
     </Screen>
   );
 }

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { passwordLogin, savePassword } from "../src/features/auth/staffAuth";
+import {
+  passwordLogin,
+  savePassword,
+  requireStaff,
+  StaffValidationError,
+} from "../src/features/auth/staffAuth";
 import {
   invitationPin,
   normalizePhone,
@@ -11,11 +16,9 @@ import {
 function client(role: string | null, badPassword = false) {
   return {
     auth: {
-      signInWithPassword: vi
-        .fn()
-        .mockResolvedValue({
-          error: badPassword ? { message: "invalid" } : null,
-        }),
+      signInWithPassword: vi.fn().mockResolvedValue({
+        error: badPassword ? { message: "invalid" } : null,
+      }),
       signOut: vi.fn().mockResolvedValue({}),
       updateUser: vi.fn().mockResolvedValue({ error: null }),
     },
@@ -56,6 +59,27 @@ describe("password access verified against backend role", () => {
     ).rejects.toThrow("não tem acesso");
     expect(c.auth.signOut).toHaveBeenCalledOnce();
   });
+  it.each(["response", "thrown"])(
+    "technical RPC failure (%s) preserves session and permits role retry",
+    async (kind) => {
+      const c = client("ADMIN");
+      if (kind === "response")
+        c.rpc.mockResolvedValueOnce({
+          data: null,
+          error: { message: "temporary failure" },
+        });
+      else c.rpc.mockRejectedValueOnce(new Error("network failure"));
+      await expect(
+        requireStaff(c as unknown as SupabaseClient, "event"),
+      ).rejects.toBeInstanceOf(StaffValidationError);
+      expect(c.auth.signOut).not.toHaveBeenCalled();
+      await expect(
+        requireStaff(c as unknown as SupabaseClient, "event"),
+      ).resolves.toBe("ADMIN");
+      expect(c.auth.signOut).not.toHaveBeenCalled();
+      expect(c.rpc).toHaveBeenCalledTimes(2);
+    },
+  );
   it("password changes are own-user Auth operations gated by backend role", async () => {
     const c = client("ADMIN");
     await savePassword(

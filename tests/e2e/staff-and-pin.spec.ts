@@ -330,10 +330,13 @@ test("a new browser device needs PIN even after another device activates", async
   }
 });
 
-test("recovery consumes the explicit token, verifies role and removes it from URL", async ({
-  page,
-}) => {
-  await backend(page);
+async function recovery(page: Page) {
+  const counts = { tokens: 0, logout: 0, email: 0 };
+  page.on("request", (request) => {
+    if (request.method() !== "POST") return;
+    if (request.url().endsWith("/auth/v1/logout?scope=global")) counts.logout++;
+    if (request.url().includes("/auth/v1/recover")) counts.email++;
+  });
   await page.route("http://127.0.0.1:54321/auth/v1/verify", async (route) => {
     if (route.request().method() === "OPTIONS")
       return route.fulfill({
@@ -343,10 +346,18 @@ test("recovery consumes the explicit token, verifies role and removes it from UR
           "Access-Control-Allow-Headers": "*",
         },
       });
+    counts.tokens++;
     expect(route.request().postDataJSON()).toMatchObject({
       token_hash: "RecoveryTokenFixtureOnly1234567890",
       type: "recovery",
     });
+    if (counts.tokens > 1)
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ message: "Token already consumed" }),
+      });
     const encode = (value: unknown) =>
       Buffer.from(JSON.stringify(value)).toString("base64url");
     await route.fulfill({
@@ -367,10 +378,110 @@ test("recovery consumes the explicit token, verifies role and removes it from UR
       }),
     });
   });
-  await page.goto(
-    "/recuperar-senha?token_hash=RecoveryTokenFixtureOnly1234567890&type=recovery&untrusted=removed",
-  );
+  return counts;
+}
+async function storedSessionUser(page: Page) {
+  return page.evaluate(() => {
+    const key = Object.keys(localStorage).find((key) =>
+      key.endsWith("-auth-token"),
+    );
+    return key
+      ? (JSON.parse(localStorage.getItem(key)!).user?.id ?? null)
+      : null;
+  });
+}
+const recoveryUrl =
+  "/recuperar-senha?token_hash=RecoveryTokenFixtureOnly1234567890&type=recovery&untrusted=removed";
+test("recovery consumes the explicit token, verifies role and removes it from URL", async ({
+  page,
+}) => {
+  await backend(page);
+  const counts = await recovery(page);
+  await page.goto(recoveryUrl);
   await expect(page.getByLabel("Nova senha", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/recuperar-senha$/);
+  expect(counts.tokens).toBe(1);
+});
+test("recovery retries a transient role failure with the authenticated session and never reuses token", async ({
+  page,
+}) => {
+  await backend(page);
+  const counts = await recovery(page);
+  let unavailable = true;
+  await page.route(
+    "http://127.0.0.1:54321/rest/v1/rpc/event_role",
+    async (route) => {
+      if (route.request().method() === "OPTIONS")
+        return route.fulfill({
+          status: 200,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+          },
+        });
+      await route.fulfill({
+        status: unavailable ? 500 : 200,
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(
+          unavailable ? { message: "Temporary server failure" } : "ADMIN",
+        ),
+      });
+    },
+  );
+  await page.goto(recoveryUrl);
+  await expect(
+    page.getByText(
+      "Não foi possível validar seu acesso agora. Tente novamente.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/recuperar-senha$/);
+  expect(await storedSessionUser(page)).toBe(uid);
+  expect(counts.logout).toBe(0);
+  expect(counts.tokens).toBe(1);
+  await expect(page.getByLabel("Nova senha", { exact: true })).toHaveCount(0);
+  unavailable = false;
+  await page
+    .getByRole("button", {
+      name: "Tentar validar acesso novamente",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByLabel("Nova senha", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "Não foi possível validar seu acesso agora. Tente novamente.",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  expect(await storedSessionUser(page)).toBe(uid);
+  expect(counts.logout).toBe(0);
+  expect(counts.tokens).toBe(1);
+  expect(counts.email).toBe(0);
+  await expect(page).toHaveURL(/\/recuperar-senha$/);
+});
+test("successful recovery with no staff role signs out and denies retry", async ({
+  page,
+}) => {
+  await backend(page, null);
+  const counts = await recovery(page);
+  await page.goto(recoveryUrl);
+  await expect(
+    page.getByText("Esta conta não tem acesso aos noivos ou ao cerimonial.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await storedSessionUser(page)).toBeNull();
+  expect(counts.logout).toBe(1);
+  expect(counts.tokens).toBe(1);
+  await expect(
+    page.getByRole("button", {
+      name: "Tentar validar acesso novamente",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Nova senha", { exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(/\/recuperar-senha$/);
 });
 
