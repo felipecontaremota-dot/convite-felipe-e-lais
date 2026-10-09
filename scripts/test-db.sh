@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-container="wedding-test-$RANDOM-$$"
-trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
-docker run --name "$container" -e POSTGRES_PASSWORD=isolated-test-only -d postgres:17-alpine >/dev/null
-for attempt in {1..30}; do if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
+if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+ database="wedding_test_${GITHUB_RUN_ID:-0}_${GITHUB_RUN_ATTEMPT:-0}_$$_${RANDOM}"
+ cleanup() { sudo -u postgres dropdb --if-exists "$database"; }
+ sudo systemctl start postgresql.service
+ sudo -u postgres createdb "$database"
+ trap cleanup EXIT
+ run_sql() { sudo -u postgres psql -d "$database" -v ON_ERROR_STOP=1; }
+else
+ container="wedding-test-$RANDOM-$$"
+ cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+ trap cleanup EXIT
+ docker run --name "$container" -e POSTGRES_PASSWORD=isolated-test-only -d postgres:17-alpine >/dev/null
+ for attempt in {1..30}; do if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
+ run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
+fi
 for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql; do
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
-  docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 < tests/access-upgrade-prepare.sql
+  run_sql < tests/access-upgrade-prepare.sql
  fi
- docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 < "$source"
+ run_sql < "$source"
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
-  docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 < tests/access-upgrade-verify.sql
+  run_sql < tests/access-upgrade-verify.sql
  fi
 done
