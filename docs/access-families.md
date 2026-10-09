@@ -18,7 +18,7 @@ Esta fase não altera o projeto Supabase hospedado automaticamente. O deploy do 
 
 2. Mantenha Anonymous Sign-ins habilitado e a proteção antiabuso do Auth/gateway. Mantenha o provider Email/password e o SMTP Resend atuais. Desative cadastro público de usuários com e-mail se somente contas previamente autorizadas devem existir; signup anônimo continua habilitado. Não remova templates ou credenciais SMTP.
 3. Em Auth → URL Configuration, configure Site URL e redirect permitido com o base path atual: `https://felipecontaremota-dot.github.io/convite-felipe-e-lais/recuperar-senha`. Homologação deve ter seu próprio endereço. Para recuperação nativa, autorize também `felipeelais://recuperar-senha` e mantenha o esquema do aplicativo. O botão atual envia para a URL web pública, que permite a recuperação pelo navegador em qualquer dispositivo.
-4. Em Auth → Email Templates → **Reset Password**, use o token de recuperação de uso único na rota explícita (não mude o template de OTP para login normal):
+4. Em Auth → Email Templates → **Reset Password**, o template padrão pode usar a sessão implícita no fragmento de `/recuperar-senha`. Como alternativa, use o token de recuperação de uso único na rota explícita (não mude o template de OTP para login normal):
 
    ```html
    <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery"
@@ -26,7 +26,7 @@ Esta fase não altera o projeto Supabase hospedado automaticamente. O deploy do 
    >
    ```
 
-   O app aceita somente `token_hash` limitado e `type=recovery` nessa rota, verifica pelo `verifyOtp({type:'recovery'})`, consulta o papel no backend e remove o token da URL após consumo. O template padrão de sessão implícita não é consumido: este ajuste do template é necessário para o botão “Esqueci minha senha”. Links são de uso único e expiram conforme a configuração do Auth. Teste o SMTP e a recuperação com uma conta de homologação antes de disponibilizar o fluxo.
+   O app aceita os dois formatos oficiais nesta rota: `?token_hash=...&type=recovery` por `verifyOtp({type:'recovery'})`, ou `#access_token=...&refresh_token=...&type=recovery` por `setSession()`, sem repetir `verifyOtp`. Os dois formatos são capturados temporariamente em memória e removidos com `history.replaceState` antes de inicializar o Router ou fazer chamadas de rede, impedindo que a navegação restaure tokens na URL. Somente o Supabase gerencia a persistência da sessão. Fragmentos com erros são rejeitados sem exibir conteúdo recebido do provider. Uma sessão autenticada existente pode ser reutilizada para alterar a própria senha após validar ADMIN/CEREMONIALIST, inclusive ao recarregar a URL já limpa. Falha técnica na consulta do papel preserva a sessão e permite nova tentativa sem outro e-mail; ausência real de papel provoca logout. Links são de uso único e expiram conforme a configuração do Auth. Teste o SMTP e a recuperação em homologação.
 
 5. Confirme os UUIDs de Felipe, Laís e cerimonial em `auth.users` e os papéis existentes de `user_roles` para o evento correto. Papel é concedido por operador confiável; nunca pelo formulário de login. ADMIN abre `/painel`; CEREMONIALIST abre `/checkin`; uma conta sem esses papéis é desconectada.
 6. Para cada família já existente, salve um PIN na área Famílias. A migration não inventa PIN nem modifica os códigos existentes. Vínculos anteriores sem PIN permanecem no banco, mas precisam ser reativados uma vez para receber `pin_verified_at`. Novas ativações exigem código + PIN. Não distribua o novo fluxo antes de configurar os PINs.
