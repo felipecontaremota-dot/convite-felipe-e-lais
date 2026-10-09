@@ -14,6 +14,8 @@ O badge vermelho ! aparece somente para observação não vazia após trim, poss
 
 `202610090005_message_recipients.sql` reutiliza message_recipients; não cria tabela. Pessoa seleciona convidados ativos diretamente, em ordem PT-BR, inclusive acessos individuais e famílias diferentes. Família continua uma seleção independente; Todos não exige seletor.
 
+O frontend usa MESSAGE_SEND_TO_GUESTS, rejeitado como unknown mutation por backends anteriores à 005: publicar frontend antes do banco não pode transformar o envio em broadcast. Todos/Família e a conversa de convidados mantêm MESSAGE_SEND.
+
 O novo payload recipient_guest_ids aceita entre 1 e 500 itens, deduplica IDs e valida evento/acesso ativo. A mesma transação registra mensagem, destinatários, recibo de idempotência e outbox. IDs inválidos abortam o conjunto. Não se cria announcement para mensagem direcionada. Não há implementação de novo provider/envio externo.
 
 RLS e app_snapshot passam a usar os destinatários reais para recados administrativos, corrigindo a leitura anterior baseada somente em invitation_id/null. ADMIN recebe IDs de destinatários; convidado não recebe IDs dos demais. A identidade de acesso continua familiar: uma sessão FAMILY pode ler recados dos membros que ela possui; INDIVIDUAL lê somente seu próprio acesso. Não foi criada autenticação individual dentro de uma sessão compartilhada. CEREMONIALIST continua sem acesso às conversas. Mensagens dos convidados para os noivos e os demais tipos de mutation são preservados.

@@ -227,7 +227,13 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
         s.contacts.push({ ...data, guest_id: g.id });
         break;
       }
+      case "MESSAGE_SEND_TO_GUESTS":
       case "MESSAGE_SEND": {
+        if (
+          m.type === "MESSAGE_SEND_TO_GUESTS" &&
+          !Array.isArray(p.recipient_guest_ids)
+        )
+          throw Error("invalid recipient");
         const invitation =
           role === "GUEST" ? demoFamily : String(p.invitation_id || "") || null;
         if (!String(p.content || "").trim()) throw Error("Digite uma mensagem");

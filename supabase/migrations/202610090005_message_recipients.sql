@@ -1,3 +1,4 @@
+-- MESSAGE_SEND_TO_GUESTS is rejected by older backends instead of falling back to broadcast.
 -- Extend only messaging. Access-unit CRUD and migrations 001-004 remain unchanged.
 -- The existing recipient table is the authority for administrative message visibility.
 create function can_read_message(p_event uuid,p_message uuid) returns boolean
@@ -37,7 +38,7 @@ create function app_mutate(p_event uuid,p_mutation uuid,p_type text,p_payload js
 language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 declare recipients uuid[]; channels delivery_channel[]; content text; mid uuid; tid uuid;
 begin
- if p_type <> 'MESSAGE_SEND' or not (p_payload ? 'recipient_guest_ids') then
+ if p_type is distinct from 'MESSAGE_SEND_TO_GUESTS' and (p_type is distinct from 'MESSAGE_SEND' or not (p_payload ? 'recipient_guest_ids')) then
    return app_mutate_v4(p_event,p_mutation,p_type,p_payload);
  end if;
  if event_role(p_event) is distinct from 'ADMIN' then raise exception 'unauthorized';end if;

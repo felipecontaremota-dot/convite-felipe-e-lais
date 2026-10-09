@@ -164,6 +164,7 @@ export type MutationType =
   | "CONTACT_UPDATE"
   | "CHECKIN_CREATE"
   | "MESSAGE_SEND"
+  | "MESSAGE_SEND_TO_GUESTS"
   | "GIFT_SELECT"
   | "PUSH_REGISTER";
 export interface OfflineMutation {
