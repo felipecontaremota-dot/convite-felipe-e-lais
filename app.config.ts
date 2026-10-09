@@ -1,4 +1,5 @@
 import type { ExpoConfig } from "expo/config";
+import { getWebBasePath } from "./config/web-paths.cjs";
 const domain = process.env.EXPO_PUBLIC_WEB_BASE_URL;
 const host = domain ? new URL(domain).hostname : undefined;
 const config: ExpoConfig = {
@@ -30,6 +31,7 @@ const config: ExpoConfig = {
       : {}),
   },
   web: { bundler: "metro", output: "single", name: "Felipe & Laís" },
+  experiments: { baseUrl: getWebBasePath() },
   plugins: [
     "expo-router",
     "expo-secure-store",

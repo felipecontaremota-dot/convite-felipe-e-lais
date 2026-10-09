@@ -27,4 +27,14 @@ jobs:
       - run: npm run test:db
       - run: npm run build:web
       - run: npx playwright install --with-deps chromium
+      - run: npm run test:export
       - run: npm run test:e2e
+      - name: Build Pages subdirectory
+        run: npm run build:web
+        env:
+          EXPO_PUBLIC_WEB_BASE_PATH: /convite-felipe-e-lais
+          EXPO_PUBLIC_WEB_BASE_URL: https://felipecontaremota-dot.github.io/convite-felipe-e-lais
+      - name: Validate Pages export and 404 fallback
+        run: npm run test:export
+        env:
+          EXPO_PUBLIC_WEB_BASE_PATH: /convite-felipe-e-lais
