@@ -1,0 +1,21 @@
+project_id = "convite-felipe-e-lais"
+[api]
+port = 54321
+schemas = ["public", "graphql_public"]
+[db]
+port = 54322
+major_version = 17
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+[auth]
+enabled = true
+site_url = "http://localhost:8081"
+additional_redirect_urls = ["felipeelais://", "http://localhost:8081"]
+enable_anonymous_sign_ins = true
+[functions.redeem-invitation]
+verify_jwt = false
+[functions.dispatch-notifications]
+verify_jwt = false
+[functions.sync-sheets]
+verify_jwt = false
