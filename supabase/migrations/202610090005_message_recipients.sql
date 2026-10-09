@@ -42,6 +42,10 @@ begin
    return app_mutate_v4(p_event,p_mutation,p_type,p_payload);
  end if;
  if event_role(p_event) is distinct from 'ADMIN' then raise exception 'unauthorized';end if;
+ -- A committed operation stays successful even if its targets or retry payload change.
+ if exists(select 1 from mutation_receipts where event_id=p_event and user_id=auth.uid() and mutation_id=p_mutation) then
+   return jsonb_build_object('duplicate',true);
+ end if;
  if jsonb_typeof(p_payload->'recipient_guest_ids') is distinct from 'array' then raise exception 'invalid recipient list';end if;
  if jsonb_array_length(p_payload->'recipient_guest_ids') not between 1 and 500 then raise exception 'invalid recipient count';end if;
  if nullif(p_payload->>'invitation_id','') is not null or nullif(p_payload->>'recipient_guest_id','') is not null then raise exception 'invalid recipient target';end if;
