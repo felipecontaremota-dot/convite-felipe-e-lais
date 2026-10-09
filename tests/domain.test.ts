@@ -123,8 +123,10 @@ describe("roles e entradas", () => {
 describe("links de transporte", () => {
   it("não inventa destino", () =>
     expect(transportLinks(event)).toEqual({
+      gps: null,
       google: null,
       waze: null,
+      uber: null,
       share: null,
     }));
   it("passa coordenadas a Google e Waze", () => {
@@ -135,7 +137,10 @@ describe("links de transporte", () => {
   it("endereço sem coordenadas tem fallback", () =>
     expect(
       transportLinks({ ...event, address: "Endereço informado" }),
-    ).toMatchObject({ waze: null, share: "Endereço informado" }));
+    ).toMatchObject({
+      waze: expect.stringContaining("q=Endere"),
+      share: "Endereço informado",
+    }));
 });
 describe("QR e check-in", () => {
   const token = "a".repeat(64),

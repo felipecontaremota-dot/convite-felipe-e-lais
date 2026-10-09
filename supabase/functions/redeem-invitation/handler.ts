@@ -1,5 +1,5 @@
 import { cors, json } from "../_shared/http.ts";
-export const invalidAccess = "Código ou PIN inválido.";
+export const invalidAccess = "Código ou senha inválido.";
 interface Dependencies {
   authenticate(request: Request): Promise<{ id: string; is_anonymous?: boolean }>;
   rpc(name: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }>;

@@ -17,11 +17,13 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     throw new AppError(
       error.message.includes("unauthorized")
         ? "Acesso não autorizado."
-        : error.message.includes("ticket_exists")
-          ? "Já existe um ingresso. Escolha regenerar para substituir a versão anterior."
-          : error.message.includes("conflict")
-            ? "Dados alterados por outro usuário. Atualize a tela."
-            : "Não foi possível concluir a operação.",
+        : error.message.includes("family access required")
+          ? "Configure a senha e gere o link da família antes de adicionar membros."
+          : error.message.includes("ticket_exists")
+            ? "Já existe um ingresso. Escolha regenerar para substituir a versão anterior."
+            : error.message.includes("conflict")
+              ? "Dados alterados por outro usuário. Atualize a tela."
+              : "Não foi possível concluir a operação.",
       error.code,
     );
   }
@@ -53,7 +55,7 @@ export async function invitationAccess(code: string, pin?: string) {
     !invitationCode.safeParse(code).success ||
     (pin !== undefined && !invitationPin.safeParse(pin).success)
   )
-    throw new AuthError("Código ou PIN inválido.");
+    throw new AuthError("Código ou senha inválido.");
   if (!supabase)
     throw new AppError(
       "O convite ainda não está disponível. Tente novamente mais tarde.",
@@ -75,7 +77,7 @@ export async function invitationAccess(code: string, pin?: string) {
       ...(pin === undefined ? { action: "identify" } : { pin }),
     },
   });
-  if (error) throw new AuthError("Código ou PIN inválido.");
+  if (error) throw new AuthError("Código ou senha inválido.");
   return data as { name: string; activated: boolean };
 }
 export const identifyInvitation = (code: string) => invitationAccess(code);

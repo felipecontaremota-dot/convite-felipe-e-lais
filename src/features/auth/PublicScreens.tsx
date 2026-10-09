@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text } from "react-native";
 import {
   Button,
@@ -36,8 +36,8 @@ export function PublicHome() {
           15 de dezembro de 2026 · 16h · Horário de Brasília
         </Text>
         <Text style={styles.text}>
-          Abra o link exclusivo que recebeu dos noivos ou informe o código e o
-          PIN do seu convite.
+          Abra o link exclusivo que recebeu dos noivos ou informe o código e a
+          senha do seu convite.
         </Text>
         <Field
           label="Código do convite"
@@ -46,7 +46,7 @@ export function PublicHome() {
           autoCapitalize="none"
         />
         <Field
-          label="PIN de acesso"
+          label="Senha de acesso"
           value={pin}
           onChangeText={setPin}
           keyboardType="number-pad"
@@ -110,7 +110,7 @@ export function InvitationAccess() {
       .catch((e: unknown) => {
         if (active)
           setError(
-            e instanceof AppError ? e.message : "Código ou PIN inválido.",
+            e instanceof AppError ? e.message : "Código ou senha inválido.",
           );
       });
     return () => {
@@ -125,7 +125,7 @@ export function InvitationAccess() {
         <Text style={styles.heading}>
           {family?.code === code
             ? `Olá, ${family.name}!`
-            : "Seu convite familiar"}
+            : "Convite preparado para você"}
         </Text>
         <Text style={styles.text}>
           Este convite foi preparado especialmente para vocês.
@@ -136,7 +136,7 @@ export function InvitationAccess() {
           </Text>
         ) : null}
         <Field
-          label="PIN de acesso"
+          label="Senha de acesso"
           value={pin}
           onChangeText={setPin}
           keyboardType="number-pad"
@@ -163,7 +163,26 @@ export function Login() {
   const app = useApp(),
     feedback = useFeedback();
   const [email, setEmail] = useState(""),
-    [password, setPassword] = useState("");
+    [password, setPassword] = useState(""),
+    [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const submit = async () => {
+    if (submitting.current || !email.includes("@") || !password) return;
+    submitting.current = true;
+    setBusy(true);
+    try {
+      await feedback.run(async () => {
+        if (!supabase)
+          throw new AppError("Configure o Supabase para usar o login.");
+        const role = await passwordLogin(supabase, eventId, email, password);
+        router.replace(staffDestination(role)!);
+      });
+    } finally {
+      setPassword("");
+      submitting.current = false;
+      setBusy(false);
+    }
+  };
   useEffect(() => {
     const path = staffDestination(app.data?.role || null);
     if (path) router.replace(path);
@@ -188,27 +207,14 @@ export function Login() {
           onChangeText={setPassword}
           secureTextEntry
           autoCapitalize="none"
+          returnKeyType="go"
+          editable={!busy}
+          onSubmitEditing={() => void submit()}
         />
         <Button
           title="Entrar"
-          disabled={!email.includes("@") || !password}
-          onPress={() =>
-            feedback.run(async () => {
-              if (!supabase)
-                throw new AppError("Configure o Supabase para usar o login.");
-              try {
-                const role = await passwordLogin(
-                  supabase,
-                  eventId,
-                  email,
-                  password,
-                );
-                router.replace(staffDestination(role)!);
-              } finally {
-                setPassword("");
-              }
-            })
-          }
+          disabled={busy || !email.includes("@") || !password}
+          onPress={submit}
         />
         <Button
           secondary

@@ -1,3 +1,5 @@
+import { ACCESS_ACTIONS, demoAccess } from "./demoAccess";
+import { generatePin } from "../utils/password";
 import type { Snapshot, Role, OfflineMutation, Ticket } from "../types/domain";
 import { WEDDING_START } from "../features/countdown/domain";
 import { NOTIFICATION_DAYS } from "../features/notifications/domain";
@@ -42,6 +44,8 @@ export function demoSeed(): Snapshot {
       timezone: "America/Sao_Paulo",
       venue_name: null,
       address: null,
+      gps_url: null,
+      version: 1,
       latitude: null,
       longitude: null,
     },
@@ -49,6 +53,7 @@ export function demoSeed(): Snapshot {
       {
         id: demoFamily,
         event_id: event,
+        kind: "FAMILY",
         name: "Família Demo",
         active: true,
         primary_guest_id: guests[0]!.id,
@@ -360,13 +365,22 @@ export async function demoAdmin(
   action: string,
   p: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  return transaction((db) => {
+  return transaction(async (db) => {
     const s = db.snapshot;
     const entity = String(p.id || "");
     const version = Number(p.version);
     const inv = s.invitations.find((i) => i.id === entity);
     if (inv && Number.isFinite(version) && inv.version !== version)
       throw Error("Dados alterados. Atualize a tela.");
+    if (ACCESS_ACTIONS.includes(action))
+      return demoAccess(db, action, p, {
+        id,
+        token: randomToken,
+        hash: hashToken,
+        pin: generatePin,
+      });
+    if (["FAMILY_MERGE", "FAMILY_SPLIT"].includes(action))
+      throw Error("retired admin action");
     switch (action) {
       case "INVITATION_SAVE":
         if (inv) {
@@ -381,6 +395,7 @@ export async function demoAdmin(
             id: id(),
             event_id: event,
             name: String(p.name),
+            kind: "FAMILY",
             active: true,
             primary_guest_id: null,
             version: 1,
@@ -435,7 +450,7 @@ export async function demoAdmin(
         if (!inv) throw Error("Família inválida");
         {
           const code = randomToken().slice(0, 48);
-          if (!inv.pin) throw Error("Salve um PIN primeiro.");
+          if (!inv.pin) throw Error("Salve uma senha primeiro.");
           db.codes[inv.id] = code;
           inv.sharing_code = code;
           inv.link_active = true;

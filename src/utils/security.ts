@@ -62,7 +62,7 @@ export function ticketToken(value: string) {
 
 export const invitationPin = z
   .string()
-  .regex(/^[0-9]{4}$/, "O PIN deve ter 4 dígitos.");
+  .regex(/^[0-9]{4}$/, "A senha deve ter 4 dígitos.");
 export function normalizePhone(value: string) {
   return value.replace(/[^0-9]/g, "");
 }

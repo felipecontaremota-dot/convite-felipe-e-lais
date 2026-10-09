@@ -122,7 +122,7 @@ async function backend(
           data = { name: "Família Teste", activated: state.bound };
         else {
           status = 429;
-          data = { error: "Código ou PIN inválido." };
+          data = { error: "Código ou senha inválido." };
         }
       } else {
         state.attempts++;
@@ -137,7 +137,7 @@ async function backend(
           data = { linked: true };
         } else {
           status = 429;
-          data = { error: "Código ou PIN inválido." };
+          data = { error: "Código ou senha inválido." };
         }
       }
     }
@@ -179,7 +179,7 @@ test("ADMIN password login, persistent session, own password update", async ({
     .getByRole("button", { name: "Salvar minha senha", exact: true })
     .click();
   await expect(
-    page.getByText("Senha atualizada no Supabase Auth.", { exact: true }),
+    page.getByText("Senha atualizada.", { exact: true }),
   ).toBeVisible();
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     "new-password-123",
@@ -222,7 +222,7 @@ test("family identification never activates; PIN 0047 activates once, session re
   await expect(
     page.getByText("Integrante Protegido", { exact: true }),
   ).toHaveCount(0);
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("0047");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
@@ -240,7 +240,9 @@ test("family identification never activates; PIN 0047 activates once, session re
     .click();
   state.bound = false;
   await page.goto(`/c/${code}`);
-  await expect(page.getByLabel("PIN de acesso", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("Senha de acesso", { exact: true }),
+  ).toBeVisible();
   expect(state.activations).toBe(1);
 });
 test("manual PIN errors are uniform; blocked link never reuses an old binding", async ({
@@ -249,27 +251,27 @@ test("manual PIN errors are uniform; blocked link never reuses an old binding", 
   const state = await backend(page, null);
   await page.goto("/");
   await page.getByLabel("Código do convite", { exact: true }).fill(code);
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("9999");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("9999");
   await page
     .getByRole("button", { name: "Abrir meu convite", exact: true })
     .click();
   await expect(
-    page.getByText("Código ou PIN inválido.", { exact: true }),
+    page.getByText("Código ou senha inválido.", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("0047");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
     .getByRole("button", { name: "Abrir meu convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   await page.goto("/c/OutroCodigoNaoEnumeravelCom32Chars");
   await expect(
-    page.getByText("Código ou PIN inválido.", { exact: true }),
+    page.getByText("Código ou senha inválido.", { exact: true }),
   ).toBeVisible();
   expect(page.url()).toContain("/c/");
   state.active = false;
   await page.goto(`/c/${code}`);
   await expect(
-    page.getByText("Código ou PIN inválido.", { exact: true }),
+    page.getByText("Código ou senha inválido.", { exact: true }),
   ).toBeVisible();
   expect(page.url()).toContain("/c/");
 });
@@ -278,7 +280,7 @@ test("revocation refresh removes cached family; new PIN is required for reactiva
 }) => {
   const state = await backend(page, null);
   await page.goto(`/c/${code}`);
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("0047");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
@@ -288,14 +290,14 @@ test("revocation refresh removes cached family; new PIN is required for reactiva
   await page.reload();
   await expect(page.getByText(/Acesso restrito/)).toBeVisible();
   await page.goto(`/c/${code}`);
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("0047");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
   await expect(
-    page.getByText("Código ou PIN inválido.", { exact: true }),
+    page.getByText("Código ou senha inválido.", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("3478");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("3478");
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
@@ -308,7 +310,7 @@ test("a new browser device needs PIN even after another device activates", async
 }) => {
   const first = await backend(page, null);
   await page.goto(`/c/${code}`);
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("0047");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
@@ -324,7 +326,7 @@ test("a new browser device needs PIN even after another device activates", async
     ).toBeVisible();
     expect(second.activations).toBe(0);
     await expect(
-      other.getByLabel("PIN de acesso", { exact: true }),
+      other.getByLabel("Senha de acesso", { exact: true }),
     ).toBeVisible();
     await expect(
       other.getByText("Integrante Protegido", { exact: true }),
@@ -557,7 +559,7 @@ test("implicit recovery clears URL, changes password and permits subsequent pass
     .getByRole("button", { name: "Salvar minha senha", exact: true })
     .click();
   await expect(
-    page.getByText("Senha atualizada no Supabase Auth.", { exact: true }),
+    page.getByText("Senha atualizada.", { exact: true }),
   ).toBeVisible();
   await page.goto("/painel");
   await page
@@ -665,4 +667,36 @@ test("implicit recovery preserves session on transient role failure and retries 
   expect(counts.tokens).toBe(0);
   expect(counts.email).toBe(0);
   expect(counts.logout).toBe(0);
+});
+
+test("Enter submits the shared login action only once while authentication is busy", async ({
+  page,
+}) => {
+  await backend(page);
+  let requests = 0;
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(
+    "http://127.0.0.1:54321/auth/v1/token?grant_type=password",
+    async (route) => {
+      requests++;
+      await wait;
+      await route.fallback();
+    },
+  );
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("staff@example.com");
+  await page.getByLabel("Senha", { exact: true }).fill("correct-password");
+  await page.getByLabel("Senha", { exact: true }).press("Enter");
+  await expect.poll(() => requests).toBe(1);
+  await expect(
+    page.getByRole("button", { name: "Entrar", exact: true }),
+  ).toBeDisabled();
+  await page.keyboard.press("Enter");
+  expect(requests).toBe(1);
+  release();
+  await expect(page).toHaveURL(/\/painel$/);
+  expect(requests).toBe(1);
 });

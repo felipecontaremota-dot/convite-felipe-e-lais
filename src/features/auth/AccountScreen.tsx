@@ -53,7 +53,7 @@ function PasswordForm() {
             await savePassword(supabase, eventId, password, confirmation);
             setPassword("");
             setConfirmation("");
-            return "Senha atualizada no Supabase Auth.";
+            return "Senha atualizada.";
           })
         }
       />

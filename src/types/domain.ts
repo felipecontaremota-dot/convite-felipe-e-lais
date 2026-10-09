@@ -2,6 +2,8 @@ export type Role = "GUEST" | "ADMIN" | "CEREMONIALIST";
 export type RSVP = "PENDING" | "CONFIRMED" | "DECLINED";
 export type Channel = "IN_APP" | "PUSH" | "EMAIL" | "WHATSAPP";
 export interface WeddingEvent {
+  gps_url?: string | null;
+  version?: number;
   id: string;
   title: string;
   starts_at: string;
@@ -12,6 +14,8 @@ export interface WeddingEvent {
   longitude: number | null;
 }
 export interface Invitation {
+  kind?: "FAMILY" | "INDIVIDUAL";
+  archived_at?: string | null;
   pin?: string | null;
   sharing_code?: string | null;
   link_active?: boolean;

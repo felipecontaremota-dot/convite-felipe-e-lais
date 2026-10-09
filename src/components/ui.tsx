@@ -9,7 +9,7 @@ import {
   StyleSheet,
   type TextInputProps,
 } from "react-native";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { theme } from "../theme/tokens";
 import { useApp } from "../lib/AppProvider";
 import { canAccess } from "../utils/security";
@@ -69,6 +69,8 @@ export const styles = StyleSheet.create({
     borderColor: theme.colors.line,
     borderWidth: 1,
   },
+  selected: { backgroundColor: "#F4EDDD", borderColor: theme.colors.gold },
+  selectedText: { color: theme.colors.ink, fontWeight: "700" },
   notice: { backgroundColor: theme.colors.wash, padding: 14, borderRadius: 10 },
   error: { color: theme.colors.error, fontSize: 15 },
   badge: {
@@ -164,15 +166,13 @@ export function Choice<T extends string>({
           accessibilityState={{ checked: value === option.value }}
           aria-checked={value === option.value}
           onPress={() => onChange(option.value)}
-          style={[
-            styles.nav,
-            value === option.value && {
-              backgroundColor: theme.colors.wash,
-              borderColor: theme.colors.ink,
-            },
-          ]}
+          style={[styles.nav, value === option.value && styles.selected]}
         >
-          <Text style={styles.text}>{option.label}</Text>
+          <Text
+            style={[styles.text, value === option.value && styles.selectedText]}
+          >
+            {option.label}
+          </Text>
         </Pressable>
       ))}
     </View>
@@ -277,6 +277,7 @@ export function Screen({
   children: React.ReactNode;
 }) {
   const app = useApp();
+  const pathname = usePathname();
   const feedback = useFeedback();
   const [discard, setDiscard] = useState(false);
   const guard = section && !canAccess(app.data?.role || null, section);
@@ -303,10 +304,16 @@ export function Screen({
             <Pressable
               key={path}
               accessibilityRole="link"
+              accessibilityState={{ selected: pathname === path }}
+              aria-current={pathname === path ? "page" : undefined}
               onPress={() => router.push(path as never)}
-              style={styles.nav}
+              style={[styles.nav, pathname === path && styles.selected]}
             >
-              <Text style={styles.small}>{label}</Text>
+              <Text
+                style={[styles.small, pathname === path && styles.selectedText]}
+              >
+                {label}
+              </Text>
             </Pressable>
           ))}
         </View>
