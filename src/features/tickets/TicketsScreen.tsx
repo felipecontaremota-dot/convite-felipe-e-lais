@@ -23,7 +23,9 @@ function TicketCard({ guest }: { guest: Guest }) {
       .then((t) => {
         if (active) setTicket(t);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setTicket(null);
+      });
     return () => {
       active = false;
     };
@@ -48,10 +50,12 @@ function TicketCard({ guest }: { guest: Guest }) {
         invalida o anterior.
       </Text>
       <Button
-        title={ticket ? "Regenerar ingresso" : "Emitir ingresso"}
+        title={
+          ticket ? "Regenerar ingresso" : "Emitir / regenerar neste dispositivo"
+        }
         onPress={() =>
           feedback.run(async () => {
-            setTicket(await app.ticket(guest.id, !!ticket));
+            setTicket(await app.ticket(guest.id, true));
             return "Ingresso salvo neste dispositivo.";
           })
         }

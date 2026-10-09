@@ -19,8 +19,9 @@ import { demoEnabled, supabase, eventId } from "./supabase";
 import * as api from "../repositories/api";
 import * as demo from "../repositories/demo";
 import { MutationQueue } from "../storage/queue";
-import { storage, readCache, writeCache, updateCache } from "../storage/driver";
+import { storage, readCache, writeCache } from "../storage/driver";
 import { AppError } from "./errors";
+import { getDeviceTicket } from "../repositories/tickets";
 interface ContextValue {
   data: Snapshot | null;
   loading: boolean;
@@ -141,24 +142,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [online, user, demoRole, sync]);
   const refetch = query.refetch;
+  const credentialState = JSON.stringify(
+    (query.data || cached)?.credentials || [],
+  );
   const ticket = useCallback(
     async (guest: string, regenerate = false): Promise<Ticket> => {
-      const key = `tickets:${scope}`;
-      const tickets = (await readCache<Ticket[]>(key)) || [];
-      const existing = tickets.find((t) => t.guest_id === guest);
-      if (existing && !regenerate) return existing;
-      if (!online) throw new AppError("Conecte-se para emitir este ingresso.");
-      const next = demoRole
-        ? await demo.demoTicket(guest)
-        : await api.issueTicket(guest);
-      await updateCache<Ticket[]>(key, (current) => [
-        ...(current || []).filter((t) => t.guest_id !== guest),
-        next,
-      ]);
-      await refetch();
-      return next;
+      const result = await getDeviceTicket(
+        scope,
+        guest,
+        JSON.parse(credentialState),
+        online,
+        regenerate,
+        async (rotate) =>
+          demoRole
+            ? demo.demoTicket(guest, rotate)
+            : api.issueTicket(guest, rotate),
+      );
+      if (online) await refetch();
+      return result;
     },
-    [scope, online, demoRole, refetch],
+    [scope, credentialState, online, demoRole, refetch],
   );
   const base = query.data || cached;
   const projected = base

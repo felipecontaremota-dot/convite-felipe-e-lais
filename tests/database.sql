@@ -21,6 +21,9 @@ select app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-800
 select pg_temp.assert_true((app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000001","status":"DECLINED"}')->>'duplicate')::boolean,'mutation idempotency');
 select issue_ticket('00000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001') as ticket \gset
 select pg_temp.assert_true(length((:'ticket'::jsonb)->>'token')=64,'opaque token entropy');
+do $$begin perform issue_ticket('00000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001');raise exception 'silent rotation';exception when others then if sqlerrm<>'ticket_exists' then raise;end if;end$$;
+select pg_temp.assert_true(jsonb_array_length(app_snapshot('00000000-0000-4000-8000-000000000001')->'credentials')=1,'guest sees own credential hash');
+select issue_ticket('00000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',true) as ticket \gset
 select app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000003','MESSAGE_SEND','{"content":"Recado privado","sender_guest_id":"20000000-0000-4000-8000-000000000001"}');
 set local request.jwt.claim.sub='aaaaaaaa-0000-4000-8000-000000000002';
 select pg_temp.assert_true((select count(*) from messages)=0,'ceremonial no messages SELECT');

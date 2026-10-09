@@ -109,7 +109,7 @@ create function finish_sheet_job(p_id uuid,p_version bigint,p_error text) return
 $$;
 -- Explicit grants after revoking PostgreSQL's default PUBLIC function privileges.
 revoke all on all functions in schema public from public,anon,authenticated;
-grant execute on function event_role(uuid),my_invitation(uuid),owns_guest(uuid,uuid),app_snapshot(uuid),issue_ticket(uuid,uuid),app_mutate(uuid,uuid,text,jsonb),admin_action(uuid,text,jsonb) to authenticated;
+grant execute on function event_role(uuid),my_invitation(uuid),owns_guest(uuid,uuid),app_snapshot(uuid),issue_ticket(uuid,uuid,boolean),app_mutate(uuid,uuid,text,jsonb),admin_action(uuid,text,jsonb) to authenticated;
 grant execute on function redeem_invitation(uuid,uuid,text,text),schedule_notifications(),claim_notifications(integer),claim_sheet_jobs(integer),finish_sheet_job(uuid,bigint,text) to service_role;
 
 grant select,insert,update,delete on all tables in schema public to service_role;

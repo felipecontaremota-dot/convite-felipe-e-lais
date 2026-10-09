@@ -17,9 +17,11 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     throw new AppError(
       error.message.includes("unauthorized")
         ? "Acesso não autorizado."
-        : error.message.includes("conflict")
-          ? "Dados alterados por outro usuário. Atualize a tela."
-          : "Não foi possível concluir a operação.",
+        : error.message.includes("ticket_exists")
+          ? "Já existe um ingresso. Escolha regenerar para substituir a versão anterior."
+          : error.message.includes("conflict")
+            ? "Dados alterados por outro usuário. Atualize a tela."
+            : "Não foi possível concluir a operação.",
       error.code,
     );
   }
@@ -40,8 +42,12 @@ export const adminAction = (action: string, payload: Record<string, unknown>) =>
     p_action: action,
     p_payload: payload,
   });
-export const issueTicket = (guest: string) =>
-  rpc<Ticket>("issue_ticket", { p_event: eventId, p_guest: guest });
+export const issueTicket = (guest: string, regenerate = false) =>
+  rpc<Ticket>("issue_ticket", {
+    p_event: eventId,
+    p_guest: guest,
+    p_regenerate: regenerate,
+  });
 export async function redeem(code: string) {
   invitationCode.parse(code);
   if (!supabase)

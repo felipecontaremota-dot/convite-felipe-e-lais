@@ -191,18 +191,19 @@ begin
  'messages',(select coalesce(jsonb_agg(to_jsonb(m) order by m.created_at desc),'[]') from messages m where event_id=p_event and (role='ADMIN' or role='GUEST' and m.channels @> '{IN_APP}'::delivery_channel[] and (m.invitation_id=inv or m.invitation_id is null))),
  'announcements',(select coalesce(jsonb_agg(to_jsonb(a) order by a.created_at desc),'[]') from announcements a where event_id=p_event and role in ('ADMIN','GUEST')),
  'rules',(select coalesce(jsonb_agg(to_jsonb(r) order by r.days_before desc),'[]') from notification_rules r where event_id=p_event and role='ADMIN'),
- 'credentials',(select coalesce(jsonb_agg(to_jsonb(q)),'[]') from qr_credentials q where event_id=p_event and revoked_at is null and role in ('ADMIN','CEREMONIALIST')),
+ 'credentials',(select coalesce(jsonb_agg(to_jsonb(q)),'[]') from qr_credentials q where event_id=p_event and revoked_at is null and (role in ('ADMIN','CEREMONIALIST') or role='GUEST' and owns_guest(p_event,q.guest_id))),
  'notification_jobs',(select coalesce(jsonb_agg(jsonb_build_object('id',j.id,'channel',j.channel,'status',j.status,'attempts',j.attempts,'last_error',j.last_error,'created_at',j.created_at)),'[]') from notification_jobs j where event_id=p_event and role='ADMIN'),
  'sheet_jobs',(select coalesce(jsonb_agg(jsonb_build_object('id',j.id,'status',j.status,'attempts',j.attempts,'last_error',j.last_error,'version',j.version)),'[]') from sheet_sync_jobs j where event_id=p_event and role='ADMIN'),
  'checkins',(select coalesce(jsonb_agg(to_jsonb(c) order by c.created_at desc),'[]') from checkins c where event_id=p_event and role in ('ADMIN','CEREMONIALIST')));
  return result;
 end $$;
-create function issue_ticket(p_event uuid,p_guest uuid) returns jsonb language plpgsql security definer set search_path=public,extensions,pg_temp as $$
+create function issue_ticket(p_event uuid,p_guest uuid,p_regenerate boolean default false) returns jsonb language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 declare token text:=encode(gen_random_bytes(32),'hex');
 begin
  if event_role(p_event) is distinct from 'ADMIN' and not owns_guest(p_event,p_guest) then raise exception 'unauthorized';end if;
  perform 1 from guests where event_id=p_event and id=p_guest for update;
  if not exists(select 1 from rsvps where event_id=p_event and guest_id=p_guest and status='CONFIRMED') then raise exception 'not confirmed';end if;
+ if not p_regenerate and exists(select 1 from qr_credentials where event_id=p_event and guest_id=p_guest and revoked_at is null) then raise exception 'ticket_exists';end if;
  update qr_credentials set revoked_at=now() where event_id=p_event and guest_id=p_guest and revoked_at is null;
  insert into qr_credentials(event_id,guest_id,token_hash) values(p_event,p_guest,encode(digest(token,'sha256'),'hex'));
  return jsonb_build_object('guest_id',p_guest,'token',token);

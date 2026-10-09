@@ -148,7 +148,9 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
           (!m.invitation_id || m.invitation_id === demoFamily) &&
           (!m.channels || m.channels.includes("IN_APP")),
       );
-      s.credentials = [];
+      s.credentials = s.credentials.filter(
+        (c) => guestIds.has(c.guest_id) && !c.revoked_at,
+      );
       s.checkins = [];
       s.rules = [];
       s.gifts = s.gifts.filter((g) => g.active);
@@ -298,7 +300,10 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
     db.applied.push(m.mutationId);
   });
 }
-export async function demoTicket(guestId: string): Promise<Ticket> {
+export async function demoTicket(
+  guestId: string,
+  regenerate = false,
+): Promise<Ticket> {
   return transaction(async (db) => {
     if (
       !db.snapshot.rsvps.some(
@@ -306,6 +311,13 @@ export async function demoTicket(guestId: string): Promise<Ticket> {
       )
     )
       throw Error("Confirme a presença primeiro");
+    if (
+      !regenerate &&
+      db.snapshot.credentials.some(
+        (c) => c.guest_id === guestId && !c.revoked_at,
+      )
+    )
+      throw Error("Ingresso existente; regeneração explícita necessária");
     db.snapshot.credentials.forEach((c) => {
       if (c.guest_id === guestId) c.revoked_at = stamp();
     });
