@@ -14,10 +14,13 @@ export default defineConfig({
       : undefined,
   },
   projects: [
-    { name: "demo", testIgnore: "staff-and-pin.spec.ts" },
+    {
+      name: "demo",
+      testIgnore: ["staff-and-pin.spec.ts", "database-admin.spec.ts"],
+    },
     {
       name: "auth",
-      testMatch: "staff-and-pin.spec.ts",
+      testMatch: ["staff-and-pin.spec.ts", "database-admin.spec.ts"],
       use: { baseURL: "http://127.0.0.1:8083" },
     },
   ],
@@ -31,7 +34,7 @@ export default defineConfig({
     },
     {
       command:
-        "EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 EXPO_PUBLIC_SUPABASE_ANON_KEY=fixture-public-key EXPO_PUBLIC_WEB_BASE_URL=https://example.test EXPO_PUBLIC_DEMO_MODE=false CI=1 npm run web -- --port 8083",
+        "EXPO_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY=fixture-public-maps-key EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 EXPO_PUBLIC_SUPABASE_ANON_KEY=fixture-public-key EXPO_PUBLIC_WEB_BASE_URL=https://example.test EXPO_PUBLIC_DEMO_MODE=false CI=1 npm run web -- --port 8083",
       url: "http://127.0.0.1:8083",
       reuseExistingServer: false,
       timeout: 120000,

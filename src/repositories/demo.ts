@@ -161,7 +161,10 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.sheet_jobs = [];
       s.messages = s.messages.filter(
         (m) =>
-          (!m.invitation_id || m.invitation_id === demoFamily) &&
+          (m.recipient_guest_ids
+            ? m.recipient_guest_ids.some((id) => guestIds.has(id))
+            : (!m.invitation_id || m.invitation_id === demoFamily) &&
+              (!m.recipient_guest_id || guestIds.has(m.recipient_guest_id))) &&
           (!m.channels || m.channels.includes("IN_APP")),
       );
       s.credentials = s.credentials.filter(
@@ -228,11 +231,40 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
         const invitation =
           role === "GUEST" ? demoFamily : String(p.invitation_id || "") || null;
         if (!String(p.content || "").trim()) throw Error("Digite uma mensagem");
+        let recipientIds: string[] | undefined;
+        if (p.recipient_guest_ids !== undefined) {
+          if (role !== "ADMIN") throw Error("unauthorized");
+          if (
+            !Array.isArray(p.recipient_guest_ids) ||
+            !p.recipient_guest_ids.length ||
+            p.recipient_guest_ids.length > 500 ||
+            invitation ||
+            p.recipient_guest_id
+          )
+            throw Error("invalid recipient");
+          recipientIds = [...new Set(p.recipient_guest_ids as string[])];
+          if (
+            recipientIds.some(
+              (id) =>
+                !s.guests.some(
+                  (g) =>
+                    g.id === id &&
+                    s.invitations.some(
+                      (i) =>
+                        i.id === g.invitation_id && i.active && !i.archived_at,
+                    ),
+                ),
+            )
+          )
+            throw Error("invalid recipient");
+        }
+
         s.messages.push({
           id: id(),
           event_id: event,
           invitation_id: invitation,
           recipient_guest_id: String(p.recipient_guest_id || "") || null,
+          ...(recipientIds ? { recipient_guest_ids: recipientIds } : {}),
           sender_guest_id:
             role === "GUEST" ? String(p.sender_guest_id || "") || null : null,
           sender_user_id: "demo",
@@ -265,6 +297,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
           role === "ADMIN" &&
           !invitation &&
           !p.recipient_guest_id &&
+          !recipientIds &&
           (!p.channels || (p.channels as string[]).includes("IN_APP"))
         )
           s.announcements.push({

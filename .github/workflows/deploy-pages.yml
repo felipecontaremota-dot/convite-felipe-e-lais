@@ -25,6 +25,7 @@ jobs:
       EXPO_PUBLIC_DEMO_MODE: "false"
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY: ${{ vars.EXPO_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

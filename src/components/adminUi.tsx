@@ -178,25 +178,7 @@ export function Select({
     </>
   );
 }
-export function Confirmation({
-  text,
-  onConfirm,
-  onCancel,
-}: {
-  text: string;
-  onConfirm: () => Promise<unknown>;
-  onCancel: () => void;
-}) {
-  return (
-    <Card>
-      <Text accessibilityRole="alert" style={styles.text}>
-        {text}
-      </Text>
-      <Button title="Confirmar" onPress={onConfirm} />
-      <Button secondary title="Cancelar" onPress={onCancel} />
-    </Card>
-  );
-}
+export { ConfirmModal as Confirmation } from "./AdminModal";
 export function Tag({ children }: { children: React.ReactNode }) {
   return (
     <Text

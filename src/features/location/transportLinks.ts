@@ -16,11 +16,12 @@ export function transportLinks(event: WeddingEvent) {
     google: destination
       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`
       : null,
-    waze: coordinates && !address
-      ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
-      : address
-        ? `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`
-        : null,
+    waze:
+      coordinates && !address
+        ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+        : address
+          ? `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`
+          : null,
     uber: address
       ? `https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=${encodeURIComponent(address)}`
       : null,
@@ -69,4 +70,11 @@ export async function nativeMapOptions(
   return checked.filter(
     (o): o is typeof o & { url: string } => o.available && !!o.url,
   );
+}
+
+export function mapsEmbedUrl(event: WeddingEvent, key?: string) {
+  const place = [event.venue_name, event.address].filter(Boolean).join(", ");
+  return key?.trim() && place
+    ? `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(key.trim())}&q=${encodeURIComponent(place)}`
+    : null;
 }

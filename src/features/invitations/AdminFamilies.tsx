@@ -12,6 +12,7 @@ import {
   useFeedback,
 } from "../../components/ui";
 import { Confirmation, IconButton, Select } from "../../components/adminUi";
+import { AdminModal, SelectedChips } from "../../components/AdminModal";
 import { useApp } from "../../lib/AppProvider";
 import type { Invitation } from "../../types/domain";
 import { invitationPin } from "../../utils/security";
@@ -60,7 +61,7 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
           icon="edit"
           label={`Editar família ${i.name}`}
           onPress={() => {
-            setExpanded((v) => !v);
+            setExpanded(true);
             setEditVersion(i.version);
             setName(i.name);
             setActive(i.active);
@@ -104,30 +105,12 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
         {i.device_count || 0} dispositivo(s) ·{" "}
         {i.sent_at ? "Convite enviado" : "Convite não enviado"}
       </Text>
-      {confirm ? (
-        <Confirmation
-          text={
-            confirm === "delete"
-              ? "Excluir esta família? Seus membros serão preservados com links e senhas individuais. Os dispositivos da família serão revogados."
-              : "Remover este membro da família? Seu cadastro, RSVP e contatos serão preservados com acesso individual. Os dispositivos da família serão revogados."
-          }
-          onCancel={() => setConfirm(null)}
-          onConfirm={() =>
-            feedback.run(async () => {
-              await app.admin(
-                confirm === "delete"
-                  ? "FAMILY_DELETE"
-                  : "GUEST_REMOVE_FROM_FAMILY",
-                confirmationPayload,
-              );
-              if (confirm !== "delete") ownChange(i.version, i.version + 1);
-              setConfirm(null);
-            })
-          }
-        />
-      ) : null}
       {expanded ? (
-        <>
+        <AdminModal
+          title={`Editar família — ${i.name}`}
+          onClose={() => setExpanded(false)}
+          dismissible={!confirm}
+        >
           <Field label="Nome da família" value={name} onChangeText={setName} />
           <Toggle label="Família ativa" value={active} onChange={setActive} />
           <Select
@@ -158,6 +141,7 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
                   primary_guest_id: primary || null,
                 });
                 ownChange(editVersion, editVersion + 1);
+                setExpanded(false);
               })
             }
           />
@@ -173,22 +157,24 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
               <Button
                 secondary
                 title={`Abrir ficha de ${g.name}`}
-                onPress={() =>
+                onPress={() => {
+                  setExpanded(false);
                   router.push({
                     pathname: "/convidados",
                     params: { guest: g.id },
-                  })
-                }
+                  });
+                }}
               />
               <IconButton
                 icon="edit"
                 label={`Editar convidado ${g.name}`}
-                onPress={() =>
+                onPress={() => {
+                  setExpanded(false);
                   router.push({
                     pathname: "/convidados",
                     params: { guest: g.id, edit: "true" },
-                  })
-                }
+                  });
+                }}
               />
               <Button
                 secondary
@@ -211,6 +197,13 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
                   membros.
                 </Text>
               ) : null}
+              <SelectedChips
+                items={available.filter((g) => selected.includes(g.id))}
+                onRemove={(id) =>
+                  setSelected((ids) => ids.filter((x) => x !== id))
+                }
+                onClear={() => setSelected([])}
+              />
               {available.map((g) => (
                 <Toggle
                   key={g.id}
@@ -249,9 +242,31 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
             title="Fechar edição"
             onPress={() => setExpanded(false)}
           />
-        </>
+          {feedback.node}
+        </AdminModal>
       ) : null}
-      {feedback.node}
+      {confirm ? (
+        <Confirmation
+          confirmLabel={confirm === "delete" ? "Excluir" : "Remover"}
+          text={
+            confirm === "delete"
+              ? "Tem certeza que deseja excluir esta família? Seus membros serão preservados na lista de convidados."
+              : "Tem certeza que deseja remover este convidado da família? Ele continuará cadastrado na lista de convidados e receberá acesso individual."
+          }
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => {
+            await app.admin(
+              confirm === "delete"
+                ? "FAMILY_DELETE"
+                : "GUEST_REMOVE_FROM_FAMILY",
+              confirmationPayload,
+            );
+            if (confirm !== "delete") ownChange(i.version, i.version + 1);
+            setConfirm(null);
+          }}
+        />
+      ) : null}
+      {!expanded ? feedback.node : null}
     </Card>
   );
 }
@@ -277,7 +292,10 @@ export function FamiliesScreen() {
       <Field label="Buscar família" value={search} onChangeText={setSearch} />
       <Button title="Adicionar família" onPress={() => setCreating(true)} />
       {creating ? (
-        <Card>
+        <AdminModal
+          title="Adicionar família"
+          onClose={() => setCreating(false)}
+        >
           <Field
             label="Nome da nova família"
             value={name}
@@ -318,7 +336,7 @@ export function FamiliesScreen() {
             onPress={() => setCreating(false)}
           />
           {feedback.node}
-        </Card>
+        </AdminModal>
       ) : null}
       {families.map((i) => (
         <FamilyCard key={i.id} invitation={i} />

@@ -8,8 +8,11 @@ import {
   Field,
   Screen,
   styles,
+  Toggle,
   useFeedback,
 } from "../../components/ui";
+import { AdminModal, SelectedChips } from "../../components/AdminModal";
+import { Select } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
 import type { Channel } from "../../types/domain";
 import { ChannelChoices } from "../notifications/ChannelChoices";
@@ -19,41 +22,104 @@ export function AdminMessages() {
   const [content, setContent] = useState(""),
     [target, setTarget] = useState("ALL"),
     [family, setFamily] = useState(""),
-    [guest, setGuest] = useState(""),
+    [guests, setGuests] = useState<string[]>([]),
+    [picking, setPicking] = useState(false),
+    [search, setSearch] = useState(""),
     [selected, setSelected] = useState<Channel[]>(["IN_APP"]);
+  const people = (app.data?.guests || [])
+    .filter((g) =>
+      app.data?.invitations.some(
+        (i) => i.id === g.invitation_id && i.active && !i.archived_at,
+      ),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const toggle = (id: string) =>
+    setGuests((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+    );
   return (
     <Screen section="admin" title="Recados & conversas">
       <Card>
         <Choice
           value={target}
-          onChange={setTarget}
+          onChange={(value) => {
+            setTarget(value);
+            setFamily("");
+            setGuests([]);
+          }}
           options={[
             { value: "ALL", label: "Todos" },
             { value: "FAMILY", label: "Família" },
             { value: "GUEST", label: "Pessoa" },
           ]}
         />
-        {target !== "ALL" ? (
-          <Choice
+        {target === "FAMILY" ? (
+          <Select
+            label="Selecionar família"
             value={family}
             onChange={setFamily}
-            options={
-              app.data?.invitations
-                .filter((i) => i.active)
-                .map((i) => ({ value: i.id, label: i.name })) || []
-            }
+            options={[
+              { value: "", label: "Selecionar família" },
+              ...(app.data?.invitations || [])
+                .filter(
+                  (i) =>
+                    i.active &&
+                    !i.archived_at &&
+                    (i.kind || "FAMILY") === "FAMILY",
+                )
+                .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+                .map((i) => ({ value: i.id, label: i.name })),
+            ]}
           />
         ) : null}
         {target === "GUEST" ? (
-          <Choice
-            value={guest}
-            onChange={setGuest}
-            options={
-              app.data?.guests
-                .filter((g) => g.invitation_id === family)
-                .map((g) => ({ value: g.id, label: g.name })) || []
-            }
-          />
+          <>
+            <Button
+              secondary
+              title="Selecionar pessoa(s)"
+              onPress={() => setPicking(true)}
+            />
+            <SelectedChips
+              items={people.filter((g) => guests.includes(g.id))}
+              onRemove={toggle}
+              onClear={() => setGuests([])}
+            />
+            {picking ? (
+              <AdminModal
+                title="Selecionar pessoa(s)"
+                onClose={() => setPicking(false)}
+              >
+                <Field
+                  label="Buscar pessoa"
+                  value={search}
+                  onChangeText={setSearch}
+                />
+                {people
+                  .filter((g) =>
+                    g.name
+                      .toLocaleLowerCase("pt-BR")
+                      .includes(search.toLocaleLowerCase("pt-BR")),
+                  )
+                  .map((g) => (
+                    <Toggle
+                      key={g.id}
+                      label={g.name}
+                      value={guests.includes(g.id)}
+                      onChange={() => toggle(g.id)}
+                    />
+                  ))}
+                <SelectedChips
+                  items={people.filter((g) => guests.includes(g.id))}
+                  onRemove={toggle}
+                  onClear={() => setGuests([])}
+                />
+                <Button
+                  title="Concluir seleção"
+                  onPress={() => setPicking(false)}
+                />
+              </AdminModal>
+            ) : null}
+          </>
         ) : null}
         <Field
           label="Mensagem dos noivos"
@@ -68,18 +134,19 @@ export function AdminMessages() {
           disabled={
             !content.trim() ||
             !selected.length ||
-            (target !== "ALL" && !family) ||
-            (target === "GUEST" && !guest)
+            (target === "FAMILY" && !family) ||
+            (target === "GUEST" && (!guests.length || guests.length > 500))
           }
           onPress={() =>
             feedback.run(async () => {
               const result = await app.send("MESSAGE_SEND", {
                 content: content.trim(),
-                invitation_id: target === "ALL" ? null : family,
-                recipient_guest_id: target === "GUEST" ? guest : null,
+                invitation_id: target === "FAMILY" ? family : null,
+                ...(target === "GUEST" ? { recipient_guest_ids: guests } : {}),
                 channels: selected,
               });
               setContent("");
+              setGuests([]);
               return result;
             })
           }

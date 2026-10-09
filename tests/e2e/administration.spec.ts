@@ -95,18 +95,24 @@ test("standalone creation, child/group, contact mask, email validation, detail a
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Confira os campos");
   await expect(
-    page.getByRole("button", {
-      name: "Abrir ficha de José Victor",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Abrir ficha de José Victor",
+        exact: true,
+        includeHidden: true,
+      })
+      .filter({ visible: true }),
   ).toHaveCount(0);
   await page.getByLabel("E-mail", { exact: true }).fill("jose@example.com");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(
-    page.getByRole("button", {
-      name: "Abrir ficha de José Victor",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Abrir ficha de José Victor",
+        exact: true,
+        includeHidden: true,
+      })
+      .filter({ visible: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Nota administrativa privada", { exact: true }),
@@ -239,7 +245,7 @@ test("alphabetical list, exact filters, batch family association, detach and del
   await expect(page.getByRole("alert")).toContainText(
     "dispositivos anteriores",
   );
-  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await page.getByRole("button", { name: "Adicionar", exact: true }).click();
   await expect(page.getByText(/selecionado\(s\)/)).toHaveCount(0);
   let db = await database(page);
   const family = db.invitations.find(
@@ -263,7 +269,7 @@ test("alphabetical list, exact filters, batch family association, detach and del
       exact: true,
     })
     .click();
-  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await page.getByRole("button", { name: "Remover", exact: true }).click();
   await expect(
     page.getByRole("button", {
       name: "Remover da família: José Victor",
@@ -278,12 +284,15 @@ test("alphabetical list, exact filters, batch family association, detach and del
     db.invitations.find((i: { id: string }) => i.id === jose.invitation_id),
   ).toMatchObject({ kind: "INDIVIDUAL", pin: "3478", active: true });
   await page
+    .getByRole("button", { name: "Fechar edição", exact: true })
+    .click();
+  await page
     .getByRole("button", {
       name: "Excluir família Guilherme e família",
       exact: true,
     })
     .click();
-  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await page.getByRole("button", { name: "Excluir", exact: true }).click();
   await expect(
     page.getByRole("button", {
       name: "Editar família Guilherme e família",
@@ -308,17 +317,23 @@ test("alphabetical list, exact filters, batch family association, detach and del
     .getByRole("button", { name: "Excluir selecionados", exact: true })
     .click();
   await expect(
-    page.getByRole("button", {
-      name: "Abrir ficha de José Victor",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Abrir ficha de José Victor",
+        exact: true,
+        includeHidden: true,
+      })
+      .filter({ visible: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await page.getByRole("button", { name: "Excluir", exact: true }).click();
   await expect(
-    page.getByRole("button", {
-      name: "Abrir ficha de José Victor",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Abrir ficha de José Victor",
+        exact: true,
+        includeHidden: true,
+      })
+      .filter({ visible: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Abrir ficha de Ágata", exact: true }),
@@ -390,6 +405,7 @@ test("location saves separate GPS URL, rejects HTTP and offers web map/share fal
   await nav(page, "Local");
   await expect(page.getByLabel("Latitude", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Longitude", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Editar local", exact: true }).click();
   await page
     .getByLabel("Nome do local", { exact: true })
     .fill("Villarejo Eventos");
@@ -423,7 +439,7 @@ test("location saves separate GPS URL, rejects HTTP and offers web map/share fal
   await nav(page, "Como chegar");
   await expect(
     page
-      .getByText("Villarejo Eventos", { exact: true })
+      .getByRole("heading", { name: "Villarejo Eventos", exact: true })
       .filter({ visible: true }),
   ).toBeVisible();
   await page
@@ -453,17 +469,23 @@ test("individual deletion is confirmed separately and a member pencil opens its 
     })
     .click();
   await expect(
-    page.getByRole("button", {
-      name: "Abrir ficha de Pessoa excluir",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Abrir ficha de Pessoa excluir",
+        exact: true,
+        includeHidden: true,
+      })
+      .filter({ visible: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(
-    page.getByRole("button", {
-      name: "Abrir ficha de Pessoa excluir",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Abrir ficha de Pessoa excluir",
+        exact: true,
+        includeHidden: true,
+      })
+      .filter({ visible: true }),
   ).toBeVisible();
   await page
     .getByRole("button", {
@@ -471,12 +493,15 @@ test("individual deletion is confirmed separately and a member pencil opens its 
       exact: true,
     })
     .click();
-  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await page.getByRole("button", { name: "Excluir", exact: true }).click();
   await expect(
-    page.getByRole("button", {
-      name: "Abrir ficha de Pessoa excluir",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Abrir ficha de Pessoa excluir",
+        exact: true,
+        includeHidden: true,
+      })
+      .filter({ visible: true }),
   ).toHaveCount(0);
   await nav(page, "Famílias");
   await page

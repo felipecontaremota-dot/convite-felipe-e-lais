@@ -79,6 +79,7 @@ export interface Message {
   event_id: string;
   invitation_id: string | null;
   recipient_guest_id: string | null;
+  recipient_guest_ids?: string[];
   sender_guest_id: string | null;
   sender_user_id: string;
   from_admin: boolean;
