@@ -17,7 +17,7 @@
     "check:functions": "deno check --config supabase/functions/deno.json supabase/functions/redeem-invitation/index.ts supabase/functions/dispatch-notifications/index.ts supabase/functions/sync-sheets/index.ts",
     "import:report": "tsx scripts/import-guests.ts",
     "format": "prettier --write app src tests scripts docs *.json *.ts *.js README.md .github/workflows/*.yml",
-    "test:functions": "deno test --config supabase/functions/deno.json --allow-env supabase/functions/_shared/providers.test.ts",
+    "test:functions": "deno test --config supabase/functions/deno.json --allow-env supabase/functions/_shared/providers.test.ts supabase/functions/redeem-invitation/handler.test.ts",
     "serve:web": "node scripts/serve-web.mjs",
     "test:export": "node scripts/test-export.mjs"
   },

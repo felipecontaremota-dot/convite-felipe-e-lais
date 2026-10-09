@@ -48,7 +48,9 @@ export function codeFromLink(value: string) {
     if (!["https:", "felipeelais:"].includes(u.protocol)) return null;
     const path =
       u.protocol === "felipeelais:" ? `/${u.host}${u.pathname}` : u.pathname;
-    return invitationCode.parse(path.match(/^\/c\/([A-Za-z0-9_-]+)$/)?.[1]);
+    return invitationCode.parse(
+      path.match(/(?:^|\/)c\/([A-Za-z0-9_-]+)$/)?.[1],
+    );
   } catch {
     return null;
   }
@@ -56,4 +58,22 @@ export function codeFromLink(value: string) {
 export function ticketToken(value: string) {
   const token = value.startsWith("wedding://ticket/") ? value.slice(17) : value;
   return /^[a-f0-9]{64}$/.test(token) ? token : null;
+}
+
+export const invitationPin = z
+  .string()
+  .regex(/^[0-9]{4}$/, "O PIN deve ter 4 dígitos.");
+export function normalizePhone(value: string) {
+  return value.replace(/[^0-9]/g, "");
+}
+export function suggestedPin(phone: string) {
+  const digits = normalizePhone(phone);
+  return digits.length >= 8 ? digits.slice(-4) : null;
+}
+export function staffDestination(role: Role | null) {
+  return role === "ADMIN"
+    ? "/painel"
+    : role === "CEREMONIALIST"
+      ? "/checkin"
+      : null;
 }

@@ -1,7 +1,7 @@
 import { supabase, eventId } from "../lib/supabase";
 import { AppError, AuthError, NetworkError } from "../lib/errors";
 import type { OfflineMutation, Snapshot, Ticket } from "../types/domain";
-import { invitationCode } from "../utils/security";
+import { invitationCode, invitationPin } from "../utils/security";
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (!supabase)
     throw new AppError(
@@ -48,8 +48,12 @@ export const issueTicket = (guest: string, regenerate = false) =>
     p_guest: guest,
     p_regenerate: regenerate,
   });
-export async function redeem(code: string) {
-  invitationCode.parse(code);
+export async function invitationAccess(code: string, pin?: string) {
+  if (
+    !invitationCode.safeParse(code).success ||
+    (pin !== undefined && !invitationPin.safeParse(pin).success)
+  )
+    throw new AuthError("Código ou PIN inválido.");
   if (!supabase)
     throw new AppError(
       "O convite ainda não está disponível. Tente novamente mais tarde.",
@@ -62,12 +66,18 @@ export async function redeem(code: string) {
     if (result.error) throw new AuthError("Não foi possível iniciar o acesso.");
     session = result.data.session;
   }
-  const { error } = await supabase.functions.invoke("redeem-invitation", {
-    body: { code, event_id: eventId },
+  if (!session?.user.is_anonymous)
+    throw new AuthError("Saia da conta administrativa para ativar um convite.");
+  const { data, error } = await supabase.functions.invoke("redeem-invitation", {
+    body: {
+      code,
+      event_id: eventId,
+      ...(pin === undefined ? { action: "identify" } : { pin }),
+    },
   });
-  if (error)
-    throw new AuthError(
-      "Convite inválido, bloqueado ou limite de tentativas atingido.",
-    );
-  return session;
+  if (error) throw new AuthError("Código ou PIN inválido.");
+  return data as { name: string; activated: boolean };
 }
+export const identifyInvitation = (code: string) => invitationAccess(code);
+export const redeem = (code: string, pin: string) =>
+  invitationAccess(code, pin);

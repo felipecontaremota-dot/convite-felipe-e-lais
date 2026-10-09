@@ -17,15 +17,15 @@ npm run android
 npm run ios
 ```
 
-O modo demo é permitido **somente quando `__DEV__` é verdadeiro**, com opt-in explícito. A tela inicial oferece três papéis de demonstração. Também aceita `/c/DemoConviteExclusivoFelipeLais2026`. Usa exclusivamente dados fictícios e armazenamento local; não autentica administradores no Supabase nem envia mensagens externas. Expo export/EAS em produção não habilitam esse acesso, mesmo que a variável esteja `true`.
+O modo demo é permitido **somente quando `__DEV__` é verdadeiro**, com opt-in explícito. A tela inicial oferece três papéis de demonstração. Também aceita `/c/DemoConviteExclusivoFelipeLais2026` com PIN fictício `0047`. Usa exclusivamente dados fictícios e armazenamento local; não autentica administradores no Supabase nem envia mensagens externas. Expo export/EAS em produção não habilitam esse acesso, mesmo que a variável esteja `true`.
 
 Na máquina de nuvem, se o diretório pessoal não permitir escrita, use `npm_config_cache=/tmp/wedding-npm EXPO_NO_TELEMETRY=1 EXPO_NO_CACHE=1` antes dos comandos. O Chromium do sistema pode ser usado com `PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium`.
 
 ## Experiência
 
-- **Convidado:** acesso por convite familiar, sessão persistente, identificação opcional do usuário do aparelho, contatos e consentimentos separados, RSVP por pessoa, ingresso por confirmado, presentes/interesses, mensagens privadas à família/noivos, avisos e localização.
-- **ADMIN:** indicadores; gestão de famílias, integrantes, acompanhantes e contato principal; movimentação, junção/divisão; códigos de alta entropia, rotação/bloqueio; presentes, mensagens privadas/familiares/gerais, regras de notificações e local; dia do evento.
-- **CEREMONIALIST:** scanner e alternativa acessível/manual, confirmados, conferência antes de registrar, últimas entradas, cache e sincronização offline. Sem contatos, restrições alimentares, conversas privadas ou CRUD administrativo no payload do backend.
+- **Convidado:** acesso por link/código familiar + PIN de quatro dígitos na primeira ativação, sessão persistente, identificação opcional do usuário do aparelho, contatos e consentimentos separados, RSVP por pessoa, ingresso por confirmado, presentes/interesses, mensagens privadas à família/noivos, avisos e localização.
+- **ADMIN:** login por e-mail/senha, conta para definir/alterar senha, indicadores; gestão de famílias, integrantes, acompanhantes e contato principal; movimentação, junção/divisão; códigos de alta entropia, rotação/bloqueio; presentes, mensagens privadas/familiares/gerais, regras de notificações e local; dia do evento.
+- **CEREMONIALIST:** login por e-mail/senha, scanner e alternativa acessível/manual, confirmados, conferência antes de registrar, últimas entradas, cache e sincronização offline. Sem contatos, restrições alimentares, conversas privadas ou CRUD administrativo no payload do backend.
 
 Cada convite é uma capacidade compartilhada pela família: todos os aparelhos vinculados podem responder pelos integrantes desse convite. A identificação de quem usa o aparelho é voluntária, não autenticação pessoal. RSVP e check-in são entidades distintas.
 
@@ -39,11 +39,11 @@ npx supabase db reset
 npx supabase functions serve
 ```
 
-`supabase/migrations/` cria o banco, RLS, RPCs transacionais, audit log, deduplicação e outboxes. `supabase/seed.sql` cadastra apenas o evento e nove regras editáveis. Não cria convidados reais ou ADMIN. Crie os usuários autorizados no Supabase Auth e atribua papéis em `user_roles` por um operador confiável, conforme [segurança](docs/security.md). Ative Anonymous Auth para convidados; configure o template de OTP de e-mail e SMTP para login dos noivos/cerimonial. Configure proteção antiabuso/CAPTCHA de Auth e gateway antes de produção.
+`supabase/migrations/` cria o banco, RLS, RPCs transacionais, audit log, deduplicação e outboxes. `supabase/seed.sql` cadastra apenas o evento e nove regras editáveis. Não cria convidados reais ou ADMIN. Crie os usuários autorizados no Supabase Auth e atribua papéis em `user_roles` por um operador confiável, conforme [segurança](docs/security.md). Ative Anonymous Auth para convidados; mantenha SMTP/Resend e configure recuperação de senha. O login normal dos noivos/cerimonial usa e-mail e senha, com papel consultado no backend. Configure proteção antiabuso/CAPTCHA de Auth e gateway antes de produção.
 
-`redeem-invitation` valida o JWT no servidor e associa seu usuário ao convite pelo hash do código. A RPC de associação não pode ser executada diretamente por clientes. As demais RPCs verificam evento, papel e vínculo; as tabelas não concedem mutações diretas aos clientes. Rotacionar/bloquear códigos encerra vínculos existentes desse convite.
+`redeem-invitation` valida o JWT no servidor e exige sessão anônima e associa seu usuário ao convite somente após validar código + PIN. Identificação por código retorna apenas nome e vínculo daquele dispositivo. A RPC de associação não pode ser executada diretamente por clientes. As demais RPCs verificam evento, papel e vínculo; as tabelas não concedem mutações diretas aos clientes. Rotacionar/bloquear códigos encerra vínculos existentes desse convite.
 
-Para um projeto hospedado, revise migrations/seed antes de `supabase db push` e faça deploy das três Edge Functions. Nenhuma implantação hospedada é executada por este projeto. Workers requerem `WORKER_SECRET`, devem ser agendados por um scheduler seguro e não são acionados pelo app. Configuração detalhada: [banco](docs/database.md), [notificações](docs/notifications.md), [Sheets](docs/google-sheets-integration.md).
+Para um projeto hospedado, revise migrations/seed antes de `supabase db push` e faça deploy das três Edge Functions. Nenhuma implantação hospedada é executada por este projeto. Workers requerem `WORKER_SECRET`, devem ser agendados por um scheduler seguro e não são acionados pelo app. Esta fase acrescenta a migration incremental `202610090003_access_families.sql` e exige deploy manual da Edge atualizada após o merge. Veja [acessos, primeira senha e implantação](docs/access-families.md). Configuração detalhada: [banco](docs/database.md), [notificações](docs/notifications.md), [Sheets](docs/google-sheets-integration.md).
 
 ## Offline e QR
 
@@ -74,13 +74,13 @@ npm test
 npm run check:functions
 npm run test:functions # providers com HTTP simulado; nenhum envio externo
 npm run test:db       # Docker, PostgreSQL 17 descartável e Auth stub; não acessa produção
-npm run test:e2e      # Chromium, Expo dev e dados demo isolados
+npm run test:e2e      # Chromium, Expo dev, demo e Auth/PIN com HTTP simulado
 npm run build:web
 npm run test:export  # inicia/encerra preview isolado; produção/PWA offline e demo bloqueado
 npm run serve:web    # preview manual na porta 8082, com fallback 404 do Pages
 ```
 
-Os testes de banco executam as migrations reais, RLS e RPCs sobre PostgreSQL. O Auth stub representa `auth.uid()`; não substitui teste de OTP/gateway de um projeto Supabase configurado. Tests de navegador cobrem papéis, link, RSVP individual, ingressos, presentes, mensagens, check-in QR/manual/offline e larguras de celular/tablet/desktop.
+Os testes de banco executam as migrations reais, RLS e RPCs sobre PostgreSQL. O Auth stub representa `auth.uid()`; não substitui teste de Auth/SMTP/gateway de um projeto Supabase configurado. Tests de navegador cobrem papéis, link, RSVP individual, ingressos, presentes, mensagens, check-in QR/manual/offline e larguras de celular/tablet/desktop.
 
 ## Publicação Web
 
@@ -125,6 +125,7 @@ Para um futuro domínio próprio, configure o domínio no Pages e altere as vari
 `app/` contém as rotas por papel; `src/features/` telas e domínio; `src/repositories/` Supabase e demo; `src/storage/` cache/fila; `src/components/` componentes acessíveis; `src/theme/` tokens. TanStack Query sincroniza snapshots; Zod valida entradas; SQL mantém a autorização definitiva.
 
 - [Arquitetura](docs/architecture.md)
+- [Acessos, famílias e primeira senha](docs/access-families.md)
 - [Banco](docs/database.md)
 - [Segurança e privacidade](docs/security.md)
 - [Google Sheets](docs/google-sheets-integration.md)

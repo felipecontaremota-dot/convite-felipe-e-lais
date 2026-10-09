@@ -16,7 +16,17 @@ import { AppError } from "../../lib/errors";
 import { readCache, writeCache } from "../../storage/driver";
 import type { Invitation } from "../../types/domain";
 import { copyText } from "../../utils/externalLinks";
-import { invitationLink } from "../../utils/security";
+import * as Crypto from "expo-crypto";
+import {
+  invitationPin,
+  suggestedPin,
+  invitationLink,
+} from "../../utils/security";
+
+function generatePin() {
+  const bytes = Crypto.getRandomBytes(2);
+  return String(((bytes[0]! << 8) + bytes[1]!) % 10000).padStart(4, "0");
+}
 
 function FamilyCard({ invitation: i }: { invitation: Invitation }) {
   const app = useApp(),
@@ -24,6 +34,7 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
   const members =
     app.data?.guests.filter((g) => g.invitation_id === i.id) || [];
   const [name, setName] = useState(i.name),
+    [pin, setPin] = useState(i.pin || ""),
     [active, setActive] = useState(i.active),
     [primary, setPrimary] = useState(i.primary_guest_id || ""),
     [target, setTarget] = useState(""),
@@ -35,13 +46,24 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
     let active = true;
     void readCache<Record<string, string>>(`codes:${app.scope}`).then(
       (codes) => {
-        if (active) setCode(codes?.[i.id] || "");
+        if (active)
+          setCode(
+            i.link_active === false
+              ? ""
+              : i.sharing_code || codes?.[i.id] || "",
+          );
       },
     );
     return () => {
       active = false;
     };
-  }, [app.scope, i.id]);
+  }, [app.scope, i.id, i.sharing_code, i.link_active]);
+  const primaryGuest = members.find((g) => g.id === primary);
+  const phone =
+    app.data?.contacts.find((c) => c.guest_id === primary)?.whatsapp || "";
+  const pending = members.filter((g) =>
+    app.data?.rsvps.some((r) => r.guest_id === g.id && r.status === "PENDING"),
+  ).length;
   return (
     <Card>
       <Text style={styles.heading}>{i.name}</Text>
@@ -54,8 +76,58 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
             ),
           ).length
         }{" "}
-        confirmados · Código: ********
+        confirmados · {pending} pendentes
       </Text>
+      <Text style={styles.small}>
+        Responsável: {primaryGuest?.name || "Não definido"} · WhatsApp:{" "}
+        {phone || "Não informado"}
+      </Text>
+      <Text style={styles.small}>
+        Link: {i.link_active ? "ativo" : "não disponível"} · Ativação:{" "}
+        {i.device_count || 0} dispositivo(s) · Envio:{" "}
+        {i.sent_at ? "Enviado" : "Não enviado"} ·{" "}
+        {i.first_activated_at ? "Já ativado" : "Ainda não ativado"}
+      </Text>
+      <Field
+        label="PIN da família"
+        value={pin}
+        onChangeText={setPin}
+        keyboardType="number-pad"
+        maxLength={4}
+      />
+      <Button
+        secondary
+        title="Sugerir pelo WhatsApp"
+        disabled={!suggestedPin(phone)}
+        onPress={() => setPin(suggestedPin(phone)!)}
+      />
+      <Button
+        secondary
+        title="Gerar PIN"
+        onPress={() => setPin(generatePin())}
+      />
+      <Button
+        title="Salvar PIN"
+        disabled={!invitationPin.safeParse(pin).success}
+        onPress={() =>
+          feedback.run(() =>
+            app.admin("PIN_SAVE", { id: i.id, version: i.version, pin }),
+          )
+        }
+      />
+      <Text style={styles.small}>
+        Alterar o PIN afeta novas ativações. Para exigir nova ativação dos
+        dispositivos atuais, revogue os acessos separadamente.
+      </Text>
+      <Button
+        secondary
+        title="Revogar dispositivos"
+        onPress={() =>
+          feedback.run(() =>
+            app.admin("ACCESS_REVOKE", { id: i.id, version: i.version }),
+          )
+        }
+      />
       <Field label="Nome da família" value={name} onChangeText={setName} />
       <Toggle label="Família ativa" value={active} onChange={setActive} />
       <Text style={styles.small}>Contato principal</Text>
@@ -85,7 +157,7 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
       <Button
         secondary
         title="Gerar / regenerar link"
-        disabled={!i.active}
+        disabled={!i.active || !i.pin}
         onPress={() =>
           feedback.run(async () => {
             const result = await app.admin("CODE_ROTATE", {
@@ -123,8 +195,29 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
               })
             }
           />
+          <Button
+            title="Copiar link + PIN"
+            disabled={!i.pin}
+            onPress={() =>
+              feedback.run(async () => {
+                const base = process.env.EXPO_PUBLIC_WEB_BASE_URL;
+                if (!base)
+                  throw new AppError(
+                    "Configure EXPO_PUBLIC_WEB_BASE_URL para copiar o link HTTPS.",
+                  );
+                await copyText(`${invitationLink(base, code)}\nPIN: ${i.pin}`);
+                return "Link e PIN copiados.";
+              })
+            }
+          />
         </>
-      ) : null}
+      ) : (
+        <Text style={styles.small}>
+          Salve um PIN e gere o link. Links antigos só podem ser recuperados no
+          dispositivo que os emitiu; regenerar invalida o anterior e os vínculos
+          atuais.
+        </Text>
+      )}
       <Button
         secondary
         title="Bloquear código"
@@ -219,6 +312,8 @@ export function FamiliesScreen() {
   const app = useApp(),
     feedback = useFeedback();
   const [name, setName] = useState(""),
+    [primaryName, setPrimaryName] = useState(""),
+    [pin, setPin] = useState(""),
     [search, setSearch] = useState("");
   return (
     <Screen section="admin" title="Famílias & convites">
@@ -228,12 +323,41 @@ export function FamiliesScreen() {
           value={name}
           onChangeText={setName}
         />
+        <Field
+          label="Nome do responsável inicial (opcional)"
+          value={primaryName}
+          onChangeText={setPrimaryName}
+        />
+        <Text style={styles.small}>
+          Se informado, será cadastrado como integrante. Você também pode
+          definir o responsável depois de cadastrar os convidados.
+        </Text>
+        <Field
+          label="PIN inicial (opcional)"
+          value={pin}
+          onChangeText={setPin}
+          keyboardType="number-pad"
+          maxLength={4}
+        />
+        <Button
+          secondary
+          title="Gerar PIN inicial"
+          onPress={() => setPin(generatePin())}
+        />
         <Button
           title="Criar família"
-          disabled={!name.trim()}
+          disabled={
+            !name.trim() || (!!pin && !invitationPin.safeParse(pin).success)
+          }
           onPress={() =>
             feedback.run(async () => {
-              await app.admin("INVITATION_SAVE", { name: name.trim() });
+              await app.admin("INVITATION_SAVE", {
+                name: name.trim(),
+                primary_name: primaryName.trim() || null,
+                pin: pin || null,
+              });
+              setPrimaryName("");
+              setPin("");
               setName("");
             })
           }

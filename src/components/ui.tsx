@@ -260,8 +260,12 @@ const nav = {
     ["Notificações", "/notificacoes"],
     ["Dia do evento", "/dia-do-evento"],
     ["Local", "/configuracao"],
+    ["Minha conta", "/conta"],
   ],
-  ceremonial: [["Check-in", "/checkin"]],
+  ceremonial: [
+    ["Check-in", "/checkin"],
+    ["Minha conta", "/conta"],
+  ],
 };
 export function Screen({
   title,

@@ -17,6 +17,14 @@ export function AdminHome() {
       s?.messages.filter((m) => !m.from_admin && !m.read_at).length,
     ],
     ["Check-ins", s?.checkins.length],
+    [
+      "Convites não enviados",
+      s?.invitations.filter((i) => i.active && !i.sent_at).length,
+    ],
+    [
+      "Famílias já ativadas",
+      s?.invitations.filter((i) => i.active && !!i.first_activated_at).length,
+    ],
   ];
   return (
     <Screen section="admin" title="O nosso casamento, em cada detalhe">

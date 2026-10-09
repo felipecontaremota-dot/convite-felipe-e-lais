@@ -1,6 +1,11 @@
 import { codeFromLink } from "./security";
 export function safeSystemPath(path: string): string {
   if (path.length > 1024) return "/";
+  const recovery = path.match(
+    /^(?:felipeelais:\/\/|\/)(?:recuperar-senha)\?token_hash=([A-Za-z0-9_-]{20,512})&type=recovery$/,
+  );
+  if (recovery)
+    return `/recuperar-senha?token_hash=${recovery[1]}&type=recovery`;
   const plain = path.split(/[?#]/)[0] || "/";
   const code = codeFromLink(plain);
   if (code) return `/c/${code}`;
@@ -8,6 +13,8 @@ export function safeSystemPath(path: string): string {
   const routes = new Set([
     "/",
     "/login",
+    "/conta",
+    "/recuperar-senha",
     "/inicio",
     "/painel",
     "/checkin",

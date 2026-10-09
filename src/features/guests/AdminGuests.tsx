@@ -11,6 +11,7 @@ import {
   styles,
   useFeedback,
 } from "../../components/ui";
+import { contactSchema, normalizePhone } from "../../utils/security";
 import { useApp } from "../../lib/AppProvider";
 
 export function GuestsScreen() {
@@ -24,8 +25,26 @@ export function GuestsScreen() {
     [guestId, setGuestId] = useState(""),
     [guestVersion, setGuestVersion] = useState<number | undefined>(),
     [group, setGroup] = useState(""),
+    [phone, setPhone] = useState(""),
+    [email, setEmail] = useState(""),
+    [notes, setNotes] = useState(""),
+    [child, setChild] = useState(false),
+    [adolescent, setAdolescent] = useState(false),
     [companion, setCompanion] = useState(""),
     [remove, setRemove] = useState(false);
+  const reset = () => {
+    setName("");
+    setGuestId("");
+    setGuestVersion(undefined);
+    setGroup("");
+    setCompanion("");
+    setPhone("");
+    setEmail("");
+    setNotes("");
+    setChild(false);
+    setAdolescent(false);
+    setRemove(false);
+  };
   const families = app.data?.invitations.filter((i) => i.active) || [];
   const guests =
     app.data?.guests.filter(
@@ -49,7 +68,10 @@ export function GuestsScreen() {
         <Field label="Grupo / vínculo" value={group} onChangeText={setGroup} />
         <Choice
           value={family}
-          onChange={setFamily}
+          onChange={(value) => {
+            setFamily(value);
+            setCompanion("");
+          }}
           options={families.map((i) => ({ value: i.id, label: i.name }))}
         />
         <Text style={styles.small}>Acompanhante de</Text>
@@ -63,21 +85,64 @@ export function GuestsScreen() {
               .map((g) => ({ value: g.id, label: g.name })) || []),
           ]}
         />
+        <Toggle
+          label="É criança?"
+          value={child}
+          onChange={(v) => {
+            setChild(v);
+            if (v) setAdolescent(false);
+          }}
+        />
+        <Toggle
+          label="É adolescente?"
+          value={adolescent}
+          onChange={(v) => {
+            setAdolescent(v);
+            if (v) setChild(false);
+          }}
+        />
+        <Field
+          label="WhatsApp do convidado"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+        />
+        <Field
+          label="E-mail do convidado"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <Field
+          label="Observações administrativas"
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          maxLength={2000}
+        />
         <Button
           title={guestId ? "Salvar / mover integrante" : "Adicionar integrante"}
           disabled={!family || !name.trim()}
           onPress={() =>
             feedback.run(async () => {
+              contactSchema
+                .pick({ email: true, whatsapp: true })
+                .parse({ email: email.trim(), whatsapp: phone });
               await app.admin("GUEST_SAVE", {
                 id: guestId || null,
                 version: guestVersion,
                 name: name.trim(),
                 invitation_id: family,
                 group_label: group,
+                whatsapp: normalizePhone(phone),
+                email: email.trim(),
+                admin_notes: notes,
+                is_child: child,
+                is_adolescent: adolescent,
                 companion_of: companion || null,
               });
-              setName("");
-              setGuestId("");
+              reset();
             })
           }
         />
@@ -98,9 +163,7 @@ export function GuestsScreen() {
                     id: guestId,
                     version: guestVersion,
                   });
-                  setGuestId("");
-                  setName("");
-                  setRemove(false);
+                  reset();
                 })
               }
             />
@@ -108,8 +171,7 @@ export function GuestsScreen() {
               secondary
               title="Cancelar edição"
               onPress={() => {
-                setGuestId("");
-                setName("");
+                reset();
               }}
             />
           </>
@@ -182,6 +244,11 @@ export function GuestsScreen() {
                     setName(g.name);
                     setFamily(g.invitation_id);
                     setGroup(g.group_label);
+                    setPhone(c?.whatsapp || "");
+                    setEmail(c?.email || "");
+                    setNotes(g.admin_notes || "");
+                    setChild(!!g.is_child);
+                    setAdolescent(!!g.is_adolescent);
                     setCompanion(g.companion_of || "");
                     setRemove(false);
                   }}

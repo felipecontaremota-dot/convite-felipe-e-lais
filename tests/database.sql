@@ -6,8 +6,10 @@ insert into user_roles(event_id,user_id,role) values('00000000-0000-4000-8000-00
 insert into invitations(id,event_id,name,code_hash) values('10000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000001','Família Teste',encode(extensions.digest('CodeSeguroNaoEnumeravelCom32Chars','sha256'),'hex')),('10000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','Outra Família',null);
 insert into guests(id,event_id,invitation_id,name) values('20000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','Pessoa Teste'),('20000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','Outra Pessoa');
 insert into rsvps(event_id,guest_id) select event_id,id from guests;
+update auth.users set is_anonymous=true where id='aaaaaaaa-0000-4000-8000-000000000003';
+insert into invitation_access(event_id,invitation_id,pin) values('00000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','0047');
 set local role service_role;
-select pg_temp.assert_true(redeem_invitation('00000000-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000003','CodeSeguroNaoEnumeravelCom32Chars','test-address'), 'redeem trusted edge');
+select pg_temp.assert_true(redeem_invitation('00000000-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000003','CodeSeguroNaoEnumeravelCom32Chars','0047','test-address'), 'redeem trusted edge');
 reset role;
 set local role authenticated;
 set local request.jwt.claim.sub='aaaaaaaa-0000-4000-8000-000000000003';
@@ -51,8 +53,8 @@ select pg_temp.assert_true(event_role('00000000-0000-4000-8000-000000000001') is
 reset role;
 select pg_temp.assert_true((select count(*) from audit_logs)>6,'audit persisted');
 set local role service_role;
-do $$begin for i in 1..14 loop perform redeem_invitation('00000000-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000003','CodeInvalidoNaoEnumeravelCom32Char','test-address');end loop;end$$;
-select pg_temp.assert_true(not redeem_invitation('00000000-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000003',(:'rotated'::jsonb)->>'code','test-address'),'rate limit after invalid attempts');
+do $$begin for i in 1..14 loop perform redeem_invitation('00000000-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000003','CodeInvalidoNaoEnumeravelCom32Char','0047','test-address');end loop;end$$;
+select pg_temp.assert_true(not redeem_invitation('00000000-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000003',(:'rotated'::jsonb)->>'code','0047','test-address'),'rate limit after invalid attempts');
 reset role;
 select pg_temp.assert_true((select attempts from invitation_rate_limits where bucket='user:aaaaaaaa-0000-4000-8000-000000000003')>=16,'failed attempts remain counted');
 rollback;

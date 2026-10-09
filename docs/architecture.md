@@ -10,6 +10,6 @@ As telas estão separadas em features por domínio (invitations, guests, rsvp, g
 
 PostgreSQL é fonte de verdade. Mudanças de RSVP/check-in disparam a projeção Sheets em uma outbox na mesma transação. Providers externos não podem reverter a resposta de presença. Notificações são configuradas no banco; workers server-side usam leases, tentativas e idempotência. Um scheduler externo configura a periodicidade; não há envio real sem configuração explícita.
 
-Decisões: convite é acesso compartilhado familiar, não conta individual; QR contém apenas token opaco; tokens brutos não são recuperados do servidor e regeneração é explícita; mudanças administrativas não são enfileiradas offline; vínculos são removidos ao rotacionar/bloquear códigos ou mover integrantes. Não há billing nem serviços pagos obrigatórios.
+Decisões: convite é acesso compartilhado familiar, não conta individual; QR contém apenas token opaco; tokens QR brutos não são recuperados do servidor e regeneração é explícita; mudanças administrativas não são enfileiradas offline; vínculos são removidos ao rotacionar/bloquear códigos ou mover integrantes. Não há billing nem serviços pagos obrigatórios.
 
 Web é SPA com fallback no hosting e PWA no export. Links universais dependem do domínio final e dos arquivos de associação Apple/Android, descritos em publicação. Os placeholders são tipográficos e não usam sprites ou arte do projeto removido.
