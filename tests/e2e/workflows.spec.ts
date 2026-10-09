@@ -68,7 +68,23 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await expect(
     page.getByText("Sincronizado com sucesso.").filter({ visible: true }),
   ).toBeVisible();
+  await navigation(page, "Perfil");
+  await page
+    .getByRole("radio", { name: "Convidada Dois", exact: true })
+    .click();
+  await page
+    .getByLabel("E-mail de Convidada Dois", { exact: true })
+    .fill("person-demo@example.com");
+  await page
+    .getByRole("button", {
+      name: "Salvar contato de Convidada Dois",
+      exact: true,
+    })
+    .click();
   await navigation(page, "Mensagens");
+  await expect(
+    page.getByRole("radio", { name: "Convidada Dois", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
   await page
     .getByLabel("Mensagem aos noivos", { exact: true })
     .fill("Que alegria participar!");
@@ -235,7 +251,7 @@ test("uma sessão existente não autoriza um novo código inválido", async ({
   await page.goto("/c/CodigoInvalidoMesmoComSessaoExistente");
   await expect(
     page.getByText(
-      "Configure o Supabase ou use o modo demo de desenvolvimento.",
+      "O convite ainda não está disponível. Tente novamente mais tarde.",
       { exact: true },
     ),
   ).toBeVisible();

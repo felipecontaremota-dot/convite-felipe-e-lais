@@ -95,6 +95,8 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled: disabled || busy, busy }}
+      aria-disabled={disabled || busy}
+      aria-busy={busy}
       disabled={disabled || busy}
       onPress={async () => {
         setBusy(true);
@@ -159,7 +161,8 @@ export function Choice<T extends string>({
           key={option.value}
           accessibilityRole="radio"
           accessibilityLabel={option.label}
-          accessibilityState={{ selected: value === option.value }}
+          accessibilityState={{ checked: value === option.value }}
+          aria-checked={value === option.value}
           onPress={() => onChange(option.value)}
           style={[
             styles.nav,
@@ -189,6 +192,7 @@ export function Toggle({
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       accessibilityState={{ checked: value }}
+      aria-checked={value}
       onPress={() => onChange(!value)}
       style={[styles.nav, styles.row]}
     >

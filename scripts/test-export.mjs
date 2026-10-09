@@ -36,9 +36,12 @@ try {
   );
   await page.goto("http://127.0.0.1:8082/c/DemoConviteExclusivoFelipeLais2026");
   await page
-    .getByText("Configure o Supabase ou use o modo demo de desenvolvimento.", {
-      exact: true,
-    })
+    .getByText(
+      "O convite ainda não está disponível. Tente novamente mais tarde.",
+      {
+        exact: true,
+      },
+    )
     .waitFor();
   const privateCached = await page.evaluate(async () => {
     const keys = await caches.keys();

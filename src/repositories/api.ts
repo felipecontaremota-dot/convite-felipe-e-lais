@@ -4,7 +4,9 @@ import type { OfflineMutation, Snapshot, Ticket } from "../types/domain";
 import { invitationCode } from "../utils/security";
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (!supabase)
-    throw new AppError("Configure o Supabase para conectar o convite.");
+    throw new AppError(
+      "O convite ainda não está disponível. Tente novamente mais tarde.",
+    );
   const { data, error } = await supabase.rpc(fn, args);
   if (error) {
     if (
@@ -44,7 +46,7 @@ export async function redeem(code: string) {
   invitationCode.parse(code);
   if (!supabase)
     throw new AppError(
-      "Configure o Supabase ou use o modo demo de desenvolvimento.",
+      "O convite ainda não está disponível. Tente novamente mais tarde.",
     );
   let {
     data: { session },
