@@ -326,9 +326,7 @@ test("cadastro familiar: senha sugerida/customizada, copiar e regenerar link", a
   await page
     .getByRole("button", { name: "Salvar família", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Fechar edição", exact: true })
-    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await page
     .getByRole("button", { name: "Editar família Família Acesso", exact: true })
     .click();

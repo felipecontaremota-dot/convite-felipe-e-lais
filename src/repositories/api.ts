@@ -1,5 +1,10 @@
 import { supabase, eventId } from "../lib/supabase";
-import { AppError, AuthError, NetworkError } from "../lib/errors";
+import {
+  administrativeError,
+  AppError,
+  AuthError,
+  NetworkError,
+} from "../lib/errors";
 import type { OfflineMutation, Snapshot, Ticket } from "../types/domain";
 import { invitationCode, invitationPin } from "../utils/security";
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
@@ -21,9 +26,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
           ? "Configure a senha e gere o link da família antes de adicionar membros."
           : error.message.includes("ticket_exists")
             ? "Já existe um ingresso. Escolha regenerar para substituir a versão anterior."
-            : error.message.includes("conflict")
-              ? "Dados alterados por outro usuário. Atualize a tela."
-              : "Não foi possível concluir a operação.",
+            : administrativeError(error.message) ||
+              "Não foi possível concluir a operação.",
       error.code,
     );
   }

@@ -24,6 +24,7 @@ import {
   SelectionCheckbox,
   Tag,
 } from "../../components/adminUi";
+import { AdminModal, SelectedChips } from "../../components/AdminModal";
 import { useApp } from "../../lib/AppProvider";
 import type { Guest } from "../../types/domain";
 import { copyText } from "../../utils/externalLinks";
@@ -40,7 +41,15 @@ import {
   guestContact,
   listGuests,
 } from "./adminDomain";
-function GuestForm({ guest, onClose }: { guest?: Guest; onClose: () => void }) {
+function GuestForm({
+  guest,
+  onClose,
+  onSaved,
+}: {
+  guest?: Guest;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const app = useApp(),
     feedback = useFeedback();
   const contact = app.data?.contacts.find((c) => c.guest_id === guest?.id);
@@ -52,10 +61,10 @@ function GuestForm({ guest, onClose }: { guest?: Guest; onClose: () => void }) {
     [email, setEmail] = useState(contact?.email || ""),
     [notes, setNotes] = useState(guest?.admin_notes || "");
   return (
-    <Card>
-      <Text style={styles.heading}>
-        {guest ? "Editar convidado" : "Adicionar convidado"}
-      </Text>
+    <AdminModal
+      title={guest ? "Editar convidado" : "Adicionar convidado"}
+      onClose={onClose}
+    >
       <Field label="Nome" value={name} onChangeText={setName} maxLength={200} />
       <Toggle label="Criança (até 10 anos)" value={child} onChange={setChild} />
       <Select
@@ -115,13 +124,14 @@ function GuestForm({ guest, onClose }: { guest?: Guest; onClose: () => void }) {
               email: email.trim(),
               admin_notes: notes,
             });
+            onSaved();
             onClose();
           })
         }
       />
       <Button secondary title="Cancelar" onPress={onClose} />
       {feedback.node}
-    </Card>
+    </AdminModal>
   );
 }
 export function GuestsScreen() {
@@ -140,6 +150,15 @@ export function GuestsScreen() {
     [selected, setSelected] = useState<string[]>([]),
     [target, setTarget] = useState(""),
     [confirm, setConfirm] = useState<"delete" | "assign" | null>(null);
+  const [deleteGuestId, setDeleteGuestId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const routeKey = `${routeGuest || ""}:${routeEdit || ""}`;
+  const [previousRoute, setPreviousRoute] = useState(routeKey);
+  if (previousRoute !== routeKey) {
+    setPreviousRoute(routeKey);
+    setDetail(routeGuest || "");
+    setForm(routeEdit === "true" && routeGuest ? routeGuest : null);
+  }
   const { width } = useWindowDimensions();
   const [confirmationPayload, setConfirmationPayload] = useState<
     Record<string, unknown>
@@ -171,7 +190,7 @@ export function GuestsScreen() {
   };
   const closeDetail = () => {
     setDetail("");
-    if (routeGuest) router.setParams({ guest: undefined });
+    if (routeGuest) router.setParams({ guest: undefined, edit: undefined });
   };
   return (
     <Screen section="admin" title="Convidados">
@@ -199,16 +218,30 @@ export function GuestsScreen() {
           closeDetail();
         }}
       />
+      {notice ? (
+        <Text role="status" style={styles.small}>
+          {notice}
+        </Text>
+      ) : null}
       {form !== null ? (
         <GuestForm
           key={form}
           guest={data?.guests.find((g) => g.id === form)}
-          onClose={() => setForm(null)}
+          onClose={() => {
+            setForm(null);
+            closeDetail();
+          }}
+          onSaved={() => setNotice("Convidado salvo.")}
         />
       ) : null}
       {selected.length ? (
         <Card>
           <Text style={styles.heading}>{selected.length} selecionado(s)</Text>
+          <SelectedChips
+            items={data?.guests.filter((g) => selected.includes(g.id)) || []}
+            onRemove={toggle}
+            onClear={() => setSelected([])}
+          />
           <Select
             label="Família de destino"
             value={target}
@@ -252,31 +285,42 @@ export function GuestsScreen() {
       ) : null}
       {confirm ? (
         <Confirmation
+          confirmLabel={confirm === "delete" ? "Excluir" : "Adicionar"}
+          destructive={confirm === "delete"}
           text={
             confirm === "delete"
               ? "Excluir definitivamente os convidados selecionados e seus dados relacionados? Esta ação não é remover da família."
               : "Adicionar os convidados selecionados à família? Os dispositivos anteriores serão revogados. Se houver membros de outra família, eles serão transferidos."
           }
           onCancel={() => setConfirm(null)}
-          onConfirm={() =>
-            feedback.run(async () => {
-              if (!data) return;
-              await app.admin(
-                confirm === "delete"
-                  ? "GUEST_DELETE_BATCH"
-                  : "GUEST_ASSIGN_FAMILY",
-                confirmationPayload,
-              );
-              setSelected([]);
-              setConfirm(null);
-              closeDetail();
-            })
-          }
+          onConfirm={async () => {
+            if (!data) return;
+            await app.admin(
+              confirm === "delete"
+                ? "GUEST_DELETE_BATCH"
+                : "GUEST_ASSIGN_FAMILY",
+              confirmationPayload,
+            );
+            setSelected([]);
+            setConfirm(null);
+            closeDetail();
+          }}
+        />
+      ) : null}
+      {deleteGuestId ? (
+        <Confirmation
+          text="Tem certeza que deseja excluir este convidado(a)? A ação não poderá ser desfeita e ele será removido da família que fizer parte."
+          onCancel={() => setDeleteGuestId(null)}
+          onConfirm={async () => {
+            await app.admin("GUEST_DELETE", confirmationPayload);
+            setSelected((ids) => ids.filter((id) => id !== deleteGuestId));
+            if (detail === deleteGuestId) closeDetail();
+            setDeleteGuestId(null);
+          }}
         />
       ) : null}
       {current && invitation && form === null ? (
-        <Card>
-          <Text style={styles.heading}>{current.name}</Text>
+        <AdminModal title={current.name} onClose={closeDetail}>
           <Text style={styles.text}>
             {current.is_child ? "Criança (até 10 anos)" : "Adulto"} ·{" "}
             {current.group_label || "Vínculo não informado"}
@@ -329,8 +373,8 @@ export function GuestsScreen() {
               closeDetail();
             }}
           />
-          <Button secondary title="Fechar ficha" onPress={closeDetail} />
-        </Card>
+          <Button secondary title="Fechar" onPress={closeDetail} />
+        </AdminModal>
       ) : null}
       {guests.map((g) => {
         const unit = data?.invitations.find((i) => i.id === g.invitation_id),
@@ -370,10 +414,22 @@ export function GuestsScreen() {
               ) : null}
               <Tag>{RSVP_LABELS[status]}</Tag>
               {g.is_child ? <Tag>Criança</Tag> : null}
-              {g.admin_notes ? (
+              {g.admin_notes?.trim() ? (
                 <Text
                   accessibilityLabel="Possui observação administrativa"
-                  style={styles.badge}
+                  {...(Platform.OS === "web"
+                    ? { title: "Possui observação" }
+                    : {})}
+                  style={{
+                    color: "#FFFFFF",
+                    backgroundColor: "#A2222C",
+                    borderRadius: 14,
+                    minWidth: 28,
+                    textAlign: "center",
+                    padding: 4,
+                    fontWeight: "800",
+                    fontSize: 17,
+                  }}
                 >
                   !
                 </Text>
@@ -393,8 +449,11 @@ export function GuestsScreen() {
                 icon="delete"
                 label={`Excluir convidado ${g.name}`}
                 onPress={() => {
-                  setSelected([g.id]);
-                  prepare("delete", [g.id]);
+                  if (!data) return;
+                  setConfirmationPayload({
+                    guests: expectedGuests(data, [g.id]),
+                  });
+                  setDeleteGuestId(g.id);
                 }}
               />
             </View>

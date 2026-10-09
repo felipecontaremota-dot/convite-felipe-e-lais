@@ -79,6 +79,7 @@ export interface Message {
   event_id: string;
   invitation_id: string | null;
   recipient_guest_id: string | null;
+  recipient_guest_ids?: string[];
   sender_guest_id: string | null;
   sender_user_id: string;
   from_admin: boolean;
@@ -163,6 +164,7 @@ export type MutationType =
   | "CONTACT_UPDATE"
   | "CHECKIN_CREATE"
   | "MESSAGE_SEND"
+  | "MESSAGE_SEND_TO_GUESTS"
   | "GIFT_SELECT"
   | "PUSH_REGISTER";
 export interface OfflineMutation {
