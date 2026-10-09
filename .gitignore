@@ -1,4 +1,12 @@
 node_modules/
-.DS_Store
+.expo/
+dist/
 .env
 .env.*
+!.env.example
+coverage/
+playwright-report/
+test-results/
+.supabase/
+*.log
+.DS_Store
