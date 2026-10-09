@@ -1,0 +1,72 @@
+# Acessos, famílias e convidados
+
+## Implantação após o merge
+
+Esta fase não altera o projeto Supabase hospedado automaticamente. O deploy do Pages continua consumindo somente URL e Publishable key públicas pelas Repository Variables. Não acrescente Service Role ou outra chave privilegiada ao GitHub.
+
+1. Faça backup do projeto hospedado e valide a migration em homologação. Em um terminal de operação autenticado na Supabase CLI, vincule o projeto correto e confira migrations pendentes:
+
+   ```sh
+   supabase link --project-ref '<PROJECT_REF>'
+   supabase migration list
+   supabase db push --dry-run
+   supabase db push
+   supabase functions deploy redeem-invitation --no-verify-jwt
+   ```
+
+   A nova migration é `202610090003_access_families.sql`. Não execute `db reset` no projeto hospedado nem reaplique migrations antigas. A assinatura antiga de redeem somente por código é removida: durante o intervalo entre migration e deploy da Edge, a ativação falha de forma segura. Publique a Edge atualizada antes de distribuir novos convites. `--no-verify-jwt` desabilita apenas a checagem legada do gateway (incompatível com algumas chaves atuais); o handler **sempre** valida o token com `auth.getUser` e exige `is_anonymous=true`. Nenhuma operação anônima sem sessão é aceita.
+
+2. Mantenha Anonymous Sign-ins habilitado e a proteção antiabuso do Auth/gateway. Mantenha o provider Email/password e o SMTP Resend atuais. Desative cadastro público de usuários com e-mail se somente contas previamente autorizadas devem existir; signup anônimo continua habilitado. Não remova templates ou credenciais SMTP.
+3. Em Auth → URL Configuration, configure Site URL e redirect permitido com o base path atual: `https://felipecontaremota-dot.github.io/convite-felipe-e-lais/recuperar-senha`. Homologação deve ter seu próprio endereço. Para recuperação nativa, autorize também `felipeelais://recuperar-senha` e mantenha o esquema do aplicativo. O botão atual envia para a URL web pública, que permite a recuperação pelo navegador em qualquer dispositivo.
+4. Em Auth → Email Templates → **Reset Password**, use o token de recuperação de uso único na rota explícita (não mude o template de OTP para login normal):
+
+   ```html
+   <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery"
+     >Definir nova senha</a
+   >
+   ```
+
+   O app aceita somente `token_hash` limitado e `type=recovery` nessa rota, verifica pelo `verifyOtp({type:'recovery'})`, consulta o papel no backend e remove o token da URL após consumo. O template padrão de sessão implícita não é consumido: este ajuste do template é necessário para o botão “Esqueci minha senha”. Links são de uso único e expiram conforme a configuração do Auth. Teste o SMTP e a recuperação com uma conta de homologação antes de disponibilizar o fluxo.
+
+5. Confirme os UUIDs de Felipe, Laís e cerimonial em `auth.users` e os papéis existentes de `user_roles` para o evento correto. Papel é concedido por operador confiável; nunca pelo formulário de login. ADMIN abre `/painel`; CEREMONIALIST abre `/checkin`; uma conta sem esses papéis é desconectada.
+6. Para cada família já existente, salve um PIN na área Famílias. A migration não inventa PIN nem modifica os códigos existentes. Vínculos anteriores sem PIN permanecem no banco, mas precisam ser reativados uma vez para receber `pin_verified_at`. Novas ativações exigem código + PIN. Não distribua o novo fluxo antes de configurar os PINs.
+7. Verifique em homologação código/PIN, persistência, logout, revogação e isolamento. Depois confira o deploy do Pages que acompanha o merge. Nenhum convite real é enviado por esta fase.
+
+## Primeira senha de Felipe e demais usuários antigos de OTP
+
+Se Felipe ainda tem uma sessão autenticada válida com papel ADMIN, pode abrir `/conta` (ou “Minha conta”) e definir a própria senha. A senha anterior não é solicitada ou exibida. Uma conta existente sem senha e sem sessão deve informar seu e-mail em `/login` e usar **Esqueci minha senha**, depois que o template e as URLs acima estiverem configurados. O link seguro permite definir a primeira senha via `auth.updateUser({password})`; depois o login normal é e-mail + senha. Um operador também pode iniciar a recuperação pelo painel Auth do Supabase, usando o mesmo template. Não compartilhe uma senha administrativa nem copie tokens para documentação/logs.
+
+A UI exige ao menos oito caracteres e confirmação; o Supabase aplica sua política de senha adicional. Uma sessão antiga pode exigir reautenticação conforme as políticas de segurança do Auth. Senhas administrativas pertencem exclusivamente ao Supabase Auth, não ao banco público, caches ou logs da aplicação.
+
+## PIN e sessões familiares
+
+O link usa código aleatório de 192 bits. A Edge recebe `{event_id,code,pin}` e valida sessão anônima, evento, convite ativo/não bloqueado, PIN de quatro dígitos e rate limit antes de vincular o UID. O modo `{action:'identify',event_id,code}` retorna **somente nome da família e se este UID já está ativado para este código**. Não revela integrantes ou concede acesso. Um código diferente/inválido nunca reutiliza o vínculo de outra família para autorizar aquela URL.
+
+O PIN é uma string (`0047` é válido). Escolha proporcional: `invitation_access` armazena PIN e, para links novos, código de compartilhamento em texto, com SELECT sob RLS exclusivo ADMIN e nenhuma mutação direta por clientes. Esses campos não estão em `invitations` e não entram em snapshots de convidados/cerimonial. Isso permite que administradores autorizados copiem link + PIN sem outro sistema de criptografia/chaves. O hash do código continua sendo usado na validação. QR continua armazenado somente por hash; esta decisão não altera ingressos.
+
+Códigos anteriores não são reversíveis a partir do hash. É possível copiá-los no dispositivo que os gerou, se o cache antigo estiver presente; para disponibilizá-los aos demais administradores, regenere explicitamente. Regenerar invalida o link anterior e os vínculos; não ocorre automaticamente ao copiar.
+
+- **Salvar PIN:** muda o PIN de próximas ativações; preserva os dispositivos já autorizados.
+- **Revogar dispositivos:** remove os vínculos, preserva link e PIN. O mesmo UID precisa ativar novamente.
+- **Regenerar link:** novo código aleatório, invalida link e vínculos anteriores, preserva PIN.
+- **Bloquear link/desativar família:** encerra vínculos e impede ativação.
+
+Auth mantém `persistSession:true` e `autoRefreshToken:true`; não guarda o PIN no armazenamento do convidado. Sair, limpar dados ou usar outro dispositivo exige nova ativação. O backend reconhece o vínculo, não um booleano local.
+
+São permitidas até 15 tentativas de ativação por usuário/endereço/código em 15 minutos, além do teto de 1000 por evento. Identificação tem contadores separados de 60, para não consumir tentativas de PIN. Contadores e tentativas malsucedidas permanecem gravados; código/PIN incorreto e bloqueio usam a mesma mensagem pública: `Código ou PIN inválido.`. O endereço deve vir de gateway confiável (`x-real-ip`), nunca de um header arbitrário do cliente. Limites por código e evento também continuam operando quando se muda UID/endereço. CAPTCHA/WAF do Auth complementam os limites; o PIN curto e a sugestão de telefone priorizam simplicidade, não identidade individual forte.
+
+Revogação vale imediatamente no servidor. Ao atualizar online, o dispositivo recebe snapshot vazio e limpa fila/ingressos. Offline, o aparelho conserva a última autorização conhecida até reconectar; não existe revogação instantânea sem rede. Preserve esse limite operacional para o check-in.
+
+## Cadastro e comunicação
+
+Família pode ser criada só com nome, com PIN opcional, e receber responsável depois. Informar o nome de um responsável inicial cria também esse integrante com RSVP PENDING. O responsável só pode pertencer à própria família. WhatsApp do responsável permite **sugerir** os quatro últimos dígitos; mudar telefone ou responsável nunca altera o PIN automaticamente. O botão Gerar PIN produz quatro dígitos, inclusive zeros iniciais.
+
+Convidados têm criança/adolescente mutuamente exclusivos. Contatos continuam em `guest_contacts`, com telefone normalizado para dígitos; inclua o DDI no cadastro quando conhecido. Observações administrativas ficam em `guest_admin_details`, com RLS ADMIN, e não aparecem nos payloads de convidados/cerimonial. Edição administrativa de contato preserva consentimentos e `consent_changed_at`; só o fluxo de consentimento do convidado muda esses valores. Novos convidados e responsáveis têm RSVP PENDING; a migration também preenche estados ausentes sem sobrescrever respostas existentes.
+
+Envio é independente de RSVP. `sent_at` e `sent_channel` ficam preparados para comunicações futuras. `first_activated_at` registra a primeira ativação e permanece histórico após revogar. `delivery_status` é derivado: OPENED após ativação, SENT quando existe envio, NOT_SENT nos demais casos. O painel conta “não enviados” por `sent_at`, de forma que uma família ativada manualmente pode continuar não enviada. `device_count` considera apenas vínculos com PIN verificado. Nenhuma ação nesta fase registra envio fictício ou dispara e-mail de convite.
+
+Auditoria registra PIN alterado, responsável, família, links, ativação/erro, revogação e CRUD/movimentação de convidados, sem PIN, código, senha, notas ou contato nos metadados.
+
+## Validação
+
+`npm test` cobre regras de PIN, contatos, Auth por senha/papéis, troca de senha e persistência com o cliente oficial Supabase e HTTP simulado. `npm run test:functions` inclui o handler de acesso e providers sem envio externo. `npm run test:db` executa migrations/RLS/RPCs reais em PostgreSQL 17 descartável, com stub de Auth; inclui `access-database.sql`. Playwright executa dois servidores: demo para regressões existentes e configuração Supabase fictícia para exercitar protocolo de login/PIN, sessão e revogação no navegador. Não usa contas/credenciais de produção. SMTP, gateway e Auth hospedado devem ser validados manualmente em homologação; testes locais não afirmam um deploy remoto.

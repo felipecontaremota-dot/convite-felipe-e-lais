@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Text } from "react-native";
 import {
   Button,
@@ -11,21 +11,22 @@ import {
 } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
-import { demoEnabled, supabase } from "../../lib/supabase";
-import { DEMO_CODE } from "../../repositories/demo";
-import type { Role } from "../../types/domain";
-const destination = (role: Role) =>
-  role === "ADMIN"
-    ? "/painel"
-    : role === "CEREMONIALIST"
-      ? "/checkin"
-      : "/inicio";
+import { demoEnabled, eventId, supabase } from "../../lib/supabase";
+import { DEMO_CODE, DEMO_PIN } from "../../repositories/demo";
+import {
+  codeFromLink,
+  invitationPin,
+  staffDestination,
+} from "../../utils/security";
+import { passwordLogin } from "./staffAuth";
 export function PublicHome() {
   const app = useApp(),
     feedback = useFeedback();
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(""),
+    [pin, setPin] = useState("");
   useEffect(() => {
-    if (app.data?.role) router.replace(destination(app.data.role));
+    if (app.data?.role)
+      router.replace(staffDestination(app.data.role) || "/inicio");
   }, [app.data?.role]);
   return (
     <Screen title="Nossa próxima aventura">
@@ -35,8 +36,8 @@ export function PublicHome() {
           15 de dezembro de 2026 · 16h · Horário de Brasília
         </Text>
         <Text style={styles.text}>
-          Abra o link exclusivo que recebeu dos noivos ou informe o código do
-          seu convite.
+          Abra o link exclusivo que recebeu dos noivos ou informe o código e o
+          PIN do seu convite.
         </Text>
         <Field
           label="Código do convite"
@@ -44,10 +45,22 @@ export function PublicHome() {
           onChangeText={setCode}
           autoCapitalize="none"
         />
+        <Field
+          label="PIN de acesso"
+          value={pin}
+          onChangeText={setPin}
+          keyboardType="number-pad"
+          maxLength={4}
+          secureTextEntry
+        />
         <Button
           title="Abrir meu convite"
-          disabled={!code.trim()}
-          onPress={() => feedback.run(() => app.enter(code.trim()))}
+          disabled={!code.trim() || !invitationPin.safeParse(pin).success}
+          onPress={() =>
+            feedback.run(() =>
+              app.enter(codeFromLink(code.trim()) || code.trim(), pin),
+            )
+          }
         />
         {feedback.node}
       </Card>
@@ -62,7 +75,10 @@ export function PublicHome() {
           <Text style={styles.small}>
             Somente em desenvolvimento. Nenhum acesso privilegiado ao Supabase.
           </Text>
-          <Button title="Demo convidado" onPress={() => app.enter(DEMO_CODE)} />
+          <Button
+            title="Demo convidado"
+            onPress={() => app.enter(DEMO_CODE, DEMO_PIN)}
+          />
           <Button title="Demo noivos" onPress={() => app.demoLogin("ADMIN")} />
           <Button
             title="Demo cerimonial"
@@ -77,41 +93,67 @@ export function InvitationAccess() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const app = useApp(),
     feedback = useFeedback();
-  const attempted = useRef<string | null>(null);
-  const [validated, setValidated] = useState<string | null>(null);
+  const [pin, setPin] = useState(""),
+    [family, setFamily] = useState<{ code: string; name: string } | null>(null),
+    [error, setError] = useState("");
+  const identify = app.identify;
   useEffect(() => {
-    if (code && attempted.current !== code) {
-      attempted.current = code;
-      void Promise.resolve().then(() =>
-        feedback.run(async () => {
-          await app.enter(code);
-          setValidated(code);
-          return "Convite validado.";
-        }),
-      );
-    }
-  }, [code, app, feedback]);
-  useEffect(() => {
-    if (app.data?.role === "GUEST" && validated === code)
-      router.replace("/inicio");
-  }, [app.data?.role, validated, code]);
+    let active = true;
+    // Identification never binds the anonymous UID or reveals the roster.
+    void identify(code)
+      .then((result) => {
+        if (!active) return;
+        setFamily({ code, name: result.name });
+        setError("");
+        if (result.activated) router.replace("/inicio");
+      })
+      .catch((e: unknown) => {
+        if (active)
+          setError(
+            e instanceof AppError ? e.message : "Código ou PIN inválido.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+    // The lookup is tied to this URL. Auth-state re-renders must not repeat signup/lookup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
   return (
     <Screen title="Seu convite">
       <Card>
-        <Text style={styles.text}>
-          Validando o link exclusivo da sua família…
+        <Text style={styles.heading}>
+          {family?.code === code
+            ? `Olá, ${family.name}!`
+            : "Seu convite familiar"}
         </Text>
-        {feedback.node}
+        <Text style={styles.text}>
+          Este convite foi preparado especialmente para vocês.
+        </Text>
+        {error ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {error}
+          </Text>
+        ) : null}
+        <Field
+          label="PIN de acesso"
+          value={pin}
+          onChangeText={setPin}
+          keyboardType="number-pad"
+          maxLength={4}
+          secureTextEntry
+        />
         <Button
-          title="Tentar validar novamente"
+          title="Abrir nosso convite"
+          disabled={!invitationPin.safeParse(pin).success}
           onPress={() =>
             feedback.run(async () => {
-              await app.enter(code);
-              setValidated(code);
-              return "Convite validado.";
+              await app.enter(code, pin);
+              router.replace("/inicio");
             })
           }
         />
+        {feedback.node}
         <Button secondary title="Voltar" onPress={() => router.replace("/")} />
       </Card>
     </Screen>
@@ -121,18 +163,17 @@ export function Login() {
   const app = useApp(),
     feedback = useFeedback();
   const [email, setEmail] = useState(""),
-    [otp, setOtp] = useState(""),
-    [sent, setSent] = useState(false);
+    [password, setPassword] = useState("");
   useEffect(() => {
-    if (app.data?.role === "ADMIN" || app.data?.role === "CEREMONIALIST")
-      router.replace(destination(app.data.role));
+    const path = staffDestination(app.data?.role || null);
+    if (path) router.replace(path);
   }, [app.data?.role]);
   return (
-    <Screen title="Acesso autorizado">
+    <Screen title="Acesso dos noivos e cerimonial">
       <Card>
         <Text style={styles.text}>
-          Entre com o e-mail cadastrado pelos noivos. O papel de acesso é
-          verificado no servidor.
+          Entre com o e-mail e a senha da sua conta autorizada. O papel de
+          acesso é verificado no servidor.
         </Text>
         <Field
           label="E-mail"
@@ -141,53 +182,61 @@ export function Login() {
           keyboardType="email-address"
           autoCapitalize="none"
         />
+        <Field
+          label="Senha"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoCapitalize="none"
+        />
         <Button
-          title="Receber código por e-mail"
-          disabled={!email.includes("@")}
+          title="Entrar"
+          disabled={!email.includes("@") || !password}
           onPress={() =>
             feedback.run(async () => {
               if (!supabase)
                 throw new AppError("Configure o Supabase para usar o login.");
-              const { error } = await supabase.auth.signInWithOtp({
-                email: email.trim(),
-                options: { shouldCreateUser: false },
-              });
-              if (error)
-                throw new AppError(
-                  "Não foi possível solicitar o código. Confira o cadastro e tente novamente.",
+              try {
+                const role = await passwordLogin(
+                  supabase,
+                  eventId,
+                  email,
+                  password,
                 );
-              setSent(true);
-              return "Solicitação realizada. Confira seu e-mail.";
+                router.replace(staffDestination(role)!);
+              } finally {
+                setPassword("");
+              }
             })
           }
         />
-        {sent ? (
-          <>
-            <Field
-              label="Código recebido"
-              value={otp}
-              onChangeText={setOtp}
-              keyboardType="number-pad"
-            />
-            <Button
-              title="Entrar"
-              disabled={otp.length < 6}
-              onPress={() =>
-                feedback.run(async () => {
-                  const result = await supabase!.auth.verifyOtp({
-                    email: email.trim(),
-                    token: otp,
-                    type: "email",
-                  });
-                  if (result.error)
-                    throw new AppError("Código inválido ou expirado.");
-                  await app.refresh();
-                  return "Conta autenticada.";
-                })
-              }
-            />
-          </>
-        ) : null}
+        <Button
+          secondary
+          title="Esqueci minha senha"
+          disabled={!email.includes("@")}
+          onPress={() =>
+            feedback.run(async () => {
+              if (!supabase)
+                throw new AppError(
+                  "Configure o Supabase para recuperar a senha.",
+                );
+              const base = process.env.EXPO_PUBLIC_WEB_BASE_URL;
+              if (!base)
+                throw new AppError(
+                  "A recuperação por e-mail ainda não está configurada.",
+                );
+              const { error } = await supabase.auth.resetPasswordForEmail(
+                email.trim(),
+                { redirectTo: `${base.replace(/\/$/, "")}/recuperar-senha` },
+              );
+              if (error)
+                throw new AppError(
+                  "Não foi possível solicitar a recuperação. Tente novamente mais tarde.",
+                );
+              return "Se houver uma conta para este e-mail, você receberá as instruções de recuperação.";
+            })
+          }
+        />
         {feedback.node}
         <Button
           secondary

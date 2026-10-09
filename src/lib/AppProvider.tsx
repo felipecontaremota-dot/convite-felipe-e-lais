@@ -32,7 +32,8 @@ interface ContextValue {
   scope: string;
   isDemo: boolean;
   demoLogin: (role: Role) => Promise<void>;
-  enter: (code: string) => Promise<void>;
+  enter: (code: string, pin: string) => Promise<void>;
+  identify: (code: string) => Promise<{ name: string; activated: boolean }>;
   logout: () => Promise<void>;
   send: (
     type: MutationType,
@@ -57,7 +58,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       data: Snapshot | null;
     } | null>(null);
   const scope = `${eventId}:${demoRole ? "demo-" + demoRole : user || "public"}`;
-  const cached = cache?.scope === scope ? cache.data : null;
+  const cached =
+    (user || demoRole) && cache?.scope === scope ? cache.data : null;
   const queue = React.useMemo(
     () => new MutationQueue(storage, `queue:${scope}`),
     [scope],
@@ -114,6 +116,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const data = demoRole
         ? await demo.demoSnapshot(demoRole)
         : await api.getSnapshot();
+      if (!data.role) {
+        await queue.clear();
+        setPending([]);
+        await storage.removeItem(`tickets:${scope}`);
+      }
       await writeCache(`cache:${scope}`, data);
       return data;
     },
@@ -172,7 +179,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [scope, credentialState, online, demoRole, refetch],
   );
-  const base = query.data || cached;
+  const base = user || demoRole ? query.data || cached : null;
   const projected = base
     ? (JSON.parse(JSON.stringify(base)) as Snapshot)
     : null;
@@ -214,20 +221,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     online,
     pending,
     isDemo: !!demoRole,
-    refresh: () => query.refetch(),
+    refresh: async () => (user || demoRole ? query.refetch() : null),
     sync,
     demoLogin: async (role) => {
       if (!demoEnabled) throw new AppError("Demo indisponível em produção.");
       await writeCache("demo-session", role);
       setDemoRole(role);
     },
-    enter: async (code) => {
+    identify: async (code) => {
+      if (demoEnabled && code === demo.DEMO_CODE)
+        return {
+          name: "Família Demo",
+          activated: (await readCache<Role>("demo-session")) === "GUEST",
+        };
+      return api.identifyInvitation(code);
+    },
+    enter: async (code, pin) => {
       if (demoEnabled && code === demo.DEMO_CODE) {
+        if (pin !== demo.DEMO_PIN)
+          throw new AppError("Código ou PIN inválido.");
         await writeCache("demo-session", "GUEST");
         setDemoRole("GUEST");
         return;
       }
-      await api.redeem(code);
+      await api.redeem(code, pin);
+      await queue.clear();
+      setPending([]);
+      setCache(null);
+      client.removeQueries({ queryKey: ["snapshot"] });
       await storage.removeItem(`tickets:${scope}`);
       await client.invalidateQueries({ queryKey: ["snapshot"] });
     },

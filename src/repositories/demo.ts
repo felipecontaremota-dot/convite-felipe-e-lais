@@ -1,9 +1,15 @@
 import type { Snapshot, Role, OfflineMutation, Ticket } from "../types/domain";
 import { WEDDING_START } from "../features/countdown/domain";
 import { NOTIFICATION_DAYS } from "../features/notifications/domain";
-import { rsvpSchema, contactSchema } from "../utils/security";
+import {
+  invitationPin,
+  normalizePhone,
+  rsvpSchema,
+  contactSchema,
+} from "../utils/security";
 import { readCache, writeCache } from "../storage/driver";
 import * as Crypto from "expo-crypto";
+export const DEMO_PIN = "0047";
 const event = "00000000-0000-4000-8000-000000000001";
 export const demoFamily = "10000000-0000-4000-8000-000000000001";
 export const DEMO_CODE = "DemoConviteExclusivoFelipeLais2026";
@@ -47,6 +53,11 @@ export function demoSeed(): Snapshot {
         active: true,
         primary_guest_id: guests[0]!.id,
         version: 1,
+        pin: DEMO_PIN,
+        sharing_code: DEMO_CODE,
+        link_active: true,
+        device_count: 0,
+        delivery_status: "NOT_SENT",
       },
     ],
     guests,
@@ -164,6 +175,15 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.gift_selections = [];
       s.rules = [];
       s.rsvps = s.rsvps.map((r) => ({ ...r, dietary: "", note: "" }));
+    }
+    if (role !== "ADMIN") {
+      s.invitations.forEach((i) => {
+        delete i.pin;
+        delete i.sharing_code;
+      });
+      s.guests.forEach((g) => {
+        delete g.admin_notes;
+      });
     }
     return s;
   });
@@ -364,8 +384,45 @@ export async function demoAdmin(
             active: true,
             primary_guest_id: null,
             version: 1,
+            pin: p.pin ? invitationPin.parse(p.pin) : null,
+            link_active: false,
+            device_count: 0,
+            delivery_status: "NOT_SENT",
           });
+          const created = s.invitations.at(-1)!;
+          if (p.primary_name) {
+            const gid = id();
+            created.primary_guest_id = gid;
+            s.guests.push({
+              id: gid,
+              event_id: event,
+              invitation_id: created.id,
+              name: String(p.primary_name),
+              group_label: "",
+              companion_of: null,
+              version: 1,
+            });
+            s.rsvps.push({
+              guest_id: gid,
+              event_id: event,
+              status: "PENDING",
+              dietary: "",
+              note: "",
+              responded_at: null,
+              source: "ADMIN",
+            });
+          }
         }
+        break;
+      case "PIN_SAVE":
+        if (!inv) throw Error("Família inválida");
+        inv.pin = invitationPin.parse(p.pin);
+        inv.version++;
+        break;
+      case "ACCESS_REVOKE":
+        if (!inv) throw Error("Família inválida");
+        inv.device_count = 0;
+        inv.version++;
         break;
       case "INVITATION_DISABLE":
         if (inv) {
@@ -378,10 +435,21 @@ export async function demoAdmin(
         if (!inv) throw Error("Família inválida");
         {
           const code = randomToken().slice(0, 48);
+          if (!inv.pin) throw Error("Salve um PIN primeiro.");
           db.codes[inv.id] = code;
+          inv.sharing_code = code;
+          inv.link_active = true;
+          inv.version++;
+          inv.device_count = 0;
           return { code };
         }
       case "CODE_BLOCK":
+        if (inv) {
+          inv.sharing_code = null;
+          inv.link_active = false;
+          inv.device_count = 0;
+          inv.version++;
+        }
         delete db.codes[entity];
         break;
       case "GUEST_SAVE": {
@@ -419,6 +487,26 @@ export async function demoAdmin(
             source: "ADMIN",
           });
         }
+        const saved = existing || s.guests.at(-1)!;
+        saved.is_child = !!p.is_child;
+        saved.is_adolescent = !!p.is_adolescent;
+        saved.admin_notes = String(p.admin_notes || "");
+        const contact = s.contacts.find((c) => c.guest_id === saved.id);
+        if (contact)
+          Object.assign(contact, {
+            email: String(p.email || ""),
+            whatsapp: normalizePhone(String(p.whatsapp || "")),
+          });
+        else
+          s.contacts.push({
+            guest_id: saved.id,
+            email: String(p.email || ""),
+            whatsapp: normalizePhone(String(p.whatsapp || "")),
+            consent_in_app: true,
+            consent_email: false,
+            consent_push: false,
+            consent_whatsapp: false,
+          });
         break;
       }
       case "GUEST_REMOVE":
@@ -428,6 +516,7 @@ export async function demoAdmin(
           throw Error("Dados alterados. Atualize.");
         s.guests = s.guests.filter((g) => g.id !== entity);
         s.rsvps = s.rsvps.filter((r) => r.guest_id !== entity);
+        s.contacts = s.contacts.filter((c) => c.guest_id !== entity);
         s.credentials = s.credentials.filter((c) => c.guest_id !== entity);
         break;
       case "FAMILY_MERGE":

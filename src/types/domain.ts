@@ -12,6 +12,14 @@ export interface WeddingEvent {
   longitude: number | null;
 }
 export interface Invitation {
+  pin?: string | null;
+  sharing_code?: string | null;
+  link_active?: boolean;
+  device_count?: number;
+  delivery_status?: "NOT_SENT" | "SENT" | "OPENED";
+  sent_at?: string | null;
+  sent_channel?: Channel | null;
+  first_activated_at?: string | null;
   id: string;
   event_id: string;
   name: string;
@@ -20,6 +28,9 @@ export interface Invitation {
   version: number;
 }
 export interface Guest {
+  is_child?: boolean;
+  is_adolescent?: boolean;
+  admin_notes?: string;
   id: string;
   event_id: string;
   invitation_id: string;
