@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import NetInfo from "@react-native-community/netinfo";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import type {
   Snapshot,
   Role,
@@ -90,15 +90,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setDemoRole(role);
       });
   }, []);
-  useEffect(
-    () =>
-      NetInfo.addEventListener((state) =>
-        setOnline(
-          state.isConnected !== false && state.isInternetReachable !== false,
-        ),
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      // NetworkInformation.change is not guaranteed for an online/offline transition.
+      const update = () => setOnline(window.navigator.onLine);
+      window.addEventListener("online", update);
+      window.addEventListener("offline", update);
+      update();
+      return () => {
+        window.removeEventListener("online", update);
+        window.removeEventListener("offline", update);
+      };
+    }
+    return NetInfo.addEventListener((state) =>
+      setOnline(
+        state.isConnected !== false && state.isInternetReachable !== false,
       ),
-    [],
-  );
+    );
+  }, []);
   const query = useQuery({
     queryKey: ["snapshot", scope, demoRole],
     queryFn: async () => {
