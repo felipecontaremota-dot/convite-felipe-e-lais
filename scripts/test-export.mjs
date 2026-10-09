@@ -4,6 +4,22 @@ import { once } from "node:events";
 import { chromium } from "playwright";
 import { getExportWebBasePath, webPath } from "../config/web-paths.cjs";
 import { createExportServer } from "./serve-web.mjs";
+import { parseProjectEnv } from "@expo/env";
+
+const { env: dotenv } = parseProjectEnv(process.cwd(), {
+  mode: "production",
+  silent: true,
+});
+const supabaseUrl =
+  process.env.EXPO_PUBLIC_SUPABASE_URL ?? dotenv.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  dotenv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const configured = Boolean(supabaseUrl && supabaseKey);
+const signupUrl = configured
+  ? `${supabaseUrl.replace(/\/$/, "")}/auth/v1/signup`
+  : null;
+let signupRequests = 0;
 
 const basePath = getExportWebBasePath();
 const shell = webPath("", basePath);
@@ -49,11 +65,27 @@ try {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
   });
-  await context.route("**/*", (route) =>
-    new URL(route.request().url()).origin === origin
-      ? route.continue()
-      : route.abort(),
-  );
+  await context.route("**/*", async (route) => {
+    const request = route.request();
+    if (new URL(request.url()).origin === origin) return route.continue();
+    if (request.url() === signupUrl && request.method() === "POST") {
+      signupRequests++;
+      assert.ok(
+        request.headers().apikey === supabaseKey,
+        "Build must consume the configured public Supabase key",
+      );
+      // Exercise the configured client without creating real users or reaching production.
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "anonymous_provider_disabled",
+          message: "Simulated authentication rejection",
+        }),
+      });
+    }
+    return route.abort();
+  });
   const page = await context.newPage();
   const unrelatedCache = "another-pages-application-cache";
   // Seed another application's cache before our worker activates.
@@ -129,16 +161,23 @@ try {
     invite,
     "Router must retain the original invitation path/code",
   );
-  // The long code exercises the unconfigured backend message and production demo guard.
+  // The demo code must use normal access in production, never the demo bypass.
   await page.goto(
     origin + webPath("c/DemoConviteExclusivoFelipeLais2026", basePath),
   );
   await page
     .getByText(
-      "O convite ainda não está disponível. Tente novamente mais tarde.",
+      configured
+        ? "Não foi possível iniciar o acesso."
+        : "O convite ainda não está disponível. Tente novamente mais tarde.",
       { exact: true },
     )
     .waitFor();
+  assert.equal(
+    signupRequests,
+    configured ? 1 : 0,
+    "Configured production client must attempt real auth protocol through the test mock",
+  );
 
   assert.equal(
     await page.evaluate(
