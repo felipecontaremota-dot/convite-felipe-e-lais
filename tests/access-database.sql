@@ -86,11 +86,8 @@ select version as fv from invitations where id=:'other_id' \gset
 select admin_action(:'event','INVITATION_SAVE',jsonb_build_object('id',:'other_id','version',:'fv'::integer,'name','Família Editada','active',true,'primary_guest_id',:'gid'));
 select pg_temp.assert_true((select primary_guest_id=:'gid' from invitations where id=:'other_id'),'define primary after guest creation');
 select version as fv from invitations where id=:'other_id' \gset
-select admin_action(:'event','FAMILY_SPLIT',jsonb_build_object('id',:'other_id','version',:'fv'::integer,'name','Família Dividida','guest_ids',jsonb_build_array(:'gid'))) as split \gset
-select (:'split'::jsonb)->>'target_id' as split_id \gset
-select pg_temp.assert_true((select invitation_id=:'split_id' from guests where id=:'gid'),'split');
-select admin_action(:'event','FAMILY_MERGE',jsonb_build_object('id',:'split_id','version',1,'target_id',:'other_id'));
-select pg_temp.assert_true((select invitation_id=:'other_id' from guests where id=:'gid'),'merge');
+do $$begin perform admin_action('00000000-0000-4000-8000-000000000001','FAMILY_SPLIT','{}');raise exception 'split accepted';exception when raise_exception then if sqlerrm<>'retired admin action' then raise;end if;end$$;
+do $$begin perform admin_action('00000000-0000-4000-8000-000000000001','FAMILY_MERGE','{}');raise exception 'merge accepted';exception when raise_exception then if sqlerrm<>'retired admin action' then raise;end if;end$$;
 select version as gv from guests where id=:'gid' \gset
 select admin_action(:'event','GUEST_REMOVE',jsonb_build_object('id',:'gid','version',:'gv'::integer));
 select pg_temp.assert_true((select count(*) from guests where id=:'gid')=0 and (select count(*) from guest_contacts where guest_id=:'gid')=0,'remove guest and dependent contact');

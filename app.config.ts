@@ -13,6 +13,9 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: process.env.IOS_BUNDLE_ID || "com.felipeelais.convite",
     supportsTablet: true,
+    infoPlist: {
+      LSApplicationQueriesSchemes: ["comgooglemaps", "waze", "uber"],
+    },
     ...(host ? { associatedDomains: [`applinks:${host}`] } : {}),
   },
   android: {
@@ -34,6 +37,7 @@ const config: ExpoConfig = {
   experiments: { baseUrl: getWebBasePath() },
   plugins: [
     "expo-router",
+    "./plugins/with-map-queries.cjs",
     "expo-secure-store",
     [
       "expo-camera",

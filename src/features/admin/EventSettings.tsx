@@ -9,54 +9,47 @@ import {
 } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
-
+import { safeHttps } from "../../utils/security";
 function EventSettingsForm() {
   const app = useApp(),
     feedback = useFeedback();
+  const [expectedVersion, setExpectedVersion] = useState(
+    app.data?.event.version || 1,
+  );
   const [venue, setVenue] = useState(app.data?.event.venue_name || ""),
     [address, setAddress] = useState(app.data?.event.address || ""),
-    [lat, setLat] = useState(String(app.data?.event.latitude ?? "")),
-    [lng, setLng] = useState(String(app.data?.event.longitude ?? ""));
+    [gps, setGps] = useState(app.data?.event.gps_url || "");
   return (
     <Screen section="admin" title="Local da celebração">
       <Card>
         <Field label="Nome do local" value={venue} onChangeText={setVenue} />
-        <Field label="Endereço" value={address} onChangeText={setAddress} />
         <Field
-          label="Latitude"
-          value={lat}
-          onChangeText={setLat}
-          keyboardType="numbers-and-punctuation"
+          label="Endereço"
+          value={address}
+          onChangeText={setAddress}
+          multiline
         />
         <Field
-          label="Longitude"
-          value={lng}
-          onChangeText={setLng}
-          keyboardType="numbers-and-punctuation"
+          label="Link de GPS"
+          value={gps}
+          onChangeText={setGps}
+          keyboardType="url"
+          autoCapitalize="none"
+          maxLength={2048}
         />
         <Button
-          title="Salvar localização"
+          title="Salvar"
           onPress={() =>
             feedback.run(async () => {
-              if (
-                (lat && !lng) ||
-                (!lat && lng) ||
-                (lat &&
-                  (!Number.isFinite(Number(lat)) ||
-                    Math.abs(Number(lat)) > 90)) ||
-                (lng &&
-                  (!Number.isFinite(Number(lng)) ||
-                    Math.abs(Number(lng)) > 180))
-              )
-                throw new AppError(
-                  "Informe um par de coordenadas válido ou deixe ambos em branco.",
-                );
+              if (gps.trim() && !safeHttps(gps.trim()))
+                throw new AppError("Informe um link de GPS HTTPS válido.");
               await app.admin("EVENT_SAVE", {
+                version: expectedVersion,
                 venue_name: venue.trim() || null,
                 address: address.trim() || null,
-                latitude: lat ? Number(lat) : null,
-                longitude: lng ? Number(lng) : null,
+                gps_url: gps.trim() ? safeHttps(gps.trim()) : null,
               });
+              setExpectedVersion(expectedVersion + 1);
             })
           }
         />
@@ -65,7 +58,6 @@ function EventSettingsForm() {
     </Screen>
   );
 }
-
 export function EventSettings() {
   const app = useApp();
   return app.data ? (

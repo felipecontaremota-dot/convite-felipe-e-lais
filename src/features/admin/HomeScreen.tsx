@@ -10,7 +10,12 @@ export function AdminHome() {
     ["Confirmados", s?.rsvps.filter((r) => r.status === "CONFIRMED").length],
     ["Não irão", s?.rsvps.filter((r) => r.status === "DECLINED").length],
     ["Pendentes", s?.rsvps.filter((r) => r.status === "PENDING").length],
-    ["Famílias", s?.invitations.filter((i) => i.active).length],
+    [
+      "Famílias",
+      s?.invitations.filter(
+        (i) => i.active && (i.kind || "FAMILY") === "FAMILY",
+      ).length,
+    ],
     ["Presentes", s?.gifts.filter((g) => g.active).length],
     [
       "Mensagens não lidas",
@@ -23,7 +28,12 @@ export function AdminHome() {
     ],
     [
       "Famílias já ativadas",
-      s?.invitations.filter((i) => i.active && !!i.first_activated_at).length,
+      s?.invitations.filter(
+        (i) =>
+          i.active &&
+          (i.kind || "FAMILY") === "FAMILY" &&
+          !!i.first_activated_at,
+      ).length,
     ],
   ];
   return (

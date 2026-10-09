@@ -30,14 +30,14 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await page.goto(`/c/${code}`);
   await expect(page.getByText("Olá, Família Demo!")).toBeVisible();
   await expect(page.getByText("Convidado Um", { exact: true })).toHaveCount(0);
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("9999");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("9999");
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
   await expect(
-    page.getByText("Código ou PIN inválido.", { exact: true }),
+    page.getByText("Código ou senha inválido.", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("PIN de acesso", { exact: true }).fill("0047");
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
@@ -109,7 +109,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   ).toBeVisible();
   await navigation(page, "Como chegar");
   await expect(
-    page.getByRole("button", { name: "Google Maps", exact: true }),
+    page.getByRole("button", { name: "Abrir localização", exact: true }),
   ).toBeDisabled();
   await page.reload();
   await expect(
@@ -130,6 +130,9 @@ test("admin cria família, convidado, presente e regra; desktop e tablet", async
   await noOverflow(page);
   await navigation(page, "Famílias");
   await page
+    .getByRole("button", { name: "Adicionar família", exact: true })
+    .click();
+  await page
     .getByLabel("Nome da nova família", { exact: true })
     .fill("Família Nova Demo");
   await page
@@ -140,14 +143,10 @@ test("admin cria família, convidado, presente e regra; desktop e tablet", async
   ).toBeVisible();
   await navigation(page, "Convidados");
   await page
-    .getByLabel("Nome do convidado", { exact: true })
-    .fill("Pessoa Nova Demo");
-  await page
-    .getByRole("radio", { name: "Família Nova Demo", exact: true })
+    .getByRole("button", { name: "Adicionar convidado", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Adicionar integrante", exact: true })
-    .click();
+  await page.getByLabel("Nome", { exact: true }).fill("Pessoa Nova Demo");
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(
     page
       .getByText("Pessoa Nova Demo", { exact: true })
@@ -272,93 +271,111 @@ test("uma sessão existente não autoriza um novo código inválido", async ({
   expect(page.url()).toContain("/c/");
 });
 
-test("cadastro familiar: contato, PIN sugerido/customizado, copiar e regenerar link", async ({
+test("cadastro familiar: senha sugerida/customizada, copiar e regenerar link", async ({
   page,
   context,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await start(page, "noivos");
+  await navigation(page, "Convidados");
+  await page
+    .getByRole("button", { name: "Adicionar convidado", exact: true })
+    .click();
+  await page.getByLabel("Nome", { exact: true }).fill("Responsável Acesso");
+  await page
+    .getByLabel("WhatsApp", { exact: true })
+    .fill("+55 (62) 99999-3478");
+  await page
+    .getByLabel("E-mail", { exact: true })
+    .fill("responsavel@example.com");
+  await page
+    .getByLabel("Observações", { exact: true })
+    .fill("Observação privada");
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await navigation(page, "Famílias");
+  await page
+    .getByRole("button", { name: "Adicionar família", exact: true })
+    .click();
   await page
     .getByLabel("Nome da nova família", { exact: true })
     .fill("Família Acesso");
   await page
-    .getByLabel("Nome do responsável inicial (opcional)", { exact: true })
-    .fill("Responsável Acesso");
-  await page.getByLabel("PIN inicial (opcional)", { exact: true }).fill("0047");
+    .getByLabel("Senha inicial (opcional)", { exact: true })
+    .fill("0047");
   await page
     .getByRole("button", { name: "Criar família", exact: true })
     .click();
-  await navigation(page, "Convidados");
   await page
-    .getByRole("button", { name: "Editar Responsável Acesso", exact: true })
+    .getByRole("button", { name: "Editar família Família Acesso", exact: true })
     .click();
   await page
-    .getByLabel("WhatsApp do convidado", { exact: true })
-    .fill("+55 (62) 99999-3478");
-  await page
-    .getByLabel("E-mail do convidado", { exact: true })
-    .fill("responsavel@example.com");
-  await page
-    .getByLabel("Observações administrativas", { exact: true })
-    .fill("Observação privada");
-  await page
-    .getByRole("button", { name: "Salvar / mover integrante", exact: true })
+    .getByRole("button", { name: "Regenerar link", exact: true })
     .click();
-  await navigation(page, "Famílias");
-  const card = page
-    .getByText("Família Acesso", { exact: true })
-    .filter({ visible: true })
-    .locator("..")
-    .filter({
-      has: page.getByRole("button", { name: "Salvar família", exact: true }),
-    });
-  await expect(card.getByLabel("PIN da família", { exact: true })).toHaveValue(
-    "0047",
-  );
+  await page
+    .getByRole("button", { name: "Adicionar membro à família", exact: true })
+    .click();
+  await page
+    .getByRole("checkbox", { name: "Responsável Acesso", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Adicionar membros", exact: true })
+    .click();
+  await page
+    .getByLabel("Responsável", { exact: true })
+    .selectOption({ label: "Responsável Acesso" });
+  await page
+    .getByRole("button", { name: "Salvar família", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Fechar edição", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Editar família Família Acesso", exact: true })
+    .click();
   await expect(
-    card.getByText(/Responsável: Responsável Acesso · WhatsApp: 5562999993478/),
+    page.getByLabel("Senha da família", { exact: true }),
+  ).toHaveValue("0047");
+  await expect(
+    page.getByText(
+      /Responsável: Responsável Acesso · WhatsApp: \(62\) 9 9999-3478/,
+    ),
   ).toBeVisible();
-  await card
-    .getByRole("button", { name: "Sugerir pelo WhatsApp", exact: true })
-    .click();
-  await expect(card.getByLabel("PIN da família", { exact: true })).toHaveValue(
-    "3478",
-  );
-  await card.getByLabel("PIN da família", { exact: true }).fill("0123");
-  await card.getByRole("button", { name: "Salvar PIN", exact: true }).click();
-  await expect(
-    card.getByRole("button", { name: "Gerar / regenerar link", exact: true }),
-  ).toBeEnabled();
-  await card
-    .getByRole("button", { name: "Gerar / regenerar link", exact: true })
-    .click();
-  await card
-    .getByRole("button", { name: "Copiar link + PIN", exact: true })
+  await page
+    .getByRole("button", { name: "Sugerir senha pelo WhatsApp", exact: true })
     .click();
   await expect(
-    card.getByText("Link e PIN copiados.", { exact: true }),
+    page.getByLabel("Senha da família", { exact: true }),
+  ).toHaveValue("3478");
+  await page.getByLabel("Senha da família", { exact: true }).fill("0123");
+  await page.getByRole("button", { name: "Salvar senha", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Regenerar link", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Copiar link + senha", exact: true })
+    .click();
+  await expect(
+    page.getByText("Link e senha copiados.", { exact: true }),
   ).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toMatch(
-    /^https:\/\/example\.test\/convite-felipe-e-lais\/c\/[a-f0-9]{48}\nPIN: 0123$/,
+    /^https:\/\/example\.test\/convite-felipe-e-lais\/c\/[a-f0-9]{48}\nSenha: 0123$/,
   );
-  await card
-    .getByRole("button", { name: "Gerar / regenerar link", exact: true })
+  await page
+    .getByRole("button", { name: "Regenerar link", exact: true })
     .click();
-  await card
-    .getByRole("button", { name: "Copiar link do convite", exact: true })
-    .click();
-  await expect(card.getByText("Link copiado.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Copiar link", exact: true }).click();
+  await expect(page.getByText("Link copiado.", { exact: true })).toBeVisible();
   const rotated = await page.evaluate(() => navigator.clipboard.readText());
   expect(rotated).not.toBe(copied.split("\n")[0]);
-  await card
+  expect(rotated).not.toContain("0123");
+  await page
     .getByRole("button", { name: "Revogar dispositivos", exact: true })
     .click();
-  await expect(card.getByLabel("PIN da família", { exact: true })).toHaveValue(
-    "0123",
-  );
   await expect(
-    card.getByRole("button", { name: "Copiar link + PIN", exact: true }),
+    page.getByLabel("Senha da família", { exact: true }),
+  ).toHaveValue("0123");
+  await expect(
+    page.getByRole("button", { name: "Copiar link + senha", exact: true }),
   ).toBeVisible();
 });

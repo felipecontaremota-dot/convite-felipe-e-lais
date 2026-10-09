@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { Text } from "react-native";
+import { useState } from "react";
+import { Text, View } from "react-native";
+import { router } from "expo-router";
 import {
   Button,
   Card,
-  Choice,
   Empty,
   Field,
   Screen,
@@ -11,368 +11,319 @@ import {
   styles,
   useFeedback,
 } from "../../components/ui";
+import { Confirmation, IconButton, Select } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
-import { AppError } from "../../lib/errors";
-import { readCache, writeCache } from "../../storage/driver";
 import type { Invitation } from "../../types/domain";
-import { copyText } from "../../utils/externalLinks";
-import * as Crypto from "expo-crypto";
-import {
-  invitationPin,
-  suggestedPin,
-  invitationLink,
-} from "../../utils/security";
-
-function generatePin() {
-  const bytes = Crypto.getRandomBytes(2);
-  return String(((bytes[0]! << 8) + bytes[1]!) % 10000).padStart(4, "0");
-}
-
+import { invitationPin } from "../../utils/security";
+import { AccessControls, generatePin } from "./AccessControls";
+import { expectedGuests, formatPhone } from "../guests/adminDomain";
 function FamilyCard({ invitation: i }: { invitation: Invitation }) {
   const app = useApp(),
     feedback = useFeedback();
-  const members =
-    app.data?.guests.filter((g) => g.invitation_id === i.id) || [];
-  const [name, setName] = useState(i.name),
-    [pin, setPin] = useState(i.pin || ""),
+  const data = app.data!;
+  const members = data.guests.filter((g) => g.invitation_id === i.id),
+    responsible = members.find((g) => g.id === i.primary_guest_id),
+    phone =
+      data.contacts.find((c) => c.guest_id === i.primary_guest_id)?.whatsapp ||
+      "";
+  const [editVersion, setEditVersion] = useState(i.version);
+  const ownChange = (previous: number, next: number) =>
+    setEditVersion((v) => (v === previous ? next : v));
+  const [expanded, setExpanded] = useState(false),
+    [name, setName] = useState(i.name),
     [active, setActive] = useState(i.active),
     [primary, setPrimary] = useState(i.primary_guest_id || ""),
-    [target, setTarget] = useState(""),
-    [split, setSplit] = useState<string[]>([]),
-    [splitName, setSplitName] = useState(""),
-    [code, setCode] = useState(""),
-    [confirm, setConfirm] = useState(false);
-  useEffect(() => {
-    let active = true;
-    void readCache<Record<string, string>>(`codes:${app.scope}`).then(
-      (codes) => {
-        if (active)
-          setCode(
-            i.link_active === false
-              ? ""
-              : i.sharing_code || codes?.[i.id] || "",
-          );
-      },
+    [adding, setAdding] = useState(false),
+    [selected, setSelected] = useState<string[]>([]),
+    [confirm, setConfirm] = useState<"delete" | string | null>(null);
+  const [confirmationPayload, setConfirmationPayload] = useState<
+    Record<string, unknown>
+  >({});
+  const prepare = (action: string) => {
+    setConfirmationPayload(
+      action === "delete"
+        ? { id: i.id, version: i.version }
+        : { guests: expectedGuests(data, [action]) },
     );
-    return () => {
-      active = false;
-    };
-  }, [app.scope, i.id, i.sharing_code, i.link_active]);
-  const primaryGuest = members.find((g) => g.id === primary);
-  const phone =
-    app.data?.contacts.find((c) => c.guest_id === primary)?.whatsapp || "";
-  const pending = members.filter((g) =>
-    app.data?.rsvps.some((r) => r.guest_id === g.id && r.status === "PENDING"),
-  ).length;
+    setConfirm(action);
+  };
+  const available = data.guests.filter(
+    (g) =>
+      data.invitations.find((u) => u.id === g.invitation_id)?.kind ===
+      "INDIVIDUAL",
+  );
   return (
     <Card>
-      <Text style={styles.heading}>{i.name}</Text>
+      <View style={styles.row}>
+        <Text style={[styles.heading, { flexGrow: 1 }]}>{i.name}</Text>
+        <IconButton
+          icon="edit"
+          label={`Editar família ${i.name}`}
+          onPress={() => {
+            setExpanded((v) => !v);
+            setEditVersion(i.version);
+            setName(i.name);
+            setActive(i.active);
+            setPrimary(i.primary_guest_id || "");
+          }}
+        />
+        <IconButton
+          icon="delete"
+          label={`Excluir família ${i.name}`}
+          onPress={() => prepare("delete")}
+        />
+      </View>
       <Text style={styles.small}>
         {members.length} integrantes ·{" "}
         {
           members.filter((g) =>
-            app.data?.rsvps.some(
+            data.rsvps.some(
               (r) => r.guest_id === g.id && r.status === "CONFIRMED",
             ),
           ).length
         }{" "}
-        confirmados · {pending} pendentes
+        confirmados ·{" "}
+        {
+          members.filter((g) =>
+            data.rsvps.some(
+              (r) => r.guest_id === g.id && r.status === "PENDING",
+            ),
+          ).length
+        }{" "}
+        pendentes
       </Text>
       <Text style={styles.small}>
-        Responsável: {primaryGuest?.name || "Não definido"} · WhatsApp:{" "}
-        {phone || "Não informado"}
+        Responsável: {responsible?.name || "Não definido"} · WhatsApp:{" "}
+        {formatPhone(phone) || "Não informado"}
       </Text>
       <Text style={styles.small}>
-        Link: {i.link_active ? "ativo" : "não disponível"} · Ativação:{" "}
-        {i.device_count || 0} dispositivo(s) · Envio:{" "}
-        {i.sent_at ? "Enviado" : "Não enviado"} ·{" "}
-        {i.first_activated_at ? "Já ativado" : "Ainda não ativado"}
+        {i.pin ? "Senha configurada" : "Senha não configurada"}
       </Text>
-      <Field
-        label="PIN da família"
-        value={pin}
-        onChangeText={setPin}
-        keyboardType="number-pad"
-        maxLength={4}
-      />
-      <Button
-        secondary
-        title="Sugerir pelo WhatsApp"
-        disabled={!suggestedPin(phone)}
-        onPress={() => setPin(suggestedPin(phone)!)}
-      />
-      <Button
-        secondary
-        title="Gerar PIN"
-        onPress={() => setPin(generatePin())}
-      />
-      <Button
-        title="Salvar PIN"
-        disabled={!invitationPin.safeParse(pin).success}
-        onPress={() =>
-          feedback.run(() =>
-            app.admin("PIN_SAVE", { id: i.id, version: i.version, pin }),
-          )
-        }
-      />
       <Text style={styles.small}>
-        Alterar o PIN afeta novas ativações. Para exigir nova ativação dos
-        dispositivos atuais, revogue os acessos separadamente.
+        {i.link_active ? "Link ativo" : "Link bloqueado"} ·{" "}
+        {i.device_count || 0} dispositivo(s) ·{" "}
+        {i.sent_at ? "Convite enviado" : "Convite não enviado"}
       </Text>
-      <Button
-        secondary
-        title="Revogar dispositivos"
-        onPress={() =>
-          feedback.run(() =>
-            app.admin("ACCESS_REVOKE", { id: i.id, version: i.version }),
-          )
-        }
-      />
-      <Field label="Nome da família" value={name} onChangeText={setName} />
-      <Toggle label="Família ativa" value={active} onChange={setActive} />
-      <Text style={styles.small}>Contato principal</Text>
-      <Choice
-        value={primary}
-        onChange={setPrimary}
-        options={[
-          { value: "", label: "Não definido" },
-          ...members.map((g) => ({ value: g.id, label: g.name })),
-        ]}
-      />
-      <Button
-        title="Salvar família"
-        disabled={!name.trim()}
-        onPress={() =>
-          feedback.run(() =>
-            app.admin("INVITATION_SAVE", {
-              id: i.id,
-              version: i.version,
-              name: name.trim(),
-              active,
-              primary_guest_id: primary || null,
-            }),
-          )
-        }
-      />
-      <Button
-        secondary
-        title="Gerar / regenerar link"
-        disabled={!i.active || !i.pin}
-        onPress={() =>
-          feedback.run(async () => {
-            const result = await app.admin("CODE_ROTATE", {
-              id: i.id,
-              version: i.version,
-            });
-            setCode(String(result.code));
-            const codes =
-              (await readCache<Record<string, string>>(`codes:${app.scope}`)) ||
-              {};
-            await writeCache(`codes:${app.scope}`, {
-              ...codes,
-              [i.id]: String(result.code),
-            });
-            return "Novo código emitido. O anterior foi invalidado.";
-          })
-        }
-      />
-      {code ? (
-        <>
-          <Text style={styles.small}>
-            Novo link pronto para copiar. O código não é registrado em logs.
-          </Text>
-          <Button
-            title="Copiar link do convite"
-            onPress={() =>
-              feedback.run(async () => {
-                const base = process.env.EXPO_PUBLIC_WEB_BASE_URL;
-                if (!base)
-                  throw new AppError(
-                    "Configure EXPO_PUBLIC_WEB_BASE_URL para copiar o link HTTPS.",
-                  );
-                await copyText(invitationLink(base, code));
-                return "Link copiado.";
-              })
-            }
-          />
-          <Button
-            title="Copiar link + PIN"
-            disabled={!i.pin}
-            onPress={() =>
-              feedback.run(async () => {
-                const base = process.env.EXPO_PUBLIC_WEB_BASE_URL;
-                if (!base)
-                  throw new AppError(
-                    "Configure EXPO_PUBLIC_WEB_BASE_URL para copiar o link HTTPS.",
-                  );
-                await copyText(`${invitationLink(base, code)}\nPIN: ${i.pin}`);
-                return "Link e PIN copiados.";
-              })
-            }
-          />
-        </>
-      ) : (
-        <Text style={styles.small}>
-          Salve um PIN e gere o link. Links antigos só podem ser recuperados no
-          dispositivo que os emitiu; regenerar invalida o anterior e os vínculos
-          atuais.
-        </Text>
-      )}
-      <Button
-        secondary
-        title="Bloquear código"
-        onPress={() =>
-          feedback.run(async () => {
-            await app.admin("CODE_BLOCK", { id: i.id, version: i.version });
-            setCode("");
-            const codes =
-              (await readCache<Record<string, string>>(`codes:${app.scope}`)) ||
-              {};
-            delete codes[i.id];
-            await writeCache(`codes:${app.scope}`, codes);
-          })
-        }
-      />
-      <Text style={styles.small}>Juntar integrantes a outra família</Text>
-      <Choice
-        value={target}
-        onChange={setTarget}
-        options={
-          app.data?.invitations
-            .filter((x) => x.id !== i.id && x.active)
-            .map((x) => ({ value: x.id, label: x.name })) || []
-        }
-      />
-      <Toggle
-        label="Confirmo a transferência ou desativação desta família"
-        value={confirm}
-        onChange={setConfirm}
-      />
-      <Button
-        title="Juntar famílias"
-        disabled={!target || !confirm}
-        onPress={() =>
-          feedback.run(() =>
-            app.admin("FAMILY_MERGE", {
-              id: i.id,
-              target_id: target,
-              version: i.version,
-            }),
-          )
-        }
-      />
-      <Text style={styles.small}>
-        Dividir: selecione os integrantes que formarão o novo convite
-      </Text>
-      {members.map((g) => (
-        <Toggle
-          key={g.id}
-          label={g.name}
-          value={split.includes(g.id)}
-          onChange={(v) =>
-            setSplit((xs) => (v ? [...xs, g.id] : xs.filter((x) => x !== g.id)))
+      {confirm ? (
+        <Confirmation
+          text={
+            confirm === "delete"
+              ? "Excluir esta família? Seus membros serão preservados com links e senhas individuais. Os dispositivos da família serão revogados."
+              : "Remover este membro da família? Seu cadastro, RSVP e contatos serão preservados com acesso individual. Os dispositivos da família serão revogados."
+          }
+          onCancel={() => setConfirm(null)}
+          onConfirm={() =>
+            feedback.run(async () => {
+              await app.admin(
+                confirm === "delete"
+                  ? "FAMILY_DELETE"
+                  : "GUEST_REMOVE_FROM_FAMILY",
+                confirmationPayload,
+              );
+              if (confirm !== "delete") ownChange(i.version, i.version + 1);
+              setConfirm(null);
+            })
           }
         />
-      ))}
-      <Field
-        label={`Nome da família resultante de ${i.name}`}
-        value={splitName}
-        onChangeText={setSplitName}
-      />
-      <Button
-        title="Dividir família"
-        disabled={!split.length || !splitName.trim()}
-        onPress={() =>
-          feedback.run(() =>
-            app.admin("FAMILY_SPLIT", {
-              id: i.id,
-              version: i.version,
-              guest_ids: split,
-              name: splitName.trim(),
-            }),
-          )
-        }
-      />
-      <Button
-        secondary
-        title="Desativar família"
-        disabled={!confirm}
-        onPress={() =>
-          feedback.run(() =>
-            app.admin("INVITATION_DISABLE", { id: i.id, version: i.version }),
-          )
-        }
-      />
+      ) : null}
+      {expanded ? (
+        <>
+          <Field label="Nome da família" value={name} onChangeText={setName} />
+          <Toggle label="Família ativa" value={active} onChange={setActive} />
+          <Select
+            label="Responsável"
+            value={primary}
+            onChange={setPrimary}
+            options={[
+              { value: "", label: "Não definido" },
+              ...members.map((g) => ({ value: g.id, label: g.name })),
+            ]}
+          />
+          <Text style={styles.small}>
+            WhatsApp do responsável:{" "}
+            {formatPhone(
+              data.contacts.find((c) => c.guest_id === primary)?.whatsapp || "",
+            ) || "Não informado"}
+          </Text>
+          <Button
+            title="Salvar família"
+            disabled={!name.trim()}
+            onPress={() =>
+              feedback.run(async () => {
+                await app.admin("INVITATION_SAVE", {
+                  id: i.id,
+                  version: editVersion,
+                  name: name.trim(),
+                  active,
+                  primary_guest_id: primary || null,
+                });
+                ownChange(editVersion, editVersion + 1);
+              })
+            }
+          />
+          <AccessControls
+            invitation={i}
+            onChanged={ownChange}
+            phone={data.contacts.find((c) => c.guest_id === primary)?.whatsapp}
+          />
+          <Text style={styles.heading}>Membros</Text>
+          {members.map((g) => (
+            <View key={g.id} style={styles.row}>
+              <Text style={[styles.text, { flexGrow: 1 }]}>{g.name}</Text>
+              <Button
+                secondary
+                title={`Abrir ficha de ${g.name}`}
+                onPress={() =>
+                  router.push({
+                    pathname: "/convidados",
+                    params: { guest: g.id },
+                  })
+                }
+              />
+              <IconButton
+                icon="edit"
+                label={`Editar convidado ${g.name}`}
+                onPress={() =>
+                  router.push({
+                    pathname: "/convidados",
+                    params: { guest: g.id, edit: "true" },
+                  })
+                }
+              />
+              <Button
+                secondary
+                title={`Remover da família: ${g.name}`}
+                onPress={() => prepare(g.id)}
+              />
+            </View>
+          ))}
+          <IconButton
+            icon="add"
+            label="Adicionar membro à família"
+            onPress={() => setAdding((v) => !v)}
+          />
+          {adding ? (
+            <Card>
+              <Text style={styles.text}>Convidados com acesso individual</Text>
+              {!i.pin || !i.link_active ? (
+                <Text style={styles.notice}>
+                  Configure a senha e gere o link da família antes de adicionar
+                  membros.
+                </Text>
+              ) : null}
+              {available.map((g) => (
+                <Toggle
+                  key={g.id}
+                  label={g.name}
+                  value={selected.includes(g.id)}
+                  onChange={(v) =>
+                    setSelected((ids) =>
+                      v ? [...ids, g.id] : ids.filter((id) => id !== g.id),
+                    )
+                  }
+                />
+              ))}
+              {!available.length ? (
+                <Empty text="Nenhum convidado individual disponível." />
+              ) : null}
+              <Button
+                title="Adicionar membros"
+                disabled={!selected.length || !i.pin || !i.link_active}
+                onPress={() =>
+                  feedback.run(async () => {
+                    await app.admin("FAMILY_ADD_MEMBERS", {
+                      target_id: i.id,
+                      target_version: i.version,
+                      guests: expectedGuests(data, selected),
+                    });
+                    ownChange(i.version, i.version + 1);
+                    setSelected([]);
+                    setAdding(false);
+                  })
+                }
+              />
+            </Card>
+          ) : null}
+          <Button
+            secondary
+            title="Fechar edição"
+            onPress={() => setExpanded(false)}
+          />
+        </>
+      ) : null}
       {feedback.node}
     </Card>
   );
 }
-
 export function FamiliesScreen() {
   const app = useApp(),
     feedback = useFeedback();
-  const [name, setName] = useState(""),
-    [primaryName, setPrimaryName] = useState(""),
+  const [creating, setCreating] = useState(false),
+    [name, setName] = useState(""),
     [pin, setPin] = useState(""),
     [search, setSearch] = useState("");
+  const families = (app.data?.invitations || [])
+    .filter(
+      (i) =>
+        (i.kind || "FAMILY") === "FAMILY" &&
+        !i.archived_at &&
+        i.name
+          .toLocaleLowerCase("pt-BR")
+          .includes(search.toLocaleLowerCase("pt-BR")),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   return (
-    <Screen section="admin" title="Famílias & convites">
-      <Card>
-        <Field
-          label="Nome da nova família"
-          value={name}
-          onChangeText={setName}
-        />
-        <Field
-          label="Nome do responsável inicial (opcional)"
-          value={primaryName}
-          onChangeText={setPrimaryName}
-        />
-        <Text style={styles.small}>
-          Se informado, será cadastrado como integrante. Você também pode
-          definir o responsável depois de cadastrar os convidados.
-        </Text>
-        <Field
-          label="PIN inicial (opcional)"
-          value={pin}
-          onChangeText={setPin}
-          keyboardType="number-pad"
-          maxLength={4}
-        />
-        <Button
-          secondary
-          title="Gerar PIN inicial"
-          onPress={() => setPin(generatePin())}
-        />
-        <Button
-          title="Criar família"
-          disabled={
-            !name.trim() || (!!pin && !invitationPin.safeParse(pin).success)
-          }
-          onPress={() =>
-            feedback.run(async () => {
-              await app.admin("INVITATION_SAVE", {
-                name: name.trim(),
-                primary_name: primaryName.trim() || null,
-                pin: pin || null,
-              });
-              setPrimaryName("");
-              setPin("");
-              setName("");
-            })
-          }
-        />
-        {feedback.node}
-      </Card>
+    <Screen section="admin" title="Famílias">
       <Field label="Buscar família" value={search} onChangeText={setSearch} />
-      {app.data?.invitations
-        .filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
-        .map((i) => (
-          <FamilyCard key={i.id} invitation={i} />
-        ))}
-      {!app.data?.invitations.length ? (
-        <Empty text="Crie o primeiro convite familiar." />
+      <Button title="Adicionar família" onPress={() => setCreating(true)} />
+      {creating ? (
+        <Card>
+          <Field
+            label="Nome da nova família"
+            value={name}
+            onChangeText={setName}
+          />
+          <Field
+            label="Senha inicial (opcional)"
+            value={pin}
+            onChangeText={setPin}
+            keyboardType="number-pad"
+            maxLength={4}
+          />
+          <Button
+            secondary
+            title="Gerar senha inicial"
+            onPress={() => setPin(generatePin())}
+          />
+          <Button
+            title="Criar família"
+            disabled={
+              !name.trim() || (!!pin && !invitationPin.safeParse(pin).success)
+            }
+            onPress={() =>
+              feedback.run(async () => {
+                await app.admin("INVITATION_SAVE", {
+                  name: name.trim(),
+                  pin: pin || null,
+                });
+                setName("");
+                setPin("");
+                setCreating(false);
+              })
+            }
+          />
+          <Button
+            secondary
+            title="Cancelar"
+            onPress={() => setCreating(false)}
+          />
+          {feedback.node}
+        </Card>
       ) : null}
+      {families.map((i) => (
+        <FamilyCard key={i.id} invitation={i} />
+      ))}
+      {!families.length ? <Empty text="Crie a primeira família." /> : null}
     </Screen>
   );
 }

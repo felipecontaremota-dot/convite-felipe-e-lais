@@ -239,7 +239,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     enter: async (code, pin) => {
       if (demoEnabled && code === demo.DEMO_CODE) {
         if (pin !== demo.DEMO_PIN)
-          throw new AppError("Código ou PIN inválido.");
+          throw new AppError("Código ou senha inválido.");
         await writeCache("demo-session", "GUEST");
         setDemoRole("GUEST");
         return;
