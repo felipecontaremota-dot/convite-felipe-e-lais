@@ -16,6 +16,7 @@ async function backend(
     activations: 0,
     identified: 0,
     anonymous: false,
+    password: "correct-password",
   };
   const exp = Math.floor(Date.now() / 1000) + 3600;
   const encode = (value: unknown) =>
@@ -41,7 +42,7 @@ async function backend(
     let data: unknown = {},
       status = 200;
     if (url.pathname === "/auth/v1/token") {
-      if (body.password === "incorrect") {
+      if (body.password !== state.password) {
         status = 400;
         data = {
           message: "Invalid login credentials",
@@ -54,8 +55,11 @@ async function backend(
     } else if (url.pathname === "/auth/v1/signup") {
       state.anonymous = true;
       data = session();
-    } else if (url.pathname === "/auth/v1/user") data = user();
-    else if (url.pathname === "/rest/v1/rpc/event_role") data = state.role;
+    } else if (url.pathname === "/auth/v1/user") {
+      if (req.method() === "PUT" && body.password)
+        state.password = body.password;
+      data = user();
+    } else if (url.pathname === "/rest/v1/rpc/event_role") data = state.role;
     else if (url.pathname === "/rest/v1/rpc/app_snapshot") {
       const actualRole = state.anonymous
         ? state.bound
@@ -347,6 +351,7 @@ async function recovery(page: Page) {
         },
       });
     counts.tokens++;
+    expect(page.url()).not.toContain("token_hash=");
     expect(route.request().postDataJSON()).toMatchObject({
       token_hash: "RecoveryTokenFixtureOnly1234567890",
       type: "recovery",
@@ -520,4 +525,144 @@ test("an unauthenticated browser never trusts a stale public cache with staff ro
     page.getByRole("button", { name: "Abrir meu convite", exact: true }),
   ).toBeVisible();
   expect(page.url()).not.toContain("/painel");
+});
+
+function implicitUrl() {
+  const encode = (value: unknown) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  const access = `${encode({ alg: "HS256" })}.${encode({ sub: uid, exp: Math.floor(Date.now() / 1000) + 3600 })}.fixture`;
+  return `/recuperar-senha#access_token=${access}&refresh_token=fixture-refresh&type=recovery&expires_in=3600&token_type=bearer`;
+}
+test("implicit recovery clears URL, changes password and permits subsequent password login", async ({
+  page,
+}) => {
+  await backend(page);
+  const counts = await recovery(page);
+  page.on("request", (request) => {
+    if (request.url().includes("/auth/v1/user"))
+      expect(page.url()).not.toContain("#");
+  });
+  await page.goto(implicitUrl());
+  await expect(page.getByLabel("Nova senha", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/recuperar-senha$/);
+  expect(counts.tokens).toBe(0);
+  expect(await storedSessionUser(page)).toBe(uid);
+  await page
+    .getByLabel("Nova senha", { exact: true })
+    .fill("new-recovery-password");
+  await page
+    .getByLabel("Confirmar nova senha", { exact: true })
+    .fill("new-recovery-password");
+  await page
+    .getByRole("button", { name: "Salvar minha senha", exact: true })
+    .click();
+  await expect(
+    page.getByText("Senha atualizada no Supabase Auth.", { exact: true }),
+  ).toBeVisible();
+  await page.goto("/painel");
+  await page
+    .getByRole("button", { name: "Sair deste dispositivo", exact: true })
+    .click();
+  await login(page, "new-recovery-password");
+  await expect(page).toHaveURL(/\/painel$/);
+  expect(counts.tokens).toBe(0);
+  expect(counts.email).toBe(0);
+});
+test("already established recovery session survives reload of the clean URL", async ({
+  page,
+}) => {
+  await backend(page);
+  const counts = await recovery(page);
+  await page.goto(recoveryUrl);
+  await expect(page.getByLabel("Nova senha", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/recuperar-senha$/);
+  await page.reload();
+  await expect(page.getByLabel("Nova senha", { exact: true })).toBeVisible();
+  expect(await storedSessionUser(page)).toBe(uid);
+  expect(counts.tokens).toBe(1);
+  expect(counts.email).toBe(0);
+});
+for (const field of ["error", "error_code", "error_description"]) {
+  test(`recovery rejects Supabase hash ${field} and removes fragment`, async ({
+    page,
+  }) => {
+    await backend(page);
+    const counts = await recovery(page);
+    await page.goto(
+      `/recuperar-senha#${field}=expired-provider-message&type=recovery`,
+    );
+    await expect(
+      page.getByText("Link de recuperação inválido ou expirado.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/recuperar-senha$/);
+    await expect(page.getByLabel("Nova senha", { exact: true })).toHaveCount(0);
+    expect(counts.tokens).toBe(0);
+  });
+}
+test("implicit recovery without staff role disconnects the user", async ({
+  page,
+}) => {
+  await backend(page, null);
+  const counts = await recovery(page);
+  await page.goto(implicitUrl());
+  await expect(
+    page.getByText("Esta conta não tem acesso aos noivos ou ao cerimonial.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await storedSessionUser(page)).toBeNull();
+  expect(counts.logout).toBe(1);
+  expect(counts.tokens).toBe(0);
+  await expect(page).toHaveURL(/\/recuperar-senha$/);
+});
+test("implicit recovery preserves session on transient role failure and retries without email or verifyOtp", async ({
+  page,
+}) => {
+  await backend(page);
+  const counts = await recovery(page);
+  let unavailable = true;
+  await page.route(
+    "http://127.0.0.1:54321/rest/v1/rpc/event_role",
+    async (route) => {
+      if (route.request().method() === "OPTIONS")
+        return route.fulfill({
+          status: 200,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+          },
+        });
+      await route.fulfill({
+        status: unavailable ? 500 : 200,
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(
+          unavailable ? { message: "Temporary failure" } : "ADMIN",
+        ),
+      });
+    },
+  );
+  await page.goto(implicitUrl());
+  await expect(
+    page.getByText(
+      "Não foi possível validar seu acesso agora. Tente novamente.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(await storedSessionUser(page)).toBe(uid);
+  expect(counts.logout).toBe(0);
+  await expect(page).toHaveURL(/\/recuperar-senha$/);
+  unavailable = false;
+  await page
+    .getByRole("button", {
+      name: "Tentar validar acesso novamente",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByLabel("Nova senha", { exact: true })).toBeVisible();
+  expect(counts.tokens).toBe(0);
+  expect(counts.email).toBe(0);
+  expect(counts.logout).toBe(0);
 });

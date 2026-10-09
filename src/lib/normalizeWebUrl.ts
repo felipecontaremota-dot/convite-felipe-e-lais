@@ -1,25 +1,15 @@
-// Only the recovery route accepts bounded, allowlisted one-time token parameters.
-// No implicit access_token/refresh_token or arbitrary Router search state is accepted.
-if (
-  typeof document !== "undefined" &&
-  typeof window !== "undefined" &&
-  window.location.search
-) {
-  const query = new URLSearchParams(window.location.search);
-  const token = query.get("token_hash");
-  const recovery =
-    /\/recuperar-senha$/.test(window.location.pathname) &&
-    query.get("type") === "recovery" &&
-    token &&
-    /^[A-Za-z0-9_-]{20,512}$/.test(token);
-  window.history.replaceState(
-    null,
-    "",
-    window.location.pathname +
-      (recovery
-        ? `?token_hash=${encodeURIComponent(token)}&type=recovery`
-        : "") +
-      window.location.hash,
+import { captureRecoveryUrl } from "../features/auth/recoverySession";
+// Recovery credentials are handed off in memory and removed before Router initializes.
+// Router must never restore credential query parameters from its navigation state.
+if (typeof document !== "undefined" && typeof window !== "undefined") {
+  captureRecoveryUrl(window.location, () =>
+    window.history.replaceState(null, "", window.location.pathname),
   );
+  if (window.location.search)
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.hash,
+    );
 }
 export {};

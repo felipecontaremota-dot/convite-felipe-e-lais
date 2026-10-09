@@ -13,6 +13,11 @@ import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import { supabase, eventId } from "../../lib/supabase";
 import { requireStaff, savePassword, StaffValidationError } from "./staffAuth";
+import {
+  establishRecovery,
+  parseRecovery,
+  takeRecoveryUrl,
+} from "./recoverySession";
 function PasswordForm() {
   const app = useApp(),
     feedback = useFeedback();
@@ -74,16 +79,9 @@ export function RecoveryScreen() {
   }>();
   const [verified, setVerified] = useState(false),
     [error, setError] = useState(""),
-    [tokenConsumed, setTokenConsumed] = useState(false),
+    [sessionEstablished, setSessionEstablished] = useState(false),
     [retryRole, setRetryRole] = useState(false);
-  const attempted = useRef<string | null>(null);
-  const valid =
-    !!supabase &&
-    type === "recovery" &&
-    typeof token_hash === "string" &&
-    /^[A-Za-z0-9_-]{20,512}$/.test(token_hash);
-  const inputError =
-    valid || tokenConsumed ? "" : "Link de recuperação inválido ou expirado.";
+  const attempted = useRef(false);
   const validateRole = useCallback(async () => {
     if (!supabase) return;
     setError("");
@@ -101,21 +99,27 @@ export function RecoveryScreen() {
     }
   }, []);
   useEffect(() => {
-    if (!valid || !supabase || !token_hash || attempted.current === token_hash)
-      return;
-    attempted.current = token_hash;
+    if (!supabase || attempted.current) return;
+    attempted.current = true;
     const client = supabase;
+    const query = new URLSearchParams();
+    if (token_hash !== undefined) query.set("token_hash", token_hash);
+    if (type !== undefined) query.set("type", type);
+    const input =
+      takeRecoveryUrl() ??
+      parseRecovery(
+        query.toString(),
+        Platform.OS === "web" ? window.location.hash : "",
+      );
+    if (Platform.OS === "web")
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname,
+      );
     void (async () => {
-      // Consume the one-time recovery token, then erase it from the browser URL.
-      const result = await client.auth.verifyOtp({
-        token_hash,
-        type: "recovery",
-      });
-      if (Platform.OS === "web")
-        window.history.replaceState(null, "", window.location.pathname);
-      if (result.error)
-        throw new AppError("Link de recuperação inválido ou expirado.");
-      setTokenConsumed(true);
+      await establishRecovery(client, input);
+      setSessionEstablished(true);
       await validateRole();
     })().catch((e: unknown) =>
       setError(
@@ -124,19 +128,19 @@ export function RecoveryScreen() {
           : "Não foi possível recuperar o acesso.",
       ),
     );
-  }, [token_hash, valid, validateRole]);
+  }, [token_hash, type, validateRole]);
   return (
     <Screen title="Recuperar senha">
-      {inputError || error ? (
+      {!supabase || error ? (
         <Text accessibilityRole="alert" style={styles.error}>
-          {inputError || error}
+          {error || "Link de recuperação inválido ou expirado."}
         </Text>
       ) : verified ? (
         <PasswordForm />
       ) : (
         <Text style={styles.text}>Validando recuperação…</Text>
       )}
-      {tokenConsumed && retryRole ? (
+      {sessionEstablished && retryRole ? (
         <Button
           title="Tentar validar acesso novamente"
           onPress={validateRole}
