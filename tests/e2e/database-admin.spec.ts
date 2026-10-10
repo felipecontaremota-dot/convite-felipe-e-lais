@@ -825,7 +825,7 @@ test("surviving family alias confirms individual resend directly without retryin
   );
   const claim = JSON.parse(
     db.sql(
-      `select claim_invitation_delivery('${reservation.id}',repeat('a',64));`,
+      `select claim_invitation_delivery('${reservation.id}',repeat('a',64),'${reservation.credential_hash}');`,
     ),
   );
   db.sql(

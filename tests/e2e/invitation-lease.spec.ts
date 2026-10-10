@@ -60,7 +60,7 @@ test("two PostgreSQL connections grant only one invitation lease and reject a st
           code === 0 ? resolve(output) : reject(new Error(error)),
         );
         process.stdin.end(
-          `begin;select claim_invitation_delivery('${row.id}',repeat('a',64));select pg_sleep(0.2);commit;`,
+          `begin;select claim_invitation_delivery('${row.id}',repeat('a',64),'${row.credential_hash}');select pg_sleep(0.2);commit;`,
         );
       });
     const results = (await Promise.all([execute(), execute()])).map((s) =>
@@ -80,7 +80,7 @@ test("two PostgreSQL connections grant only one invitation lease and reject a st
       `update invitation_deliveries set locked_at=now()-interval '3 minutes' where id='${row.id}';`,
     );
     const next = JSON.parse(
-      db.sql(`select claim_invitation_delivery('${row.id}',repeat('a',64));`),
+      db.sql(`select claim_invitation_delivery('${row.id}',repeat('a',64),'${row.credential_hash}');`),
     );
     expect(next.claimed).toBe(true);
     expect(next.token).not.toBe(first.token);
