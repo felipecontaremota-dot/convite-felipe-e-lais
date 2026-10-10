@@ -104,7 +104,6 @@ export class TestPostgres {
       `'${String(value).replaceAll("'", "''")}'`;
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
-      issue_ticket: `issue_ticket(${event},${literal(args.p_guest)}::uuid,${args.p_regenerate === true})`,
       event_role: `event_role(${event})`,
       app_snapshot: `app_snapshot(${event})`,
       admin_action: `admin_action(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,

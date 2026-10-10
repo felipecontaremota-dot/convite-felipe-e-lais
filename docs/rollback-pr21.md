@@ -1,65 +1,62 @@
-# Rollback funcional para o PR #21
+# Reconstrução limpa da aplicação — PR #21
 
-Base restaurada: `919382d988c1b8cb06130f0da3813db7a841ebd1`.
-Reversão funcional dos merges #23 (`0fcd3bf`) e #22 (`5dbfa3d`), preservando histórico.
+Referência: `919382d988c1b8cb06130f0da3813db7a841ebd1`.
+Estratégia B: descartar dados operacionais de teste e reconstruir objetos da aplicação em `public` com 001–006. Runtime, dependências, workflows e Functions correspondem à referência; 001–006 não foram editadas. 007/008 estão apenas em `tests/fixtures/post-pr21`, fora do caminho ativo. A proposta 009 foi removida.
 
-## Implementação
+## Limites
 
-- Runtime volta a RSVP PENDING/CONFIRMED/DECLINED, identidade local no Perfil, QR individual para confirmados e projeção original do cerimonial. QR familiar, saudação por gênero, novo feedback RSVP e identificação RPC deixam a UX.
-- Migrations 001–008 permanecem byte-for-byte. A `202610100009_restore_pr21_contracts.sql` restaura `admin_action`, `app_snapshot`, `app_mutate` e `issue_ticket` a partir das definições versionadas do PR #21. As cadeias privadas originais continuam existindo.
-- A 009 não altera linhas de dados, enum, links/PINs, sessões, consentimentos, receipts ou deliveries. Retira somente os dois triggers de responsável familiar adicionados em 007; as validações administrativas originais da 004 continuam ativas.
-- Novas RPCs de identificação/QR familiar/resolução ficam sem EXECUTE para clientes. Funções, tabelas, colunas, índices, RLS e dados aditivos ficam dormentes.
-- Funções públicas restauradas têm EXECUTE somente para authenticated, SECURITY DEFINER, search_path fixo e owner igual ao owner confiável de invitations. Conferir este owner e os delegates antes de produção.
-- MAYBE existente permanece no banco e na leitura administrativa. No formulário restaurado, aparece como a opção indecisa PENDING. Abrir a tela não escreve; salvar explicitamente usa os três estados do PR #21. O backend aceita payloads MAYBE antigos ainda pendentes para não descartar filas durante a transição.
-- `notifications_revoked=true` mantém os quatro canais desligados no Perfil. O backend serializa a verificação com os writers e impede que um formulário/cache antigo reative esses canais. O marcador é mantido no payload/fila e mesclado na projeção otimista, inclusive para payloads históricos sem esse campo. Salvar offline, reabrir Perfil e reconectar não reativa canais. Reconsentimento global exige um futuro fluxo explícito; não é feito automaticamente por este rollback.
-- Functions, secrets, workflows, dependências, autenticação/recovery, rotas, armazenamento da fila, PWA e infraestrutura 006 de Resend/mensagens ficam intactos.
+**Nenhum script deste pacote deve ser aplicado em produção antes da revisão do corte.** Não houve merge, deploy, execução remota de SQL ou alteração de secrets nesta preparação. O teste local não substitui o inventário do projeto hospedado nem recebimento real do Resend.
 
-## Validação isolada
+Não executar `DROP SCHEMA public CASCADE`, `supabase db reset`, `migration repair`, `db push` para reaplicar 001–006, reset/force push de main ou limpeza de `auth`/Storage. O histórico oficial já registra 001–006 e não é modificado.
 
-`npm run test:db` aplica 001–009 desde o início, mantém fixtures de upgrade 004/006/007/008 e acrescenta dados reais de 008 antes da 009. Compara todas as linhas de todas as tabelas public/auth antes/depois, incluindo credenciais, notificações, consentimentos, mutation results e lease/payload hash de envio pendente.
+## Conteúdo operacional
 
-`rollback-database.sql` valida contrato restaurado, ACL/owner/search_path, ausência das features no snapshot, leitura de MAYBE, opt-out resistente a cache, papel GUEST, projeção do cerimonial, ID de mensagem em retry, link/PIN existentes e mesma reservation de envio.
+- `scripts/rebuild-pr21/preflight-readonly.sql`: contexto, histórico, objetos, owners/ACL, extensões e dependências; consulta local para identificar ADMIN existente. Conferir no painel Auth o UUID e e-mail autorizado; não publicar resultados pessoais. Se o vínculo estiver ausente, localizar a conta pelo e-mail no painel Auth. Não inventar UUID.
+- `cleanup-reviewed.sql`: allowlists explícitas de 32 tabelas, view `invitation_members`, funções com assinaturas permitidas e três enums. Remove triggers/policies internos, funções, tabelas e tipos nessa ordem. Usa RESTRICT, recusa overloads inesperados e objetos de extensão. Dependências externas causam erro, não são removidas automaticamente. Requer confirmação de descarte e deve rodar na mesma transação da reconstrução.
+- `bootstrap-reviewed.sql`: valida usuário Auth existente e não anônimo; recria vínculo ADMIN no evento `00000000-0000-4000-8000-000000000001`. `supabase/seed.sql`, executado antes, recria evento/settings/nove regras padrão do baseline. Não cria Auth user, senha ou convidados. Rever data, local e regras do seed; reconfigurar pelo painel após o corte.
+- `run-rebuild.sh`: chama psql com `-X`, `ON_ERROR_STOP=1` e transação única para cleanup → 001–006 → seed → bootstrap. URI é recebida pelo ambiente e convertida em arquivo libpq temporário privado, removido ao terminar; não entra em argumentos de psql. Não escreve schema_migrations nem publica Functions. Sem confirmação/UUID/conexão, para.
+- `clear-browser-data.js`: ferramenta manual, fora do runtime. Apaga queue/cache/tickets do evento, demo-session e sessão local do projeto indicado; unregister do SW no escopo do convite e caches PWA correspondentes. Preserva dados de outras aplicações. Não acessa banco nem apaga usuário Auth.
 
-E2E de acesso usa PostgreSQL descartável e a Function real de acesso via bridge de teste. Valida login administrativo, link, PIN inválido/válido, RSVP salvo, MAYBE sem alteração na abertura, QR individual FAMILY sem Perfil, identidade apenas local, reload e revogação persistente. Auth HTTP é fixture; não substitui smoke real de produção. Resend é simulado nos testes de Functions; recebimento de e-mail real exige smoke controlado posterior.
+## O que será descartado
 
-## Trava antes de produção
+Todas as linhas das tabelas allowlisted: evento/configurações atuais, profiles/vínculos ADMIN da aplicação, convidados/famílias, convites/códigos/PINs/acessos/sessões de convidados, contatos/RSVP/presentes, QR/check-ins, mensagens/announcements/recipients, regras/jobs/outboxes/attempts, logs, receipts e deliveries/batches/members. Objetos 007/008 são removidos. Links e PINs anteriores deixam de funcionar deliberadamente.
 
-Nesta execução não houve acesso ao catálogo de produção, aplicação de migration, publicação de Functions, alteração de secrets ou merge. O SQL `scripts/checkpoint-rollback.sql` é somente leitura e foi preparado para a conferência posterior; não deve ser confundido com checkpoint já executado.
+O que permanece: projeto/URL/chaves, schema public e suas permissões de infraestrutura, extensions/pgcrypto, auth e usuários/identidades/senhas/configurações, Storage, migration history, secrets, SMTP, Resend/domínio/remetente, Functions idênticas ao baseline, Repository Variables e Pages. Sessões Supabase Auth não são removidas no servidor; os vínculos de acesso ao casamento são apagados e sessões locais serão limpas.
 
-1. Confirmar projeto e backup/PITR recuperável. Registrar migration history, versões de Functions e artefatos Pages/nativos.
-2. Executar o checkpoint somente leitura. Comparar definições/owners/ACL/search_path com o Git da main antes do rollback e o SHA estável, incluindo delegates privados. Se faltar função, houver definição/owner divergente ou dados de acesso inconsistentes, parar antes de qualquer alteração; não aplicar a 009 sob premissas falsas.
-3. Conferir filas nos clientes afetados: são locais e não podem ser inventariadas por SQL. Não limpar cache/localStorage/AsyncStorage nem descartar mutations para facilitar o deploy. Drenar alterações compatíveis e preservar mutation IDs.
-4. Conferir deliveries pending, leases e janela de 24h. Não repetir lotes nem criar novos request IDs como procedimento de implantação.
-5. Conferir versões publicadas das quatro Functions; o código versionado coincide com PR #21. Se coincidir, não republicar. Manter secrets Resend e demais integrações.
-6. Homologar o artefato restaurado com banco 008 (ponte do corte) e com 009. Testar upgrade com dados representativos, incluindo MAYBE/consentimentos/receipts antigos.
+## Teste isolado e comparação
 
-## Corte após revisão/merge autorizado
+`npm run test:db` mantém toda a suíte baseline e acrescenta reconstrução. Instala 001–006, seed e ADMIN; registra catálogo baseline; aplica fixtures 007/008 e cria MAYBE, contato revogado, receipt, QR individual/familiar e delivery pendente. Testa que dependência de Storage bloqueia cleanup e que DDL anterior é revertido. Depois executa o procedimento real e compara exatamente tabelas/colunas/enums/funções/assinaturas/retornos/owners/ACL/RLS/policies/triggers/views/índices/constraints/schema. Confirma Auth, Storage e histórico preservados, dados operacionais descartados e event_role/snapshot ADMIN funcionando.
 
-O merge dispara Pages; coordenar a janela antes de aprová-lo. Pausar novas escritas/envios sem apagar filas ou alterar secrets. Publicar frontend restaurado primeiro, ainda com 008, verificar artefato/SW, e aplicar somente a 009 após aprovação do checkpoint. Recarregar schema e validar grants/contratos. Clientes web/PWA/nativos anteriores precisam ser atualizados/controlados: identificação e QR familiar antigos deixarão de funcionar após a 009. Não liberar operação enquanto houver clientes antigos escrevendo sem controle.
+Auth/Storage hospedados são representados por fixtures no PostgreSQL descartável; dependências específicas do projeto precisam do preflight. O proprietário de execução deve ser o owner confiável validado; a comparação local usa o mesmo owner na instalação limpa e reconstrução. Não supor que owners de produção sejam iguais ao teste.
 
-Não reaplicar 001–008. Não apagar estruturas novas. Não restaurar backup antigo por cima de novas escritas. Não alterar SMTP, Resend ou secrets válidos. Não usar o link antigo comprovadamente rotacionado e não regenerar um convite existente para o smoke.
+## Sequência do corte futuro
 
-## Smoke obrigatório antes de reabrir
+1. Revisar PR e inventário; confirmar projeto, snapshot/backup e owner de execução. Confirmar UUID ADMIN existente. Conferir Functions publicadas com baseline; não republicar se iguais. Guardar configuração externa/evento desejada.
+2. Pausar acesso, scheduler/workers e envios. Nenhum cliente antigo deve escrever ou retomar filas; manter a pausa até fim do smoke. Secrets não são apagados para pausar workers.
+3. Fechar outras abas/janelas PWA. Com o app parado (página de manutenção, sem bundle executando), executar a ferramenta de limpeza no console da origem/caminho correto; fechar aba. Para IndexedDB, o baseline não a utiliza: identificar bases adicionais em DevTools e apagar somente as deste app. Não limpar toda a origem GitHub Pages se outras aplicações a compartilham.
+4. Apps nativos de teste: encerrar app; descartar AsyncStorage deste app e sessão SecureStore via procedimento de reset do app. Desinstalar/reinstalar limpa armazenamento do app, mas iOS Keychain pode sobreviver; em simulador dedicado usar reset do simulador, ou exclusão explícita do item Supabase SecureStore antes do próximo uso. Não considerar reinstalação iOS prova de limpeza. Manter instalações antigas fechadas; distribuir build baseline.
+5. Preparar conexão de banco em ambiente seguro, sem URL/senha em chat, commit ou histórico de shell. Executar somente após aprovação do corte:
 
-- ADMIN: senha válida/inválida, painel, convidados, edição, criação de convite controlado e cópia de link existente.
-- Envio: destinatário de teste, Resend confirma ID, e-mail recebido, URL/base path corretos e PIN correto. Retry conserva operation/request/reservation; nada duplica. Pending permanece pending quando resultado incerto.
-- Convidado: link atualmente válido, senha incorreta rejeitada, senha correta aceita, Home, Presença, Perfil local, Mensagens, Presentes, Local e QR individual após confirmação. FAMILY não depende de identify_guest.
-- Segurança: código inválido, isolamento de eventos/unidades, GUEST sem ADMIN, cerimonial sem contatos/mensagens, nenhum link rotacionado e consentimentos revogados preservados.
-- Operação: fila antiga drenada sem descarte, deliveries/receipts preservados, deploy Pages e builds nativos correspondem ao commit aprovado.
+```bash
+export REBUILD_ADMIN_USER_ID='<UUID-AUTH-CONFIRMADO>'
+export REBUILD_CONFIRMATION=DISCARD_TEST_DATA_REBUILD_PR21
+# REBUILD_DATABASE_URL deve ser injetada por mecanismo seguro.
+bash scripts/rebuild-pr21/run-rebuild.sh
+```
 
-## Reversão do corte e riscos
+6. Se qualquer operação falhar, parar: transação inteira deve ser revertida. Não adicionar CASCADE nem ignorar erros. Investigar dependência/owner/overload, revisar e homologar novamente.
+7. Conferir catálogo final contra 001–006; enum RSVP deve conter somente PENDING/CONFIRMED/DECLINED e nenhuma estrutura 007/008. Confirmar Auth/Storage/histórico intactos e papel ADMIN correto. Recarregamento PostgREST é solicitado pelo bootstrap.
+8. Coordenar merge/publicação: merge em main dispara Pages automaticamente, por isso só fazer durante a janela. Validar artefato baseline e SW; clientes não podem abrir versão antiga contra banco novo. Não fazer deploy das Functions idênticas. A pausa cobre todo o intervalo entre reconstrução e frontend pronto.
+9. Smoke real: login ADMIN correto/incorreto → painel → novo convidado/convite → envio Resend → e-mail recebido → novo link → PIN correto/incorreto → área convidado → RSVP → sessão/reabertura → QR individual/check-in. Validar isolamento, mensagens, retry idempotente/lease/pending sem duplicar e PWA. Ajustar data/local e regras antes de uso.
+10. Liberar somente clientes novos e depois workers. Convites antigos descartados não devem ser usados para teste.
 
-Guardar definições/ACL/owners e artefatos anteriores no checkpoint. Se o smoke falhar, manter operação pausada, restaurar os contratos/ACL/owners anteriores por alteração incremental revisada e o artefato frontend correspondente. Não voltar só o frontend #23 enquanto as RPCs continuarem em contrato #21; não tentar reexecutar 007/008 sobre objetos existentes. Dados novos ficam preservados.
+## Riscos residuais
 
-QR familiar fica armazenado, mas fora da UX/scanner antigo. QR individual volta à confirmação obrigatória; uma futura alteração explícita de RSVP para não confirmado pode revogar seu QR conforme PR #21, sem rotação do link de acesso. Abrir/aplicar a migration não revoga QRs em massa. O botão administrativo Regenerar link já existia no PR #21; não o usar durante o corte.
+- Dependências não registradas em pg_depend (SQL dinâmico/corpos textuais) exigem leitura no preflight; RESTRICT não as detecta todas.
+- Objetos adicionais não reconhecidos devem ser classificados antes do corte; não ampliar allowlists automaticamente.
+- Clientes offline antigos e iOS Keychain podem sobreviver ao corte; todos precisam de reset controlado.
+- E-mail realmente aceito antes do corte não é desfeito pelo descarte de deliveries; novos testes podem gerar e-mails adicionais. Não retomar lote antigo.
+- Uma falha de Auth/configuração externa não é corrigida por reconstrução de public; smoke real permanece obrigatório.
+- Perda de dados é intencional; backup permite recuperação excepcional, mas não deve ser restaurado automaticamente sobre o banco novo.
 
-## Resultados locais deste PR
-
-- Node 24.19.0; lint e typecheck aprovados.
-- Unitários: 122 aprovados; Functions: check aprovado e 41 testes aprovados.
-- PostgreSQL 17 descartável: instalação limpa 001–009, checkpoint somente leitura e suíte completa de upgrade/SQL aprovados.
-- E2E: 52 aprovados, com EXPO_NO_TELEMETRY=1, EXPO_NO_CACHE=1 e EXPO_PUBLIC_DEMO_MODE=false no processo principal; cada web server configura seu modo conforme Playwright. Chromium do ambiente usado localmente; CI instala seu Chromium.
-- Build/export Web na raiz e em /convite-felipe-e-lais aprovados; manifest, SW, 404, isolamento de caches privados e shell offline verificados.
-- Exports Android e iOS aprovados (bundles Expo; não equivalem a instalação/teste em aparelho nem publicação nas lojas).
-- Migrations 001–008, Functions, workflows, Auth/recovery, fila e secrets sem alterações.
-- Smoke de produção/recebimento real Resend e catálogo/versões publicadas não verificados por falta de acesso ao Supabase neste ambiente.
+Informações necessárias no corte: project ref correto para limpeza local, conexão segura, owner confiável, UUID ADMIN confirmado, aprovação de configuração do evento e inventário externo. Nenhuma credencial privilegiada entra no frontend ou Git.

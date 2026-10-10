@@ -16,7 +16,6 @@ import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import type { Contact, Guest } from "../../types/domain";
 import { contactSchema } from "../../utils/security";
-import { preserveContactRevocation } from "./contactCompatibility";
 
 const initialContact: Omit<Contact, "guest_id"> = {
   email: "",
@@ -36,10 +35,6 @@ function ContactForm({ guest }: { guest: Guest }) {
       ...initialContact,
     },
   );
-  const revoked =
-    form.notifications_revoked === true ||
-    app.data?.contacts.find((c) => c.guest_id === guest.id)
-      ?.notifications_revoked === true;
   const change = (key: string, value: unknown) =>
     setForm((f) => ({ ...f, [key]: value }));
   return (
@@ -62,29 +57,17 @@ function ContactForm({ guest }: { guest: Guest }) {
         <Toggle
           key={c}
           label={`Aceito receber mensagens por ${c.replace("_", " ")}`}
-          value={revoked ? false : form[`consent_${c}`]}
-          disabled={revoked}
+          value={form[`consent_${c}`]}
           onChange={(v) => change(`consent_${c}`, v)}
         />
       ))}
-      {revoked ? (
-        <Text style={styles.small}>
-          As notificações foram revogadas. Salvar o contato mantém essa
-          revogação.
-        </Text>
-      ) : null}
       <Button
         title={`Salvar contato de ${guest.name}`}
         onPress={() =>
           feedback.run(() =>
             app.send("CONTACT_UPDATE", {
               guest_id: guest.id,
-              ...contactSchema.parse(
-                preserveContactRevocation(
-                  app.data?.contacts.find((c) => c.guest_id === guest.id),
-                  form,
-                ),
-              ),
+              ...contactSchema.parse(form),
             }),
           )
         }
@@ -93,7 +76,6 @@ function ContactForm({ guest }: { guest: Guest }) {
         secondary
         title={`Ativar push para ${guest.name}`}
         disabled={
-          revoked ||
           !form.consent_push ||
           Platform.OS === "web" ||
           app.isDemo ||

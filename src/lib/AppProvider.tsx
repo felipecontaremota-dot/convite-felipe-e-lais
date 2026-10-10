@@ -1,4 +1,3 @@
-import { preserveContactRevocation } from "../features/guests/contactCompatibility";
 import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import React, {
   createContext,
@@ -237,14 +236,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           });
       }
       if (mutation.type === "CONTACT_UPDATE") {
-        const contact = preserveContactRevocation(
-          projected.contacts.find((c) => c.guest_id === p.guest_id),
-          p as unknown as Snapshot["contacts"][number],
-        );
         projected.contacts = projected.contacts.filter(
           (c) => c.guest_id !== p.guest_id,
         );
-        projected.contacts.push(contact);
+        projected.contacts.push(p as unknown as Snapshot["contacts"][number]);
       }
       if (mutation.type === "GIFT_SELECT") {
         projected.gift_selections = projected.gift_selections.filter(

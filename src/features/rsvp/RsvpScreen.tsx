@@ -13,15 +13,12 @@ import {
 import { useApp } from "../../lib/AppProvider";
 import type { Guest, RSVP } from "../../types/domain";
 import { rsvpSchema } from "../../utils/security";
-import { restoredRsvpStatus } from "./compatibility";
 
 function RsvpForm({ guest }: { guest: Guest }) {
   const app = useApp(),
     feedback = useFeedback();
   const record = app.data?.rsvps.find((r) => r.guest_id === guest.id);
-  const [status, setStatus] = useState<RSVP>(
-      restoredRsvpStatus(record?.status),
-    ),
+  const [status, setStatus] = useState<RSVP>(record?.status || "PENDING"),
     [dietary, setDietary] = useState(record?.dietary || ""),
     [note, setNote] = useState(record?.note || "");
   return (

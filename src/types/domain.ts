@@ -1,5 +1,5 @@
 export type Role = "GUEST" | "ADMIN" | "CEREMONIALIST";
-export type RSVP = "PENDING" | "CONFIRMED" | "DECLINED" | "MAYBE";
+export type RSVP = "PENDING" | "CONFIRMED" | "DECLINED";
 export type Channel = "IN_APP" | "PUSH" | "EMAIL" | "WHATSAPP";
 export interface WeddingEvent {
   gps_url?: string | null;
@@ -53,7 +53,6 @@ export interface RsvpRecord {
   source: string;
 }
 export interface Contact {
-  notifications_revoked?: boolean | null;
   guest_id: string;
   email: string;
   whatsapp: string;

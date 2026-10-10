@@ -9,7 +9,6 @@ export const GROUPS = [
 ];
 export const RSVP_LABELS = {
   PENDING: "Pendente",
-  MAYBE: "Ainda vou decidir",
   CONFIRMED: "Confirmado",
   DECLINED: "Não irá",
 };

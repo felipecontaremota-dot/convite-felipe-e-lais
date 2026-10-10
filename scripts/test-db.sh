@@ -23,26 +23,7 @@ for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql
  if [[ "$source" == supabase/migrations/202610090006_invitation_deliveries.sql ]]; then
   run_sql < tests/message-upgrade-prepare.sql
  fi
- if [[ "$source" == supabase/migrations/202610100007_guest_invitations.sql ]]; then
-  run_sql < tests/guest-upgrade-prepare.sql
- fi
- if [[ "$source" == supabase/migrations/202610100008_guest_access.sql ]]; then
-  run_sql < tests/guest-access-upgrade-prepare.sql
- fi
- if [[ "$source" == supabase/migrations/202610100009_restore_pr21_contracts.sql ]]; then
-  run_sql < tests/rollback-upgrade-prepare.sql
- fi
  run_sql < "$source"
- if [[ "$source" == supabase/migrations/202610100009_restore_pr21_contracts.sql ]]; then
-  run_sql < tests/rollback-upgrade-verify.sql
-  run_sql < tests/rollback-database.sql
- fi
- if [[ "$source" == supabase/migrations/202610100008_guest_access.sql ]]; then
-  run_sql < tests/guest-access-upgrade-verify.sql
- fi
- if [[ "$source" == supabase/migrations/202610100007_guest_invitations.sql ]]; then
-  run_sql < tests/guest-upgrade-verify.sql
- fi
  if [[ "$source" == supabase/migrations/202610090006_invitation_deliveries.sql ]]; then
   run_sql < tests/message-upgrade-verify.sql
  fi
@@ -50,3 +31,5 @@ for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql
   run_sql < tests/access-upgrade-verify.sql
  fi
 done
+
+source scripts/rebuild-pr21/test-rebuild.sh

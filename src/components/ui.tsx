@@ -184,9 +184,7 @@ export function Toggle({
   label,
   value,
   onChange,
-  disabled = false,
 }: {
-  disabled?: boolean;
   label: string;
   value: boolean;
   onChange: (value: boolean) => void;
@@ -195,8 +193,7 @@ export function Toggle({
     <Pressable
       accessibilityRole="checkbox"
       accessibilityLabel={label}
-      accessibilityState={{ checked: value, disabled }}
-      disabled={disabled}
+      accessibilityState={{ checked: value }}
       aria-checked={value}
       onPress={() => onChange(!value)}
       style={[styles.nav, styles.row]}
