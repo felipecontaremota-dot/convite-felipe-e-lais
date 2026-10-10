@@ -6,6 +6,7 @@ import React, {
   useState,
   useCallback,
   useRef,
+  useLayoutEffect,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import NetInfo from "@react-native-community/netinfo";
@@ -46,6 +47,8 @@ interface ContextValue {
     action: string,
     payload: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
+  identifyGuest: (guest: string) => Promise<void>;
+  familyTicket: (invitation: string, regenerate?: boolean) => Promise<Ticket>;
   ticket: (guest: string, regenerate?: boolean) => Promise<Ticket>;
   sync: () => Promise<SyncResult>;
   syncNow: () => Promise<string>;
@@ -198,15 +201,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [online, user, demoRole, sync]);
   const refetch = query.refetch;
-  const credentialState = JSON.stringify(
-    (query.data || cached)?.credentials || [],
-  );
+  const credentialsRef = useRef<Snapshot["credentials"]>([]);
+  useLayoutEffect(() => {
+    credentialsRef.current = (query.data || cached)?.credentials || [];
+  }, [query.data, cached]);
   const ticket = useCallback(
     async (guest: string, regenerate = false): Promise<Ticket> => {
       const result = await getDeviceTicket(
         scope,
         guest,
-        JSON.parse(credentialState),
+        credentialsRef.current,
         online,
         regenerate,
         async (rotate) =>
@@ -217,7 +221,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (online) await refetch();
       return result;
     },
-    [scope, credentialState, online, demoRole, refetch],
+    [scope, online, demoRole, refetch],
+  );
+  const familyCredentialsRef = useRef<
+    NonNullable<Snapshot["family_credentials"]>
+  >([]);
+  useLayoutEffect(() => {
+    familyCredentialsRef.current =
+      (query.data || cached)?.family_credentials || [];
+  }, [query.data, cached]);
+  const familyTicket = useCallback(
+    async (invitation: string, regenerate = false) => {
+      const key = `family:${invitation}`;
+      const credentials = familyCredentialsRef.current.map((c) => ({
+        ...c,
+        guest_id: key,
+      }));
+      const result = await getDeviceTicket(
+        scope,
+        key,
+        credentials,
+        online,
+        regenerate,
+        async (rotate) => {
+          const value = demoRole
+            ? await demo.demoFamilyTicket(invitation, rotate)
+            : await api.issueFamilyTicket(invitation, rotate);
+          return { guest_id: key, token: value.token };
+        },
+      );
+      if (online) await refetch();
+      return result;
+    },
+    [scope, online, demoRole, refetch],
   );
   const base = user || demoRole ? query.data || cached : null;
   const projected = base
@@ -380,6 +416,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await query.refetch();
       return result;
     },
+    identifyGuest: async (guest) => {
+      if (!online)
+        throw new AppError("Conecte-se para identificar este aparelho.");
+      if (demoRole) await demo.demoIdentifyGuest(guest);
+      else await api.identifyGuest(guest);
+      await query.refetch();
+    },
+    familyTicket,
     ticket,
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;

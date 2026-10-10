@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Platform, Text } from "react-native";
 import {
   Button,
@@ -15,15 +15,16 @@ import {
 import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import type { Contact, Guest } from "../../types/domain";
+import { mobileMask, mobileDigits, validMobile } from "../../utils/mobilePhone";
 import { contactSchema } from "../../utils/security";
 
 const initialContact: Omit<Contact, "guest_id"> = {
   email: "",
   whatsapp: "",
   consent_in_app: true,
-  consent_push: false,
-  consent_email: false,
-  consent_whatsapp: false,
+  consent_push: true,
+  consent_email: true,
+  consent_whatsapp: true,
 };
 
 function ContactForm({ guest }: { guest: Guest }) {
@@ -49,27 +50,49 @@ function ContactForm({ guest }: { guest: Guest }) {
       />
       <Field
         label={`WhatsApp de ${guest.name}`}
-        value={form.whatsapp}
-        onChangeText={(v) => change("whatsapp", v)}
+        value={mobileMask(form.whatsapp)}
+        onChangeText={(v) => change("whatsapp", mobileDigits(v))}
+        maxLength={16}
         keyboardType="phone-pad"
       />
-      {(["in_app", "push", "email", "whatsapp"] as const).map((c) => (
-        <Toggle
-          key={c}
-          label={`Aceito receber mensagens por ${c.replace("_", " ")}`}
-          value={form[`consent_${c}`]}
-          onChange={(v) => change(`consent_${c}`, v)}
-        />
-      ))}
+      <Toggle
+        label="Revogar permissão de receber mensagens e notificações"
+        value={!!form.notifications_revoked}
+        onChange={(v) =>
+          setForm((f) => ({
+            ...f,
+            notifications_revoked: v,
+            consent_in_app: !v,
+            consent_push: !v,
+            consent_email: !v,
+            consent_whatsapp: !v,
+          }))
+        }
+      />
       <Button
         title={`Salvar contato de ${guest.name}`}
         onPress={() =>
-          feedback.run(() =>
-            app.send("CONTACT_UPDATE", {
+          feedback.run(async () => {
+            if (!validMobile(mobileDigits(form.whatsapp)))
+              throw new AppError("Informe um celular com DDD e 11 dígitos.");
+            const result = await app.send("CONTACT_UPDATE", {
               guest_id: guest.id,
-              ...contactSchema.parse(form),
-            }),
-          )
+              ...contactSchema.parse({
+                ...form,
+                whatsapp: mobileDigits(form.whatsapp),
+                notifications_revoked: !!form.notifications_revoked,
+              }),
+            });
+            if (app.online)
+              setForm((f) => ({
+                ...f,
+                consent_in_app: !f.notifications_revoked,
+                consent_push: !f.notifications_revoked,
+                consent_email: !f.notifications_revoked,
+                consent_whatsapp: !f.notifications_revoked,
+              }));
+            return app.online ? "Salvo com sucesso." : result;
+          })
         }
       />
       <Button
@@ -121,12 +144,7 @@ function ContactForm({ guest }: { guest: Guest }) {
 export function ProfileScreen() {
   const app = useApp(),
     feedback = useFeedback();
-  const [who, setWho] = useState("");
-  useEffect(() => {
-    void import("../../storage/driver")
-      .then((m) => m.readCache<string>(`identity:${app.scope}`))
-      .then((v) => setWho(v || ""));
-  }, [app.scope]);
+  const who = app.data?.current_guest_id || "";
   return (
     <Screen section="guest" title="Quem está usando este dispositivo?">
       <Card>
@@ -137,10 +155,8 @@ export function ProfileScreen() {
         <Choice
           value={who}
           onChange={(v) => {
-            setWho(v);
             void feedback.run(async () => {
-              const { writeCache } = await import("../../storage/driver");
-              await writeCache(`identity:${app.scope}`, v);
+              await app.identifyGuest(v);
               return "Identificação salva neste aparelho.";
             });
           }}
@@ -151,8 +167,8 @@ export function ProfileScreen() {
         {feedback.node}
       </Card>
       <Text style={styles.text}>
-        Contatos são opcionais. E-mail e WhatsApp só recebem mensagens com sua
-        autorização. Desmarque uma opção para revogar o consentimento.
+        Contatos são opcionais. Marque a opção de revogação para deixar de
+        receber mensagens e notificações; desmarque para reativar a permissão.
       </Text>
       {app.data?.guests.map((g) => (
         <ContactForm key={g.id} guest={g} />

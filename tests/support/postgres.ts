@@ -1,5 +1,5 @@
 // Disposable PostgreSQL bridge for browser regression tests. Never connects to production.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 export class TestPostgres {
@@ -46,6 +46,44 @@ export class TestPostgres {
           ],
           source,
         );
+  }
+  parallelSql(source: string): Promise<string> {
+    const args = this.ci
+      ? [
+          "-u",
+          "postgres",
+          "psql",
+          "-d",
+          this.name,
+          "-qAt",
+          "-v",
+          "ON_ERROR_STOP=1",
+        ]
+      : [
+          "exec",
+          "-i",
+          this.name,
+          "psql",
+          "-h",
+          "127.0.0.1",
+          "-U",
+          "postgres",
+          "-qAt",
+          "-v",
+          "ON_ERROR_STOP=1",
+        ];
+    return new Promise((resolve, reject) => {
+      const child = spawn(this.ci ? "sudo" : "docker", args);
+      let output = "",
+        error = "";
+      child.stdout.on("data", (d) => (output += d));
+      child.stderr.on("data", (d) => (error += d));
+      child.on("error", reject);
+      child.on("close", (code) =>
+        code === 0 ? resolve(output) : reject(Error(error)),
+      );
+      child.stdin.end(source);
+    });
   }
   async start() {
     if (this.ci) {
@@ -104,6 +142,10 @@ export class TestPostgres {
       `'${String(value).replaceAll("'", "''")}'`;
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
+      identify_guest: `identify_guest(${event},${literal(args.p_guest)}::uuid)`,
+      issue_ticket: `issue_ticket(${event},${literal(args.p_guest)}::uuid,${args.p_regenerate === true})`,
+      issue_family_ticket: `issue_family_ticket(${event},${literal(args.p_invitation)}::uuid,${args.p_regenerate === true})`,
+      resolve_checkin_ticket: `resolve_checkin_ticket(${event},${literal(args.p_token)})`,
       event_role: `event_role(${event})`,
       app_snapshot: `app_snapshot(${event})`,
       admin_action: `admin_action(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,

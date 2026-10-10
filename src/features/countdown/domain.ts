@@ -16,13 +16,13 @@ export function weddingCountdown(startsAt: string, now = Date.now()) {
     return {
       unit: "days" as const,
       value,
-      text: `Faltam ${value} dias até o Sim`,
+      text: `Faltam ${value} dias até o "Sim"`,
     };
   }
   const value = Math.ceil(remaining / 3600000);
   return {
     unit: "hours" as const,
     value,
-    text: `Faltam ${value} ${value === 1 ? "hora" : "horas"} até o Sim`,
+    text: `Faltam ${value} ${value === 1 ? "hora" : "horas"} até o "Sim"`,
   };
 }

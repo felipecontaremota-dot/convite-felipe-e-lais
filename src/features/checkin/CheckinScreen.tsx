@@ -45,10 +45,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
     ...(s?.checkins || []),
     ...local.filter((c) => !s?.checkins.some((x) => x.guest_id === c.guest_id)),
   ];
-  const confirmed =
-    s?.guests.filter((g) =>
-      s.rsvps.some((r) => r.guest_id === g.id && r.status === "CONFIRMED"),
-    ) || [];
+  const confirmed = s?.guests || [];
   const scan = async (value: string) => {
     setCamera(false);
     const parsed = ticketToken(value);
@@ -84,7 +81,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
             confirmed.filter((g) => !checkins.some((c) => c.guest_id === g.id))
               .length
           }{" "}
-          confirmados aguardados
+          convidados aguardados
         </Text>
         <Button
           title="Preparar / atualizar cache offline"
@@ -213,7 +210,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           </Card>
         ))}
       {!confirmed.length ? (
-        <Empty text="Não há confirmados na base local. Atualize o cache antes do evento." />
+        <Empty text="Não há convidados na base local. Atualize o cache antes do evento." />
       ) : null}
       <Text style={styles.heading}>Últimas entradas</Text>
       {checkins

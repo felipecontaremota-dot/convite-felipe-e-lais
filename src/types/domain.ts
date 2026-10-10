@@ -1,5 +1,5 @@
 export type Role = "GUEST" | "ADMIN" | "CEREMONIALIST";
-export type RSVP = "PENDING" | "CONFIRMED" | "DECLINED";
+export type RSVP = "PENDING" | "CONFIRMED" | "DECLINED" | "MAYBE";
 export type Channel = "IN_APP" | "PUSH" | "EMAIL" | "WHATSAPP";
 export interface WeddingEvent {
   gps_url?: string | null;
@@ -32,6 +32,7 @@ export interface Invitation {
   version: number;
 }
 export interface Guest {
+  salutation?: "NEUTRAL" | "MALE" | "FEMALE";
   is_child?: boolean;
   is_adolescent?: boolean;
   admin_notes?: string;
@@ -53,6 +54,7 @@ export interface RsvpRecord {
   source: string;
 }
 export interface Contact {
+  notifications_revoked?: boolean | null;
   guest_id: string;
   email: string;
   whatsapp: string;
@@ -143,6 +145,16 @@ export interface SheetJob {
   version: number;
 }
 export interface Snapshot {
+  current_guest_id?: string | null;
+  family_credentials?: (Omit<Credential, "guest_id"> & {
+    invitation_id: string;
+  })[];
+  checkin_notices?: {
+    id: string;
+    content: string;
+    created_at: string;
+    recipient_guest_id?: string;
+  }[];
   role: Role | null;
   event: WeddingEvent;
   invitations: Invitation[];
@@ -178,6 +190,7 @@ export type MutationType =
   | "RSVP_UPDATE"
   | "CONTACT_UPDATE"
   | "CHECKIN_CREATE"
+  | "CHECKIN_FAMILY"
   | "MESSAGE_SEND"
   | "MESSAGE_SEND_TO_GUESTS"
   | "GIFT_SELECT"
