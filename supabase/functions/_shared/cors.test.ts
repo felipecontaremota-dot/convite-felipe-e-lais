@@ -116,6 +116,9 @@ Deno.test("actual SDK invokes dispatch and send-invitations after preflight; ser
     const result = await client.functions.invoke(name, {
       body: {
         event_id: "00000000-0000-4000-8000-000000000001",
+        ...(name === "dispatch-notifications"
+          ? { message_id: "11111111-1111-4111-8111-111111111111" }
+          : {}),
         request_id: "dddddddd-1000-4000-8000-000000000001",
         guest_id: "dddddddd-0000-4000-8000-000000000001",
       },

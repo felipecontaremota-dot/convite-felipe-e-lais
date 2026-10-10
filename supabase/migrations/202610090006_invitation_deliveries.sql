@@ -83,3 +83,55 @@ create function invitation_delivery_targets(p_event uuid) returns jsonb language
 $$;
 revoke all on function invitation_delivery_targets(uuid) from public,anon,authenticated;
 grant execute on function invitation_delivery_targets(uuid) to service_role;
+
+-- Persist committed messaging results; historical receipts deliberately remain NULL.
+alter table mutation_receipts add column result jsonb;
+create or replace function app_mutate(p_event uuid,p_mutation uuid,p_type text,p_payload jsonb) returns jsonb
+language plpgsql security definer set search_path=public,extensions,pg_temp as $$
+declare recipients uuid[]; channels delivery_channel[]; content text; mid uuid; tid uuid; receipt_result jsonb; response jsonb; broadcast boolean;
+begin
+ if p_type is distinct from 'MESSAGE_SEND_TO_GUESTS' and (p_type is distinct from 'MESSAGE_SEND' or not (p_payload ? 'recipient_guest_ids')) then
+   return app_mutate_v4(p_event,p_mutation,p_type,p_payload);
+ end if;
+ if event_role(p_event) is distinct from 'ADMIN' then raise exception 'unauthorized';end if;
+ -- A committed operation stays successful even if its targets or retry payload change.
+ select result into receipt_result from mutation_receipts where event_id=p_event and user_id=auth.uid() and mutation_id=p_mutation;
+ if found then return coalesce(receipt_result,'{}'::jsonb)||jsonb_build_object('duplicate',true);end if;
+ -- Serialize against guest changes and concurrent retries, then recheck the receipt.
+ perform pg_advisory_xact_lock(hashtextextended('admin:'||p_event,0));
+ select result into receipt_result from mutation_receipts where event_id=p_event and user_id=auth.uid() and mutation_id=p_mutation;
+ if found then return coalesce(receipt_result,'{}'::jsonb)||jsonb_build_object('duplicate',true);end if;
+ if jsonb_typeof(p_payload->'recipient_guest_ids') is distinct from 'array' then raise exception 'invalid recipient list';end if;
+ if jsonb_array_length(p_payload->'recipient_guest_ids') not between 1 and 500 then raise exception 'invalid recipient count';end if;
+ if nullif(p_payload->>'invitation_id','') is not null or nullif(p_payload->>'recipient_guest_id','') is not null then raise exception 'invalid recipient target';end if;
+ select array_agg(distinct value::uuid) into recipients from jsonb_array_elements_text(p_payload->'recipient_guest_ids');
+ if array_position(recipients,null) is not null then raise exception 'invalid recipient';end if;
+ if cardinality(recipients) <> (select count(*) from guests g join invitations i on i.id=g.invitation_id where g.event_id=p_event and i.event_id=p_event and g.id=any(recipients) and i.active and i.archived_at is null) then raise exception 'invalid recipient';end if;
+ content=trim(p_payload->>'content');
+ if content is null or length(content) not between 1 and 4000 then raise exception 'invalid message';end if;
+ if jsonb_typeof(coalesce(p_payload->'channels','["IN_APP"]'::jsonb)) <> 'array' then raise exception 'invalid channels';end if;
+ select array_agg(distinct value::delivery_channel) into channels from jsonb_array_elements_text(coalesce(p_payload->'channels','["IN_APP"]'::jsonb));
+ if coalesce(cardinality(channels),0)=0 or array_position(channels,null) is not null then raise exception 'invalid channels';end if;
+ if p_payload ? 'create_announcement' and jsonb_typeof(p_payload->'create_announcement') <> 'boolean' then raise exception 'invalid announcement flag';end if;
+ broadcast=coalesce((p_payload->>'create_announcement')::boolean,false);
+ if broadcast then
+   if not (channels @> '{IN_APP}'::delivery_channel[]) then raise exception 'announcement requires IN_APP';end if;
+   if cardinality(recipients) <> (select count(*) from guests g join invitations i on i.id=g.invitation_id and i.event_id=g.event_id where g.event_id=p_event and i.active and i.archived_at is null) then raise exception 'announcement requires all active recipients';end if;
+ end if;
+ insert into mutation_receipts(event_id,user_id,mutation_id) values(p_event,auth.uid(),p_mutation) on conflict do nothing;
+ if not found then
+   select result into receipt_result from mutation_receipts where event_id=p_event and user_id=auth.uid() and mutation_id=p_mutation;
+   return coalesce(receipt_result,'{}'::jsonb)||jsonb_build_object('duplicate',true);
+ end if;
+ insert into message_threads(event_id,invitation_id) values(p_event,null) returning id into tid;
+ insert into messages(event_id,thread_id,from_admin,sender_user_id,content,channels) values(p_event,tid,true,auth.uid(),content,channels) returning id into mid;
+ insert into message_recipients(event_id,message_id,guest_id) select p_event,mid,unnest(recipients);
+ insert into notification_jobs(event_id,message_id,guest_id,channel,idempotency_key)
+   select p_event,mid,r,c,mid||':'||r||':'||c from unnest(recipients) r cross join unnest(channels) c;
+ if broadcast then insert into announcements(event_id,title,content) values(p_event,'Mensagem dos noivos',content);end if;
+ response=jsonb_build_object('ok',true,'id',mid);
+ update mutation_receipts set result=response where event_id=p_event and user_id=auth.uid() and mutation_id=p_mutation;
+ return response;
+end $$;
+revoke all on function app_mutate(uuid,uuid,text,jsonb) from public,anon;
+grant execute on function app_mutate(uuid,uuid,text,jsonb) to authenticated;

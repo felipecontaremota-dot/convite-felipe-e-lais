@@ -1,3 +1,4 @@
+import { validMessageId } from "../features/messages/recipients";
 import { supabase, eventId } from "../lib/supabase";
 import {
   administrativeError,
@@ -157,7 +158,9 @@ export function messageDeliverySummary(
   }
   return "Mensagem registrada. Consulte o resultado dos canais externos.";
 }
-export async function dispatchMessage(channels: string[], message?: string) {
+export async function dispatchMessage(channels: string[], message: string) {
+  if (!validMessageId(message))
+    throw new AppError("Não foi possível identificar a mensagem para envio.");
   if (!supabase)
     throw new AppError(
       "Mensagem registrada, mas o serviço de envio está indisponível.",
@@ -168,14 +171,12 @@ export async function dispatchMessage(channels: string[], message?: string) {
       {
         body: {
           event_id: eventId,
-          ...(message ? { message_id: message } : {}),
+          message_id: message,
         },
       },
     );
     if (error || !Array.isArray(data?.results))
       return "Mensagem registrada, mas o serviço de envio está indisponível ou ainda não foi publicado.";
-    if (!message)
-      return "Mensagem já registrada. Consulte o resultado dos envios no histórico; nenhum novo recado foi criado.";
     return messageDeliverySummary(channels, data as DispatchResult);
   } catch {
     return "Mensagem registrada, mas não foi possível confirmar o processamento dos envios. Tente novamente pelo histórico.";

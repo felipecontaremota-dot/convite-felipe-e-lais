@@ -265,6 +265,23 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             throw Error("invalid recipient");
         }
 
+        if (p.create_announcement) {
+          const activeIds = s.guests
+            .filter((g) =>
+              s.invitations.some(
+                (i) => i.id === g.invitation_id && i.active && !i.archived_at,
+              ),
+            )
+            .map((g) => g.id);
+          if (
+            !(p.channels as string[])?.includes("IN_APP") ||
+            !recipientIds ||
+            recipientIds.length !== activeIds.length ||
+            activeIds.some((id) => !recipientIds.includes(id))
+          )
+            throw Error("invalid announcement recipients");
+        }
+
         s.messages.push({
           id: id(),
           event_id: event,
@@ -303,7 +320,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
           role === "ADMIN" &&
           !invitation &&
           !p.recipient_guest_id &&
-          !recipientIds &&
+          (!recipientIds || p.create_announcement === true) &&
           (!p.channels || (p.channels as string[]).includes("IN_APP"))
         )
           s.announcements.push({

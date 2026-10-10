@@ -21,13 +21,29 @@ select pg_temp.assert_retry((select count(*)=2 from message_recipients where mes
 select pg_temp.assert_retry((select count(*)=4 from notification_jobs where message_id=:'mid'),'first commit creates recipients x channels jobs');
 select pg_temp.assert_retry((select count(*)=1 from mutation_receipts where event_id=:'event' and user_id=:'admin' and mutation_id=:'mutation'),'first commit persists receipt');
 begin;
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select app_mutate(:'event',gen_random_uuid(),'MESSAGE_SEND_TO_GUESTS',jsonb_build_object('content','Unrelated pending retry job','recipient_guest_ids',jsonb_build_array(:'ga'),'channels','["EMAIL"]'::jsonb));
+-- Simulate response loss: discard the first response and obtain the ID only from the retry.
+select app_mutate(:'event',:'mutation','MESSAGE_SEND_TO_GUESTS',:'payload'::jsonb) as retry_result \gset
+select pg_temp.assert_retry(:'retry_result'::jsonb=(:'sent'::jsonb||'{"duplicate":true}'::jsonb),'lost response retry restores committed result');
+select (:'retry_result'::jsonb)->>'id' as retry_mid \gset
+commit;
+begin;
+set local role service_role;
+select pg_temp.assert_retry((select count(*)=4 and bool_and(message_id=:'mid') from claim_event_notifications(:'event',50,:'retry_mid')),'retry ID claims only original message jobs');
+-- Complete this fixture's claimed batch so later isolation tests begin without leased jobs.
+update notification_jobs set status='sent',locked_at=null where message_id=:'retry_mid';
+commit;
+select pg_temp.assert_retry(not exists(select 1 from notification_jobs j join messages m on m.id=j.message_id where m.content='Unrelated pending retry job' and j.status<>'pending'),'retry never touches unrelated jobs');
+begin;
 update invitations set active=false,version=version+1 where id=:'ib';
 commit;
 begin;
 set local role authenticated;
 set local request.jwt.claim.sub=:'admin';
-select pg_temp.assert_retry(app_mutate(:'event',:'mutation','MESSAGE_SEND_TO_GUESTS',:'payload'::jsonb)='{"duplicate":true}'::jsonb,'same committed mutation retries after recipient deactivation');
-select pg_temp.assert_retry(app_mutate(:'event',:'mutation','MESSAGE_SEND_TO_GUESTS','{"recipient_guest_ids":"invalid","channels":"invalid","content":null}'::jsonb)='{"duplicate":true}'::jsonb,'registered mutation ID bypasses altered payload validation');
+select pg_temp.assert_retry(app_mutate(:'event',:'mutation','MESSAGE_SEND_TO_GUESTS',:'payload'::jsonb)=(:'sent'::jsonb||'{"duplicate":true}'::jsonb),'same committed mutation retries after recipient deactivation');
+select pg_temp.assert_retry(app_mutate(:'event',:'mutation','MESSAGE_SEND_TO_GUESTS','{"recipient_guest_ids":"invalid","channels":"invalid","content":null}'::jsonb)=(:'sent'::jsonb||'{"duplicate":true}'::jsonb),'registered mutation ID bypasses altered payload validation');
 commit;
 select pg_temp.assert_retry((select count(*)=1 from messages where content='Committed retry regression'),'deactivation retries never recreate message');
 select pg_temp.assert_retry((select count(*)=2 from message_recipients where message_id=:'mid'),'deactivation retries never duplicate recipients');
@@ -43,7 +59,7 @@ select coalesce(jsonb_agg(id order by id),'[]') as job_ids from notification_job
 begin;
 set local role authenticated;
 set local request.jwt.claim.sub=:'admin';
-select pg_temp.assert_retry(app_mutate(:'event',:'mutation','MESSAGE_SEND_TO_GUESTS',:'payload'::jsonb)='{"duplicate":true}'::jsonb,'same committed mutation retries after recipient deletion without invalid recipient');
+select pg_temp.assert_retry(app_mutate(:'event',:'mutation','MESSAGE_SEND_TO_GUESTS',:'payload'::jsonb)=(:'sent'::jsonb||'{"duplicate":true}'::jsonb),'same committed mutation retries after recipient deletion without invalid recipient');
 commit;
 select pg_temp.assert_retry((select count(*)=1 from messages where content='Committed retry regression'),'deletion retry never creates second message');
 select pg_temp.assert_retry((select coalesce(jsonb_agg(id order by id),'[]') from message_recipients where message_id=:'mid')=:'recipient_ids'::jsonb,'deletion retry preserves exact remaining recipient rows');

@@ -24,8 +24,8 @@ export function dispatchHandler(
         event = body.event_id;
         messageId = body.message_id;
         if (
-          messageId !== undefined &&
-          !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(messageId)
+          (typeof messageId !== "string" ||
+            !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(messageId))
         ) return json({ error: "invalid message" }, 400);
         if (typeof event !== "string") {
           return json({ error: "invalid event" }, 400);
@@ -36,6 +36,12 @@ export function dispatchHandler(
       }
     }
     const db = deps.service();
+    if (!worker) {
+      const { data: message, error: messageError } = await db.from("messages")
+        .select("id").eq("event_id", event!).eq("id", messageId!).maybeSingle();
+      if (messageError) return json({ error: "message lookup failed" }, 503);
+      if (!message) return json({ error: "invalid message" }, 400);
+    }
     if (worker) {
       const schedule = await db.rpc("schedule_notifications");
       if (schedule.error) return json({ error: "schedule failed" }, 500);
@@ -44,7 +50,7 @@ export function dispatchHandler(
       worker ? "claim_notifications" : "claim_event_notifications",
       {
         p_limit: 50,
-        ...(event ? { p_event: event, p_message: messageId || null } : {}),
+        ...(event ? { p_event: event, p_message: messageId } : {}),
       },
     );
     if (error) return json({ error: "claim failed" }, 500);

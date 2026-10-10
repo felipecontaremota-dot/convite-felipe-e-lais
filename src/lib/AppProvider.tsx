@@ -18,6 +18,7 @@ import type {
 } from "../types/domain";
 import { demoEnabled, supabase, eventId } from "./supabase";
 import * as api from "../repositories/api";
+import { dispatchCommittedMessage } from "../features/messages/recipients";
 import * as demo from "../repositories/demo";
 import { MutationQueue, type SyncResult } from "../storage/queue";
 import { storage, readCache, writeCache } from "../storage/driver";
@@ -163,9 +164,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           item.type === "MESSAGE_SEND_TO_GUESTS" ||
           (item.type === "MESSAGE_SEND" && Array.isArray(item.payload.channels))
         ) {
-          const summary = await api.dispatchMessage(
+          const summary = await dispatchCommittedMessage(
+            result,
             (item.payload.channels as string[]) || [],
-            result.id,
+            api.dispatchMessage,
           );
           deliveryResults.current.set(item.mutationId, summary);
           if (deliveryResults.current.size > 100)

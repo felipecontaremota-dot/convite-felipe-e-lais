@@ -101,8 +101,9 @@ it("duplicate/legacy mutation with unknown message ID cannot claim unrelated ema
     },
     error: null,
   });
-  expect(await dispatchMessage(["EMAIL"])).toContain("Consulte o resultado");
-  expect(await dispatchMessage(["EMAIL"], "message-id")).toBe(
-    "Mensagem registrada. E-mail enviado.",
-  );
+  await expect(dispatchMessage(["EMAIL"], "")).rejects.toThrow("identificar");
+  expect(c.functions.invoke).not.toHaveBeenCalled();
+  expect(
+    await dispatchMessage(["EMAIL"], "11111111-1111-4111-8111-111111111111"),
+  ).toBe("Mensagem registrada. E-mail enviado.");
 });

@@ -15,6 +15,7 @@ import { AdminModal, SelectedChips } from "../../components/AdminModal";
 import { Select } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
 import type { Channel } from "../../types/domain";
+import { effectiveRecipients, recipientError } from "./recipients";
 import { ChannelChoices } from "../notifications/ChannelChoices";
 export function AdminMessages() {
   const app = useApp(),
@@ -33,6 +34,13 @@ export function AdminMessages() {
       ),
     )
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const effectiveRecipientIds = effectiveRecipients(
+    people,
+    target,
+    family,
+    guests,
+  );
+  const validationError = recipientError(target, effectiveRecipientIds.length);
   const toggle = (id: string) =>
     setGuests((ids) =>
       ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
@@ -129,27 +137,33 @@ export function AdminMessages() {
           maxLength={4000}
         />
         <ChannelChoices value={selected} onChange={setSelected} />
+        <Text style={styles.small}>
+          {validationError || `${effectiveRecipientIds.length} destinatários`}
+        </Text>
         <Button
           title="Enviar recado"
           disabled={
             !content.trim() ||
             !selected.length ||
             (target === "FAMILY" && !family) ||
-            (target === "GUEST" && (!guests.length || guests.length > 500))
+            !!validationError
           }
           onPress={() =>
             feedback.run(async () => {
+              if (validationError) throw new Error(validationError);
+              if (
+                !content.trim() ||
+                !selected.length ||
+                (target === "FAMILY" && !family)
+              )
+                throw new Error(
+                  "Confira a mensagem, os canais e os destinatários.",
+                );
               const result = await app.send("MESSAGE_SEND_TO_GUESTS", {
                 content: content.trim(),
-                recipient_guest_ids:
-                  target === "GUEST"
-                    ? guests
-                    : people
-                        .filter(
-                          (g) =>
-                            target !== "FAMILY" || g.invitation_id === family,
-                        )
-                        .map((g) => g.id),
+                recipient_guest_ids: effectiveRecipientIds,
+                create_announcement:
+                  target === "ALL" && selected.includes("IN_APP"),
                 channels: selected,
               });
               setContent("");
