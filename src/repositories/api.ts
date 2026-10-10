@@ -18,7 +18,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     throw new AppError(
       "O convite ainda não está disponível. Tente novamente mais tarde.",
     );
-  const { data, error } = await supabase.rpc(fn, args);
+  const { data, error, status } = await supabase.rpc(fn, args);
   if (error) {
     if (
       ((fn === "identify_guest" || fn === "issue_family_ticket") &&
@@ -27,6 +27,10 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     )
       throw new AppError(guestSchemaMessage, "SCHEMA");
     if (
+      status >= 500 ||
+      status === 408 ||
+      status === 429 ||
+      ["PGRST000", "PGRST001", "PGRST002", "PGRST003"].includes(error.code) ||
       error.message.includes("Failed to fetch") ||
       error.message.includes("Network")
     )

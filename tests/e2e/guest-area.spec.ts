@@ -89,6 +89,7 @@ async function setup(
   const state = {
     fail: false,
     legacySchema: false,
+    snapshotFailure: null as { status: number; code: string } | null,
     loseResponse: false,
     gate: null as Promise<void> | null,
     calls: [] as { fn: string; args: Record<string, unknown> }[],
@@ -105,7 +106,17 @@ async function setup(
       state.calls.push({ fn, args });
       if (fn === "app_mutate" && args.p_type === "RSVP_UPDATE" && state.gate)
         await state.gate;
-      if (fn === "app_mutate" && args.p_type === "RSVP_UPDATE" && state.fail) {
+      if (fn === "app_snapshot" && state.snapshotFailure) {
+        status = state.snapshotFailure.status;
+        data = {
+          code: state.snapshotFailure.code,
+          message: "Temporary service failure",
+        };
+      } else if (
+        fn === "app_mutate" &&
+        args.p_type === "RSVP_UPDATE" &&
+        state.fail
+      ) {
         status = 503;
         data = { message: "network" };
       } else
@@ -594,6 +605,63 @@ test("RSVP: resposta perdida após commit retoma o mesmo mutation_id sem duplica
     page.getByRole("button", { name: "Editar confirmação", exact: true }),
   ).toBeVisible();
 });
+for (const failure of [
+  { status: 502, code: "" },
+  { status: 503, code: "" },
+  { status: 400, code: "PGRST002" },
+])
+  test(`snapshot transiente ${failure.status}/${failure.code}: RSVP permanece na fila e sincroniza com o mesmo ID`, async ({
+    page,
+  }) => {
+    const { guests, state } = await setup(page, "INDIVIDUAL");
+    await nav(page, "Presença");
+    state.snapshotFailure = failure;
+    state.fail = true;
+    await page
+      .getByRole("radio", { name: "Ainda decidirei", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Confirmar que decidirei", exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        "Salvo neste dispositivo. A sincronização falhou; tente novamente.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    const queued = await page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("queue:"))
+        .flatMap((k) => JSON.parse(localStorage.getItem(k) || "[]")),
+    );
+    expect(queued).toHaveLength(1);
+    expect(queued[0].payload.status).toBe("MAYBE");
+    state.snapshotFailure = null;
+    state.fail = false;
+    await page
+      .getByRole("button", { name: "Sincronizar agora", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Editar confirmação", exact: true }),
+    ).toBeVisible();
+    expect(
+      db
+        .sql(`select status from rsvps where guest_id='${guests[0].id}';`)
+        .trim(),
+    ).toBe("MAYBE");
+    const sends = state.calls.filter(
+      (c) => c.fn === "app_mutate" && c.args.p_type === "RSVP_UPDATE",
+    );
+    expect(sends.length).toBeGreaterThanOrEqual(2);
+    expect(sends.every((c) => c.args.p_mutation === queued[0].mutationId)).toBe(
+      true,
+    );
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Editar confirmação", exact: true }),
+    ).toBeVisible();
+  });
+
 test("schema antigo: erro de implantação não enfileira novo RSVP online nem finge identificação local", async ({
   page,
 }) => {

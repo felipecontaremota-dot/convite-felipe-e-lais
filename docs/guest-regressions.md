@@ -30,6 +30,8 @@ FAMILY compartilhada permite seus convites familiares/individuais; INDIVIDUAL so
 
 ## Validação e pós-merge
 
+O review também identificou que falhas transitórias do snapshot (HTTP 408/429/5xx ou PGRST000–003) não eram classificadas como conectividade. Elas agora preservam o RSVP na fila, com erro sanitizado e o mesmo mutation_id no retry. Somente a incompatibilidade de contrato comprovada continua bloqueando um novo RSVP; regressões E2E cobrem 502, 503 e PGRST002, recuperação do serviço e reload.
+
 Regressões: navegação HTTP real link→senha→Home→Convites sem Perfil, todas as decisões de RSVP e reload, identificação e reload, QR estável durante RSVP, perda da resposta após commit/retry do mesmo mutation_id, erro de contrato sem nova entrada inválida na fila, isolamento e rotação, dados anteriores a 007 e upgrade até 008.
 
 Após eventual merge, conferir o projeto correto e aplicar apenas migrations pendentes na ordem 007→008. A 008 solicita reload do schema PostgREST. Revalidar com a sessão que apresentou o erro, conferir que a fila antiga foi drenada por retry (não descartar dados válidos) e acompanhar Pages. Para diagnóstico de implantação, scripts/diagnose-guest-backend.sql contém somente consultas sem dados pessoais/tokens.

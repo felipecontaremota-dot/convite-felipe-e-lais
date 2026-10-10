@@ -70,6 +70,30 @@ it("transport failures stay retryable network errors", async () => {
   });
   await expect(checkGuestBackend()).rejects.toMatchObject({ code: "NETWORK" });
 });
+it.each([
+  [408, ""],
+  [429, ""],
+  [500, ""],
+  [502, ""],
+  [503, ""],
+  [400, "PGRST000"],
+  [400, "PGRST001"],
+  [400, "PGRST002"],
+  [400, "PGRST003"],
+])(
+  "transient snapshot HTTP %s / %s stays retryable without exposing details",
+  async (status, code) => {
+    backend.rpc.mockResolvedValue({
+      status,
+      data: null,
+      error: { code, message: "private database connection details" },
+    });
+    await expect(checkGuestBackend("MAYBE")).rejects.toMatchObject({
+      code: "NETWORK",
+      message: "Sem conexão. Tente novamente.",
+    });
+  },
+);
 it("007-like metadata with an old enum cannot enqueue MAYBE as if it were supported", async () => {
   backend.rpc.mockResolvedValue({
     data: {
