@@ -16,6 +16,7 @@ import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import type { Contact, Guest } from "../../types/domain";
 import { contactSchema } from "../../utils/security";
+import { preserveContactRevocation } from "./contactCompatibility";
 
 const initialContact: Omit<Contact, "guest_id"> = {
   email: "",
@@ -78,7 +79,12 @@ function ContactForm({ guest }: { guest: Guest }) {
           feedback.run(() =>
             app.send("CONTACT_UPDATE", {
               guest_id: guest.id,
-              ...contactSchema.parse(form),
+              ...contactSchema.parse(
+                preserveContactRevocation(
+                  app.data?.contacts.find((c) => c.guest_id === guest.id),
+                  form,
+                ),
+              ),
             }),
           )
         }

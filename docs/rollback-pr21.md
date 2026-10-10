@@ -11,7 +11,7 @@ Reversão funcional dos merges #23 (`0fcd3bf`) e #22 (`5dbfa3d`), preservando hi
 - Novas RPCs de identificação/QR familiar/resolução ficam sem EXECUTE para clientes. Funções, tabelas, colunas, índices, RLS e dados aditivos ficam dormentes.
 - Funções públicas restauradas têm EXECUTE somente para authenticated, SECURITY DEFINER, search_path fixo e owner igual ao owner confiável de invitations. Conferir este owner e os delegates antes de produção.
 - MAYBE existente permanece no banco e na leitura administrativa. No formulário restaurado, aparece como a opção indecisa PENDING. Abrir a tela não escreve; salvar explicitamente usa os três estados do PR #21. O backend aceita payloads MAYBE antigos ainda pendentes para não descartar filas durante a transição.
-- `notifications_revoked=true` mantém os quatro canais desligados no Perfil. O backend serializa a verificação com os writers e impede que um formulário/cache antigo reative esses canais. Reconsentimento global exige um futuro fluxo explícito; não é feito automaticamente por este rollback.
+- `notifications_revoked=true` mantém os quatro canais desligados no Perfil. O backend serializa a verificação com os writers e impede que um formulário/cache antigo reative esses canais. O marcador é mantido no payload/fila e mesclado na projeção otimista, inclusive para payloads históricos sem esse campo. Salvar offline, reabrir Perfil e reconectar não reativa canais. Reconsentimento global exige um futuro fluxo explícito; não é feito automaticamente por este rollback.
 - Functions, secrets, workflows, dependências, autenticação/recovery, rotas, armazenamento da fila, PWA e infraestrutura 006 de Resend/mensagens ficam intactos.
 
 ## Validação isolada
@@ -56,7 +56,7 @@ QR familiar fica armazenado, mas fora da UX/scanner antigo. QR individual volta 
 ## Resultados locais deste PR
 
 - Node 24.19.0; lint e typecheck aprovados.
-- Unitários: 119 aprovados; Functions: check aprovado e 41 testes aprovados.
+- Unitários: 122 aprovados; Functions: check aprovado e 41 testes aprovados.
 - PostgreSQL 17 descartável: instalação limpa 001–009, checkpoint somente leitura e suíte completa de upgrade/SQL aprovados.
 - E2E: 52 aprovados, com EXPO_NO_TELEMETRY=1, EXPO_NO_CACHE=1 e EXPO_PUBLIC_DEMO_MODE=false no processo principal; cada web server configura seu modo conforme Playwright. Chromium do ambiente usado localmente; CI instala seu Chromium.
 - Build/export Web na raiz e em /convite-felipe-e-lais aprovados; manifest, SW, 404, isolamento de caches privados e shell offline verificados.

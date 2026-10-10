@@ -4,6 +4,7 @@ export const invitationCode = z
   .string()
   .regex(/^[A-Za-z0-9_-]{32,64}$/, "Link de convite inválido.");
 export const contactSchema = z.object({
+  notifications_revoked: z.boolean().nullable().optional(),
   email: z.union([z.string().email(), z.literal("")]),
   whatsapp: z.string().regex(/^(\+?[0-9 ()-]{8,20})?$/, "WhatsApp inválido."),
   consent_in_app: z.boolean(),

@@ -364,6 +364,101 @@ test("rollback: stored MAYBE is read safely, opt-out survives, and FAMILY QR nee
             .trim(),
         ).toBe("t");
       }
+      if (guestId === individualId) {
+        await context.setOffline(true);
+        await expect(
+          guest
+            .getByText(
+              "Sem conexão · exibindo os últimos dados salvos neste dispositivo.",
+              { exact: true },
+            )
+            .filter({ visible: true }),
+        ).toBeVisible();
+        await guest
+          .getByLabel(`E-mail de ${name}`, { exact: true })
+          .fill("offline@example.test");
+        await guest
+          .getByRole("button", {
+            name: `Salvar contato de ${name}`,
+            exact: true,
+          })
+          .click();
+        await expect(
+          guest.getByText(
+            "Salvo neste dispositivo. Será sincronizado quando houver conexão.",
+            { exact: true },
+          ),
+        ).toBeVisible();
+        const queued = await guest.evaluate(() =>
+          Object.keys(localStorage)
+            .filter((key) => key.startsWith("queue:"))
+            .flatMap((key) => JSON.parse(localStorage.getItem(key) || "[]")),
+        );
+        expect(queued).toHaveLength(1);
+        expect(queued[0]).toMatchObject({
+          type: "CONTACT_UPDATE",
+          payload: {
+            notifications_revoked: true,
+            consent_in_app: false,
+            consent_push: false,
+            consent_email: false,
+            consent_whatsapp: false,
+            email: "offline@example.test",
+          },
+        });
+        // Reopening mounts a new form from the optimistic projection, not the server.
+        await guest.getByRole("link", { name: "Início", exact: true }).click();
+        await guest.getByRole("link", { name: "Perfil", exact: true }).click();
+        await expect(
+          guest
+            .getByLabel(`E-mail de ${name}`, { exact: true })
+            .filter({ visible: true }),
+        ).toHaveValue("offline@example.test");
+        for (const channel of ["in app", "push", "email", "whatsapp"]) {
+          const toggle = guest.getByRole("checkbox", {
+            name: `Aceito receber mensagens por ${channel}`,
+            exact: true,
+          });
+          await expect(toggle).toHaveAttribute("aria-checked", "false");
+          await expect(toggle).toBeDisabled();
+        }
+        expect(
+          db
+            .sql(
+              `select email from guest_contacts where guest_id='${guestId}';`,
+            )
+            .trim(),
+        ).toBe("updated@example.test");
+        await context.setOffline(false);
+        await expect
+          .poll(() =>
+            db
+              .sql(
+                `select email from guest_contacts where guest_id='${guestId}';`,
+              )
+              .trim(),
+          )
+          .toBe("offline@example.test");
+        await expect
+          .poll(() =>
+            guest.evaluate(
+              () =>
+                Object.keys(localStorage)
+                  .filter((key) => key.startsWith("queue:"))
+                  .flatMap((key) =>
+                    JSON.parse(localStorage.getItem(key) || "[]"),
+                  ).length,
+            ),
+          )
+          .toBe(0);
+        expect(
+          db
+            .sql(
+              `select notifications_revoked and not consent_in_app and not consent_push and not consent_email and not consent_whatsapp from guest_contacts where guest_id='${guestId}';`,
+            )
+            .trim(),
+        ).toBe("t");
+      }
       expect(
         db
           .sql(
