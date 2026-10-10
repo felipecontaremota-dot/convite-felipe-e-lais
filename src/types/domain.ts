@@ -146,6 +146,7 @@ export interface SheetJob {
 }
 export interface Snapshot {
   guest_access_version?: number;
+  rsvp_statuses?: RSVP[];
   ticket_guest_ids?: string[];
   family_ticket_invitation_ids?: string[];
   current_guest_id?: string | null;

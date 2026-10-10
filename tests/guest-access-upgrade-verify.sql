@@ -9,10 +9,15 @@ do $$begin
 end$$;
 set role authenticated;
 set request.jwt.claim.sub='70707070-2000-4000-8000-000000000002';
+select 1 / (case when has_function_privilege('authenticated','public.identify_guest(uuid,uuid)','EXECUTE') then 1 else 0 end);
+select 1 / (case when not has_function_privilege('anon','public.identify_guest(uuid,uuid)','EXECUTE') then 1 else 0 end);
+select app_mutate('70707070-2000-4000-8000-000000000001','70707070-4000-4000-8000-000000000001','RSVP_UPDATE','{"guest_id":"70707070-2000-4000-8000-000000000004","status":"MAYBE"}');
+select 1 / (case when (app_mutate('70707070-2000-4000-8000-000000000001','70707070-4000-4000-8000-000000000001','RSVP_UPDATE','{}')->>'duplicate')::boolean then 1 else 0 end);
 select 1 / (case when app_snapshot('70707070-2000-4000-8000-000000000001')->'ticket_guest_ids' ? '70707070-2000-4000-8000-000000000004' and app_snapshot('70707070-2000-4000-8000-000000000001')->'family_ticket_invitation_ids' ? '70707070-2000-4000-8000-000000000003' then 1 else 0 end);
 select identify_guest('70707070-2000-4000-8000-000000000001','70707070-2000-4000-8000-000000000004');
 select identify_guest('70707070-2000-4000-8000-000000000001','70707070-2000-4000-8000-000000000004');
 reset role;
+select 1 / (case when exists(select 1 from invitation_sessions where user_id='70707070-2000-4000-8000-000000000002' and identified_guest_id='70707070-2000-4000-8000-000000000004') then 1 else 0 end);
 update invitations set primary_guest_id=null where event_id='70707070-2000-4000-8000-000000000001';
 delete from guests where event_id='70707070-2000-4000-8000-000000000001';
 delete from invitations where event_id='70707070-2000-4000-8000-000000000001';

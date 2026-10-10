@@ -124,9 +124,14 @@ async function setup(
             await route.abort("failed");
             return;
           }
-        } catch {
+        } catch (error) {
           status = 400;
-          data = { message: "unauthorized" };
+          data = {
+            code: "P0001",
+            message: String(error).includes("ticket_exists")
+              ? "ticket_exists"
+              : "unauthorized",
+          };
         }
     }
     await route.fulfill({ status, json: data });
@@ -624,4 +629,78 @@ test("schema antigo: erro de implantação não enfileira novo RSVP online nem f
         .flat(),
     ),
   ).toEqual([]);
+});
+
+test("QR já existente sem token local: erro explícito e regeneração somente após confirmação", async ({
+  page,
+}) => {
+  const { guests, state } = await setup(page, "INDIVIDUAL");
+  await nav(page, "Convites");
+  await expect(
+    page.getByRole("img", {
+      name: "QR do convite individual de Guilherme",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const original = db
+    .sql(
+      `select token_hash from qr_credentials where guest_id='${guests[0].id}' and revoked_at is null;`,
+    )
+    .trim();
+  await page.evaluate(() => {
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith("tickets:")) localStorage.removeItem(key);
+  });
+  await page.reload();
+  await expect(
+    page.getByRole("alert").filter({
+      hasText:
+        "Já existe um convite. Escolha gerar um novo para substituir a versão anterior.",
+    }),
+  ).toBeVisible();
+  expect(
+    db
+      .sql(
+        `select token_hash from qr_credentials where guest_id='${guests[0].id}' and revoked_at is null;`,
+      )
+      .trim(),
+  ).toBe(original);
+  expect(
+    state.calls.filter(
+      (c) => c.fn === "issue_ticket" && c.args.p_regenerate === true,
+    ),
+  ).toHaveLength(0);
+  await page
+    .getByRole("button", { name: "Gerar novo convite", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  expect(
+    db
+      .sql(
+        `select token_hash from qr_credentials where guest_id='${guests[0].id}' and revoked_at is null;`,
+      )
+      .trim(),
+  ).toBe(original);
+  await page
+    .getByRole("button", { name: "Gerar novo convite", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await expect(
+    page.getByRole("img", {
+      name: "QR do convite individual de Guilherme",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(
+    db
+      .sql(
+        `select token_hash from qr_credentials where guest_id='${guests[0].id}' and revoked_at is null;`,
+      )
+      .trim(),
+  ).not.toBe(original);
+  expect(
+    state.calls.filter(
+      (c) => c.fn === "issue_ticket" && c.args.p_regenerate === true,
+    ),
+  ).toHaveLength(1);
 });

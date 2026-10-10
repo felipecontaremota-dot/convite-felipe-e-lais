@@ -2,7 +2,7 @@
 
 ## Evidências e limites
 
-O usuário confirmou que a 007 foi aplicada em produção. Não houve acesso ao banco de produção nem a uma sessão real do usuário. O código/mensagem da resposta técnica de produção foi solicitado; as mensagens genéricas da UI não identificam a causa do servidor.
+O usuário confirmou que a 007 foi aplicada em produção. Não houve acesso ao banco de produção nem a uma sessão real do usuário. A resposta real de app_mutate foi fornecida: HTTP 400, código 22P02, invalid input value for enum rsvp_status: "MAYBE". Portanto, o enum efetivamente usado pela RPC não aceita MAYBE; a aplicação informada da 007 não garante que o schema implantado corresponde ao arquivo. Também foi capturada a resposta real de identify_guest: PGRST202, sem função public.identify_guest(p_event,p_guest) no schema cache. A chamada coincide com os argumentos uuid da 007 versionada e seu grant authenticated; a assinatura não está disponível na API implantada. Sem consulta ao catálogo de produção, não atribuir exclusivamente ao cache: pode ser ausência/definição/grant/cache. A 008 restabelece a assinatura/permissões explicitamente e solicita reload.
 
 Reprodução isolada sobre dados legados, sessão anônima verificada e migrations originais:
 
@@ -13,14 +13,14 @@ Reprodução isolada sobre dados legados, sessão anônima verificada e migratio
 | 007 aplicada com PostgREST previamente iniciado em 006, sem reload | HTTP 200 | HTTP 200 | HTTP 404/PGRST202 | regra da 007 |
 | Após NOTIFY pgrst, reload schema | HTTP 200 | HTTP 200 | HTTP 204 | regra da 007 |
 
-A reprodução HTTP utilizou PostgREST 16.4 real, PostgreSQL 17 isolado e JWT de fixture, não somente mocks. Cache desatualizado reproduz a falha de Perfil apesar da migration aplicada; não explica, por si só, falha de RSVP. Sem a resposta real, não declarar que a causa específica de produção está confirmada.
+A reprodução HTTP utilizou PostgREST 16.4 real, PostgreSQL 17 isolado e JWT de fixture, não somente mocks. Cache desatualizado reproduz a falha de Perfil apesar da migration aplicada; não explica, por si só, falha de RSVP. Isso demonstra uma causa possível para o mesmo PGRST202, mas não distingue sozinho o estado do catálogo de produção.
 
 ## Defeitos confirmados e correção
 
-1. A tela RSVP mantinha seu estado de edição/erro mesmo depois de um retry da fila já confirmado pelo servidor. Agora o estado salvo acompanha a versão persistida e a ausência de mutação pendente. Não há sucesso/celebração antes da persistência nem perda da escolha em falhas reais.
-2. RPCs ausentes/enum incompatível eram reduzidos a erro genérico. O diagnóstico distingue SCHEMA de NETWORK, sem reproduzir detalhes sensíveis. Novo RSVP online confere o contrato atual antes da fila; rede indisponível continua permitindo fila, e mutations existentes conservam seus IDs para retry.
+1. A resposta de produção confirmou incompatibilidade do enum com MAYBE. A 008 executa ALTER TYPE public.rsvp_status ADD VALUE IF NOT EXISTS, sem editar a 007. O upgrade simula funções/colunas de 007 com enum antigo, reproduz 22P02 antes da 008 e comprova persistência/retry idempotente depois. Além disso, a tela RSVP mantinha seu estado de edição/erro mesmo depois de um retry da fila já confirmado pelo servidor. Agora o estado salvo acompanha a versão persistida e a ausência de mutação pendente. Não há sucesso/celebração antes da persistência nem perda da escolha em falhas reais.
+2. A 008 recria public.identify_guest(uuid,uuid) com os nomes exatos p_event/p_guest, EXECUTE authenticated e sem acesso anon/PUBLIC; valida pertença da pessoa à sessão verificada no próprio UPDATE. O upgrade também remove a função em uma base 007 para comprovar sua restauração. RPCs ausentes/enum incompatível eram reduzidos a erro genérico. O diagnóstico distingue SCHEMA de NETWORK, sem reproduzir detalhes sensíveis. Novo RSVP online confere o contrato atual antes da fila; rede indisponível continua permitindo fila, e mutations existentes conservam seus IDs para retry.
 3. TicketsScreen dependia de current_guest_id, e manages_guest_ticket/issue_family_ticket exigiam a identificação do responsável. Como a identidade era uma escolha livre dentro da senha familiar compartilhada, isso era uma pré-condição artificial. A 008 autoriza pela unidade verificada e devolve listas explícitas de alvos no snapshot; a UI usa essas listas, sem inferir papéis pelo Perfil.
-4. Credenciais familiares estavam ocultas pelo snapshot até selecionar o responsável; sem cards, a emissão lazy nem começava. A 008 expõe hashes autorizados da própria unidade e permite emissão lazy sem Perfil. Tokens opacos continuam sendo retornados somente pela emissão autorizada, com hash no banco. Credencial já emitida em outro aparelho sem token local exige regeneração confirmada; não é possível recuperar um token a partir do hash, nem há rotação silenciosa.
+4. O catch de emissão descartava o erro técnico e mostrava uma orientação genérica de conexão. Agora a mensagem segura da API permanece visível, incluindo credencial já existente sem token local. Credenciais familiares estavam ocultas pelo snapshot até selecionar o responsável; sem cards, a emissão lazy nem começava. A 008 expõe hashes autorizados da própria unidade e permite emissão lazy sem Perfil. Tokens opacos continuam sendo retornados somente pela emissão autorizada, com hash no banco. Credencial já emitida em outro aparelho sem token local exige regeneração confirmada; não é possível recuperar um token a partir do hash, nem há rotação silenciosa.
 
 ## Segurança e upgrade
 

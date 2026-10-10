@@ -47,8 +47,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 }
 export const getSnapshot = () =>
   rpc<Snapshot>("app_snapshot", { p_event: eventId });
-export const checkGuestBackend = async () =>
-  requireGuestBackend(await getSnapshot());
+export const checkGuestBackend = async (status?: unknown) =>
+  requireGuestBackend(await getSnapshot(), status);
 export const mutate = (item: OfflineMutation) =>
   rpc("app_mutate", {
     p_event: eventId,

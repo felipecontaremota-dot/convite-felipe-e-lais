@@ -12,6 +12,7 @@ import {
 import { Confirmation } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
 import type { Ticket } from "../../types/domain";
+import { friendlyError } from "../../lib/errors";
 import {
   guestSchemaMessage,
   hasTicketContract,
@@ -30,7 +31,8 @@ function TicketCard({
   const [ticket, setTicket] = useState<Ticket | null>(null),
     [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [loadError, setLoadError] = useState<string | null>(null);
   const issue = family ? app.familyTicket : app.ticket;
   const load = useCallback(() => issue(target), [issue, target]);
   useEffect(() => {
@@ -39,8 +41,11 @@ function TicketCard({
       .then((t) => {
         if (active) setTicket(t);
       })
-      .catch(() => {
-        if (active) setTicket(null);
+      .catch((error) => {
+        if (active) {
+          setTicket(null);
+          setLoadError(friendlyError(error));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -71,9 +76,14 @@ function TicketCard({
           />
         </View>
       ) : (
-        <Text style={styles.text}>
-          Conecte-se para disponibilizar o convite. Se ele já foi emitido em
-          outro aparelho, gere um novo convite para este dispositivo.
+        <Text
+          accessibilityRole={loadError ? "alert" : undefined}
+          style={loadError ? styles.error : styles.text}
+        >
+          {loadError ||
+            (loading
+              ? "Preparando convite…"
+              : "Conecte-se para disponibilizar o convite.")}
         </Text>
       )}
       <Text style={styles.text}>

@@ -10,3 +10,31 @@ insert into invitation_sessions(event_id,user_id,invitation_id,pin_verified_at) 
 insert into rsvps(event_id,guest_id,status,responded_at,source) values('70707070-2000-4000-8000-000000000001','70707070-2000-4000-8000-000000000004','CONFIRMED',now(),'APP');
 insert into guest_contacts(event_id,guest_id,email,whatsapp,consent_in_app,consent_email,consent_push,consent_whatsapp) values('70707070-2000-4000-8000-000000000001','70707070-2000-4000-8000-000000000004','legacy@example.test','62999430047',true,false,false,true);
 insert into qr_credentials(event_id,guest_id,token_hash) values('70707070-2000-4000-8000-000000000001','70707070-2000-4000-8000-000000000004',repeat('a',64));
+-- Reproduce the captured production response: 007 functions/columns exist,
+-- but the actual public enum still lacks MAYBE. PostgreSQL cannot drop an
+-- enum value, so this disposable fixture reconstructs its pre-upgrade type.
+alter table rsvps alter column status drop default;
+alter type public.rsvp_status rename to rsvp_status_fixture_old;
+create type public.rsvp_status as enum('PENDING','CONFIRMED','DECLINED');
+alter table rsvps alter column status type public.rsvp_status using (status::text)::public.rsvp_status;
+alter table rsvps alter column status set default 'PENDING';
+drop type public.rsvp_status_fixture_old;
+-- RPC unavailable despite the rest of 007 existing: reproduce the second
+-- production symptom independently of the enum incompatibility.
+drop function public.identify_guest(uuid,uuid);
+set role authenticated;
+set request.jwt.claim.sub='70707070-2000-4000-8000-000000000002';
+do $$begin
+ begin
+ perform identify_guest('70707070-2000-4000-8000-000000000001','70707070-2000-4000-8000-000000000004');
+ raise exception 'expected the unavailable identification RPC';
+ exception when undefined_function then null;
+ end;
+ begin
+ perform app_mutate('70707070-2000-4000-8000-000000000001','70707070-4000-4000-8000-000000000001','RSVP_UPDATE','{"guest_id":"70707070-2000-4000-8000-000000000004","status":"MAYBE"}');
+ raise exception 'expected the production enum failure';
+ exception when invalid_text_representation then
+ if sqlerrm not like '%rsvp_status%MAYBE%' then raise;end if;
+ end;
+end $$;
+reset role;

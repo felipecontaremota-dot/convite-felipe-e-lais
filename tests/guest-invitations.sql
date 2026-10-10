@@ -34,6 +34,8 @@ select pg_temp.assert_guest(current_guest(:'event') is null,'family access does 
 create function pg_temp.denied_ticket(e uuid,g uuid,f uuid) returns boolean language plpgsql as $$begin perform issue_ticket(e,g);return false;exception when others then return sqlerrm='unauthorized';end$$;
 select pg_temp.assert_guest(not pg_temp.denied_ticket(:'event',:'gh',:'familyid'),'shared family access issues head QR without profile identification');
 select identify_guest(:'event',:'gm');
+create function pg_temp.denied_identity(e uuid,g uuid) returns boolean language plpgsql as $$begin perform identify_guest(e,g);return false;exception when others then return sqlerrm='unauthorized';end$$;
+select pg_temp.assert_guest(pg_temp.denied_identity(:'event',:'go') and current_guest(:'event')=:'gm'::uuid,'cross-unit identity is rejected without changing the selected member');
 select issue_ticket(:'event',:'gm') as memberticket \gset
 select pg_temp.assert_guest(pg_temp.denied_ticket(:'event',:'go',:'familyid'),'family access cannot issue another unit QR');
 create function pg_temp.denied_family(e uuid,f uuid) returns boolean language plpgsql as $$begin perform issue_family_ticket(e,f);return false;exception when others then return sqlerrm='unauthorized';end$$;
@@ -95,6 +97,7 @@ select pg_temp.assert_guest(pg_temp.denied_ticket(:'event',:'gh',:'familyid'),'i
 select pg_temp.assert_guest(pg_temp.denied_family(:'event',:'familyid'),'individual cannot issue another family QR');
 select identify_guest(:'event',:'go');
 select identify_guest(:'event',:'go');
+select pg_temp.assert_guest(pg_temp.denied_identity(:'event',:'gh') and current_guest(:'event')=:'go'::uuid,'individual cannot identify as another unit member');
 reset role;
 rollback;
 \echo Guest invitation regression passed: session identity, structured gender/head, opt-out, independent QR rotation, partial/idempotent check-in and RSVP isolation.

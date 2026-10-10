@@ -1,15 +1,15 @@
-import { vi, it, expect, beforeEach } from "vitest";
-const backend = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock("../src/lib/supabase", () => ({
-  supabase: backend,
-  eventId: "event-fixture",
-}));
 import {
   checkGuestBackend,
   identifyGuest,
   mutate,
 } from "../src/repositories/api";
 import { guestSchemaMessage } from "../src/features/guests/backendContract";
+import { vi, it, expect, beforeEach } from "vitest";
+const backend = vi.hoisted(() => ({ rpc: vi.fn() }));
+vi.mock("../src/lib/supabase", () => ({
+  supabase: backend,
+  eventId: "event-fixture",
+}));
 beforeEach(() => vi.resetAllMocks());
 it("a pre-007 backend cannot silently accept identification or online RSVP", async () => {
   backend.rpc.mockResolvedValue({
@@ -69,4 +69,28 @@ it("transport failures stay retryable network errors", async () => {
     error: { code: "", message: "Failed to fetch" },
   });
   await expect(checkGuestBackend()).rejects.toMatchObject({ code: "NETWORK" });
+});
+it("007-like metadata with an old enum cannot enqueue MAYBE as if it were supported", async () => {
+  backend.rpc.mockResolvedValue({
+    data: {
+      current_guest_id: null,
+      family_credentials: [],
+      rsvp_statuses: ["PENDING", "CONFIRMED", "DECLINED"],
+    },
+    error: null,
+  });
+  await expect(checkGuestBackend("MAYBE")).rejects.toMatchObject({
+    code: "SCHEMA",
+  });
+});
+it("the repaired backend explicitly advertises the enum value used by MAYBE", async () => {
+  backend.rpc.mockResolvedValue({
+    data: {
+      current_guest_id: null,
+      family_credentials: [],
+      rsvp_statuses: ["PENDING", "CONFIRMED", "DECLINED", "MAYBE"],
+    },
+    error: null,
+  });
+  await expect(checkGuestBackend("MAYBE")).resolves.toBeUndefined();
 });

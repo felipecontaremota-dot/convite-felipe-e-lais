@@ -376,7 +376,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Existing queued mutations retain their IDs and remain retryable.
       if (online && !demoRole && type === "RSVP_UPDATE") {
         try {
-          await api.checkGuestBackend();
+          await api.checkGuestBackend(payload.status);
         } catch (error) {
           if (!(error instanceof NetworkError)) throw error;
         }
