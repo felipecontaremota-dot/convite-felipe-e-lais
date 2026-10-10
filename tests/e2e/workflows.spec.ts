@@ -41,59 +41,39 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
-  await expect(
-    page.getByText("Bem-vindos, Convidado Um e família"),
-  ).toBeVisible();
+  await expect(page.getByText("Bem-vindos, Família Demo")).toBeVisible();
   await noOverflow(page);
   await navigation(page, "Presença");
-  const second = page
-    .getByText("Convidada Dois", { exact: true })
-    .locator("..");
-  await second
-    .getByRole("radio", { name: "Ainda decidirei", exact: true })
-    .click();
-  await second
-    .getByRole("button", { name: "Confirmar que decidirei", exact: true })
-    .click();
-  await expect(
-    second.getByText("Ainda decidirei", { exact: true }),
-  ).toBeVisible();
-  expect(
-    await page.evaluate(() =>
-      JSON.parse(localStorage.getItem("demo-db")!).snapshot.rsvps.map(
-        (r: { status: string }) => r.status,
-      ),
-    ),
-  ).toEqual(["CONFIRMED", "MAYBE", "PENDING"]);
-  await second
-    .getByRole("button", { name: "Editar confirmação", exact: true })
-    .click();
-  await second.getByRole("radio", { name: "Irei", exact: true }).click();
-  await second
+  await page
     .getByRole("button", {
-      name: "Confirmar presença de Convidada Dois",
+      name: "Salvar presença de Convidada Dois",
       exact: true,
     })
     .click();
   await expect(
-    second.getByText("Presença confirmada", { exact: true }),
+    page.getByText("Sincronizado com sucesso.").filter({ visible: true }),
   ).toBeVisible();
-  await navigation(page, "Perfil");
-  await page.getByRole("radio", { name: "Convidado Um", exact: true }).click();
+  // Each card owns its choice. Only the second person is updated.
+  const second = page
+    .getByRole("button", {
+      name: "Salvar presença de Convidada Dois",
+      exact: true,
+    })
+    .locator("..");
+  await second.getByRole("radio", { name: "Vou participar" }).click();
+  await second
+    .getByRole("button", { name: "Salvar presença de Convidada Dois" })
+    .click();
+  await navigation(page, "Ingressos");
   await expect(
-    page.getByText("Identificação salva neste aparelho.", { exact: true }),
+    page.getByText("Convidado Um", { exact: true }).filter({ visible: true }),
   ).toBeVisible();
-  await navigation(page, "Convites");
-  for (const name of ["Convidado Um", "Convidada Dois", "Criança Demo"])
-    await expect(
-      page.getByRole("img", {
-        name: `QR do convite individual de ${name}`,
-        exact: true,
-      }),
-    ).toBeVisible();
   await expect(
-    page.getByRole("img", { name: "QR do convite da família", exact: true }),
+    page.getByText("Convidada Dois", { exact: true }).filter({ visible: true }),
   ).toBeVisible();
+  await expect(
+    page.getByText("Criança Demo", { exact: true }).filter({ visible: true }),
+  ).toHaveCount(0);
   await navigation(page, "Presentes");
   await page
     .getByRole("checkbox", { name: "Tenho interesse em Um novo capítulo" })
@@ -106,7 +86,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
     .getByRole("radio", { name: "Convidada Dois", exact: true })
     .click();
   await page
-    .getByRole("textbox", { name: "E-mail de Convidada Dois", exact: true })
+    .getByLabel("E-mail de Convidada Dois", { exact: true })
     .fill("person-demo@example.com");
   await page
     .getByRole("button", {
@@ -195,24 +175,13 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
   page,
 }) => {
   await start(page);
-  await navigation(page, "Perfil");
-  await page.getByRole("radio", { name: "Convidado Um", exact: true }).click();
+  await navigation(page, "Ingressos");
   await expect(
-    page.getByText("Identificação salva neste aparelho.", { exact: true }),
-  ).toBeVisible();
-  await navigation(page, "Convites");
-  await expect(
-    page.getByRole("img", {
-      name: "QR do convite individual de Convidado Um",
-      exact: true,
-    }),
+    page.getByRole("button", { name: "Regenerar ingresso", exact: true }),
   ).toBeVisible();
   const token = await page.evaluate(
     () =>
-      JSON.parse(localStorage.getItem("demo-db")!).tickets.find(
-        (t: { guest_id: string }) =>
-          t.guest_id === "20000000-0000-4000-8000-000000000001",
-      ).token as string,
+      JSON.parse(localStorage.getItem("demo-db")!).tickets[0].token as string,
   );
   await page.getByRole("button", { name: "Sair deste dispositivo" }).click();
   await start(page, "cerimonial");
@@ -220,22 +189,22 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     .getByLabel("Token ou conteúdo do QR (entrada acessível)")
     .fill(`wedding://ticket/${token}`);
   await page
-    .getByRole("button", { name: "Validar convite", exact: true })
+    .getByRole("button", { name: "Validar ingresso", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Confirmar entrada", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("0 / 3 presentes", { exact: true }),
+    page.getByText("0 / 1 presentes", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Confirmar entrada", exact: true })
     .click();
   await expect(
-    page.getByText("1 / 3 presentes", { exact: true }),
+    page.getByText("1 / 1 presentes", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Validar convite", exact: true })
+    .getByRole("button", { name: "Validar ingresso", exact: true })
     .click();
   await expect(
     page.getByText("CONVIDADO JÁ REGISTRADO", { exact: true }),
@@ -279,12 +248,12 @@ test("offline: check-in manual persiste e sincroniza ao reconectar", async ({
     ),
   ).toBeVisible();
   await expect(
-    page.getByText("1 / 3 presentes", { exact: true }),
+    page.getByText("1 / 1 presentes", { exact: true }),
   ).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByText(/aguardando sincronização/)).toHaveCount(0);
   await expect(
-    page.getByText("1 / 3 presentes", { exact: true }),
+    page.getByText("1 / 1 presentes", { exact: true }),
   ).toBeVisible();
 });
 test("uma sessão existente não autoriza um novo código inválido", async ({

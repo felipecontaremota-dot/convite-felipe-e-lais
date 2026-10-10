@@ -153,12 +153,10 @@ export function Choice<T extends string>({
   value,
   options,
   onChange,
-  disabled = false,
 }: {
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
-  disabled?: boolean;
 }) {
   return (
     <View style={styles.row}>
@@ -167,8 +165,7 @@ export function Choice<T extends string>({
           key={option.value}
           accessibilityRole="radio"
           accessibilityLabel={option.label}
-          accessibilityState={{ checked: value === option.value, disabled }}
-          disabled={disabled}
+          accessibilityState={{ checked: value === option.value }}
           aria-checked={value === option.value}
           onPress={() => onChange(option.value)}
           style={[styles.nav, value === option.value && styles.selected]}
@@ -189,10 +186,10 @@ export function Toggle({
   onChange,
   disabled = false,
 }: {
+  disabled?: boolean;
   label: string;
   value: boolean;
   onChange: (value: boolean) => void;
-  disabled?: boolean;
 }) {
   return (
     <Pressable
@@ -252,7 +249,7 @@ const nav = {
   guest: [
     ["Início", "/inicio"],
     ["Presença", "/presenca"],
-    ["Convites", "/ingressos"],
+    ["Ingressos", "/ingressos"],
     ["Presentes", "/presentes"],
     ["Como chegar", "/como-chegar"],
     ["Mensagens", "/mensagens"],
@@ -426,7 +423,7 @@ export function Screen({
       ) : null}
       <Text style={styles.small}>
         Com carinho, Felipe & Laís · Seus dados são usados para organizar o
-        casamento.
+        casamento. Consentimentos podem ser revogados no Perfil.
       </Text>
     </ScrollView>
   );

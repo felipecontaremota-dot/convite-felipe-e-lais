@@ -4,13 +4,14 @@ import { Button, Card, Empty, Screen, styles } from "../../components/ui";
 import { WeddingCountdown } from "../../components/WeddingCountdown";
 import { useApp } from "../../lib/AppProvider";
 
-import { guestGreeting, homeRsvp } from "./guestDomain";
-
 export function GuestHome() {
   const app = useApp(),
     s = app.data;
   return (
-    <Screen section="guest" title={guestGreeting(s)}>
+    <Screen
+      section="guest"
+      title={`Bem-vindos, ${s?.invitations[0]?.name || "à nossa celebração"}`}
+    >
       <Card>
         {s ? <WeddingCountdown startsAt={s.event.starts_at} /> : null}
         <Text style={styles.text}>
@@ -19,13 +20,16 @@ export function GuestHome() {
         <Text style={styles.text}>
           {s?.event.venue_name || "O local será informado pelos noivos."}
         </Text>
-        <Text style={styles.badge}>{homeRsvp(s)}</Text>
+        <Text style={styles.badge}>
+          {s?.rsvps.filter((r) => r.status === "CONFIRMED").length || 0}{" "}
+          presença(s) confirmada(s)
+        </Text>
         <Text style={styles.text}>
           {s?.guests.map((g) => g.name).join(" · ")}
         </Text>
         <Button
           secondary
-          title="Informar contatos"
+          title="Identificar este aparelho e informar contatos"
           onPress={() => router.push("/perfil")}
         />
         <Button
@@ -34,15 +38,10 @@ export function GuestHome() {
         />
         <Button
           secondary
-          title="Ver meus convites"
+          title="Ver meus ingressos"
           onPress={() => router.push("/ingressos")}
         />
       </Card>
-      {s?.checkin_notices?.map((n) => (
-        <Card key={n.id}>
-          <Text style={styles.text}>{n.content}</Text>
-        </Card>
-      ))}
       <Text style={styles.heading}>Recados com carinho</Text>
       {s?.announcements.length ? (
         s.announcements.map((a) => (

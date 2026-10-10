@@ -22,27 +22,3 @@ export async function shareText(text: string) {
   }
   await Share.share({ message: text });
 }
-
-// Share/chooser delegates to the OS without guessing which navigation apps are installed.
-export async function openLocation(address: string | null, url: string | null) {
-  const safe = safeHttps(url);
-  const message = [address, safe].filter(Boolean).join("\n");
-  if (!message)
-    throw new ValidationError("Este local ainda não está disponível.");
-  if (Platform.OS === "web") {
-    if (navigator.share) {
-      await navigator.share({
-        title: "Local da celebração",
-        text: address || undefined,
-        url: safe || undefined,
-      });
-      return;
-    }
-    await copyText(message);
-    return "Localização copiada para abrir no aplicativo de sua preferência.";
-  }
-  await Share.share({
-    message,
-    ...(Platform.OS === "ios" && safe ? { url: safe } : {}),
-  });
-}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import {
@@ -9,138 +9,81 @@ import {
   styles,
   useFeedback,
 } from "../../components/ui";
-import { Confirmation } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
-import type { Ticket } from "../../types/domain";
-import { friendlyError } from "../../lib/errors";
-import {
-  guestSchemaMessage,
-  hasTicketContract,
-} from "../guests/backendContract";
-function TicketCard({
-  target,
-  name,
-  family = false,
-}: {
-  target: string;
-  name: string;
-  family?: boolean;
-}) {
+import type { Guest, Ticket } from "../../types/domain";
+
+function TicketCard({ guest }: { guest: Guest }) {
   const app = useApp(),
     feedback = useFeedback();
-  const [ticket, setTicket] = useState<Ticket | null>(null),
-    [confirm, setConfirm] = useState(false),
-    [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true),
-    [loadError, setLoadError] = useState<string | null>(null);
-  const issue = family ? app.familyTicket : app.ticket;
-  const load = useCallback(() => issue(target), [issue, target]);
+  const issueTicket = app.ticket;
+  const [ticket, setTicket] = useState<Ticket | null>(null);
   useEffect(() => {
     let active = true;
-    void load()
+    void issueTicket(guest.id)
       .then((t) => {
         if (active) setTicket(t);
       })
-      .catch((error) => {
-        if (active) {
-          setTicket(null);
-          setLoadError(friendlyError(error));
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+      .catch(() => {
+        if (active) setTicket(null);
       });
     return () => {
       active = false;
     };
-  }, [load]);
+  }, [guest.id, issueTicket]);
   return (
     <Card>
-      <Text accessibilityRole="header" style={styles.heading}>
-        {family ? "Convite da família" : `Convite individual — ${name}`}
-      </Text>
+      <Text style={styles.heading}>{guest.name}</Text>
       {ticket ? (
         <View
-          accessible
-          accessibilityRole="image"
-          style={{ alignItems: "center", padding: 12, maxWidth: "100%" }}
-          accessibilityLabel={
-            family
-              ? "QR do convite da família"
-              : `QR do convite individual de ${name}`
-          }
+          style={{ alignItems: "center", padding: 12 }}
+          accessibilityLabel={`Ingresso individual de ${guest.name}`}
         >
-          <QRCode
-            value={`wedding://${family ? "family" : "ticket"}/${ticket.token}`}
-            size={190}
-          />
+          <QRCode value={`wedding://ticket/${ticket.token}`} size={190} />
         </View>
       ) : (
-        <Text
-          accessibilityRole={loadError ? "alert" : undefined}
-          style={loadError ? styles.error : styles.text}
-        >
-          {loadError ||
-            (loading
-              ? "Preparando convite…"
-              : "Conecte-se para disponibilizar o convite.")}
+        <Text style={styles.text}>
+          Emita o ingresso conectado para salvá-lo neste aparelho.
         </Text>
       )}
-      <Text style={styles.text}>
-        {family
-          ? "Este é o convite da sua família, use ele para acessar o local no Grande Dia."
-          : "Este é o seu convite individual, use ele para acessar o local no Grande Dia."}
+      <Text style={styles.small}>
+        O QR contém apenas uma credencial aleatória. Um ingresso regenerado
+        invalida o anterior.
       </Text>
       <Button
-        title="Gerar novo convite"
-        disabled={!app.online || busy || loading}
-        onPress={() => setConfirm(true)}
+        title={
+          ticket ? "Regenerar ingresso" : "Emitir / regenerar neste dispositivo"
+        }
+        onPress={() =>
+          feedback.run(async () => {
+            setTicket(await app.ticket(guest.id, true));
+            return "Ingresso salvo neste dispositivo.";
+          })
+        }
       />
-      {confirm ? (
-        <Confirmation
-          text="Tem certeza que deseja gerar um novo convite? O antigo será invalidado."
-          confirmLabel="Confirmar"
-          onCancel={() => setConfirm(false)}
-          onConfirm={async () => {
-            setBusy(true);
-            try {
-              setTicket(await issue(target, true));
-              setConfirm(false);
-              await feedback.run(async () => "Novo convite gerado.");
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      ) : null}
       {feedback.node}
     </Card>
   );
 }
+
 export function TicketsScreen() {
-  const app = useApp(),
-    s = app.data,
-    unit = s?.invitations[0];
-  const ready = hasTicketContract(s);
+  const app = useApp();
   const guests =
-    s?.guests.filter((g) => s.ticket_guest_ids?.includes(g.id)) || [];
+    app.data?.guests.filter((g) =>
+      app.data?.rsvps.some(
+        (r) => r.guest_id === g.id && r.status === "CONFIRMED",
+      ),
+    ) || [];
   return (
-    <Screen section="guest" title="Meus convites">
-      {unit?.kind === "FAMILY" &&
-      s?.family_ticket_invitation_ids?.includes(unit.id) ? (
-        <TicketCard target={unit.id} name={unit.name} family />
-      ) : null}
+    <Screen section="guest" title="Meus ingressos">
+      <Text style={styles.text}>
+        Um QR individual por pessoa confirmada, inclusive crianças. Abra os
+        ingressos antes do evento para guardar uma cópia offline.
+      </Text>
       {guests.map((g) => (
-        <TicketCard key={g.id} target={g.id} name={g.name} />
+        <TicketCard key={g.id} guest={g} />
       ))}
       {!guests.length ? (
-        <Empty
-          text={
-            ready
-              ? "Nenhum convite disponível para esta unidade de acesso."
-              : guestSchemaMessage
-          }
-        />
+        <Empty text="Confirme a presença para disponibilizar os ingressos." />
       ) : null}
     </Screen>
   );

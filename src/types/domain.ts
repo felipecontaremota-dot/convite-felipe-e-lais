@@ -32,7 +32,6 @@ export interface Invitation {
   version: number;
 }
 export interface Guest {
-  salutation?: "NEUTRAL" | "MALE" | "FEMALE";
   is_child?: boolean;
   is_adolescent?: boolean;
   admin_notes?: string;
@@ -145,20 +144,6 @@ export interface SheetJob {
   version: number;
 }
 export interface Snapshot {
-  guest_access_version?: number;
-  rsvp_statuses?: RSVP[];
-  ticket_guest_ids?: string[];
-  family_ticket_invitation_ids?: string[];
-  current_guest_id?: string | null;
-  family_credentials?: (Omit<Credential, "guest_id"> & {
-    invitation_id: string;
-  })[];
-  checkin_notices?: {
-    id: string;
-    content: string;
-    created_at: string;
-    recipient_guest_id?: string;
-  }[];
   role: Role | null;
   event: WeddingEvent;
   invitations: Invitation[];
@@ -194,7 +179,6 @@ export type MutationType =
   | "RSVP_UPDATE"
   | "CONTACT_UPDATE"
   | "CHECKIN_CREATE"
-  | "CHECKIN_FAMILY"
   | "MESSAGE_SEND"
   | "MESSAGE_SEND_TO_GUESTS"
   | "GIFT_SELECT"

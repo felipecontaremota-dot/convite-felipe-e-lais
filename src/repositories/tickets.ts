@@ -32,7 +32,7 @@ export function getDeviceTicket(
       );
     }
     if (!online)
-      throw new AppError("Conecte-se para emitir ou atualizar este convite.");
+      throw new AppError("Conecte-se para emitir ou atualizar este ingresso.");
     const next = await issue(regenerate);
     await updateCache<Ticket[]>(key, (items) => [
       ...(items || []).filter((t) => t.guest_id !== guest),

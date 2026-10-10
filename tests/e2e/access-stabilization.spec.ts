@@ -29,6 +29,8 @@ test.beforeAll(async () => {
   });
   familyId = family.id;
   action("CODE_ROTATE", { id: familyId, version: 1 });
+  db.sql(`insert into guests(id,event_id,invitation_id,name) values('bcbcbcbc-0000-4000-8000-000000000012','${event}','${familyId}','Membro CORS');
+    insert into rsvps(event_id,guest_id,status) values('${event}','bcbcbcbc-0000-4000-8000-000000000012','CONFIRMED');`);
   const snapshot = db.rpc(admin, "app_snapshot", { p_event: event });
   code = snapshot.invitations.find(
     (i: { id: string }) => i.id === individual.invitation_id,
@@ -213,80 +215,6 @@ test("ADMIN copies links without invoking access; new anonymous browser passes r
       .getByRole("button", { name: "Abrir nosso convite", exact: true })
       .click();
     await expect(guest).toHaveURL(/\/inicio$/);
-    await guest.getByRole("link", { name: "Convites", exact: true }).click();
-    await expect(
-      guest.getByRole("img", {
-        name:
-          link === code
-            ? "QR do convite individual de Pessoa CORS"
-            : "QR do convite da família",
-        exact: true,
-      }),
-    ).toBeVisible();
-    if (link === code) {
-      const original = db
-        .sql(
-          `select token_hash from qr_credentials where guest_id='${individualId}' and revoked_at is null;`,
-        )
-        .trim();
-      await guest.getByRole("link", { name: "Presença", exact: true }).click();
-      for (const [i, [choice, button, status]] of [
-        ["Irei", "Confirmar presença de Pessoa CORS", "CONFIRMED"],
-        ["Não irei", "Confirmar ausência de Pessoa CORS", "DECLINED"],
-        ["Ainda decidirei", "Confirmar que decidirei", "MAYBE"],
-        ["Irei", "Confirmar presença de Pessoa CORS", "CONFIRMED"],
-      ].entries()) {
-        if (i)
-          await guest
-            .getByRole("button", { name: "Editar confirmação", exact: true })
-            .click();
-        await guest.getByRole("radio", { name: choice, exact: true }).click();
-        await guest.getByRole("button", { name: button, exact: true }).click();
-        await expect(
-          guest.getByRole("button", {
-            name: "Editar confirmação",
-            exact: true,
-          }),
-        ).toBeVisible();
-        expect(
-          db
-            .sql(`select status from rsvps where guest_id='${individualId}';`)
-            .trim(),
-        ).toBe(status);
-        await guest.reload();
-        await expect(
-          guest.getByRole("button", {
-            name: "Editar confirmação",
-            exact: true,
-          }),
-        ).toBeVisible();
-      }
-      expect(
-        db
-          .sql(
-            `select token_hash from qr_credentials where guest_id='${individualId}' and revoked_at is null;`,
-          )
-          .trim(),
-      ).toBe(original);
-      await guest.getByRole("link", { name: "Perfil", exact: true }).click();
-      await guest
-        .getByRole("radio", { name: "Pessoa CORS", exact: true })
-        .click();
-      await expect(
-        guest.getByText("Identificação salva neste aparelho.", { exact: true }),
-      ).toBeVisible();
-      await guest.reload();
-      await expect(
-        guest.getByRole("radio", { name: "Pessoa CORS", exact: true }),
-      ).toBeChecked();
-      await guest.getByRole("link", { name: "Convites", exact: true }).click();
-      await expect(
-        guest.getByRole("img", {
-          name: "QR do convite individual de Pessoa CORS",
-          exact: true,
-        }),
-      ).toBeVisible();
-    }
     await context.close();
   }
   const after = await (
@@ -302,6 +230,157 @@ test("ADMIN copies links without invoking access; new anonymous browser passes r
       .trim(),
   ).toBe("2");
 });
+test("rollback: stored MAYBE is read safely, opt-out survives, and FAMILY QR needs no Profile identification", async ({
+  browser,
+}) => {
+  db.sql(`update rsvps set status='MAYBE',note='Preservar resposta' where guest_id='${individualId}';
+    insert into guest_contacts(event_id,guest_id,email,whatsapp,consent_in_app,consent_push,consent_email,consent_whatsapp,notifications_revoked)
+    values('${event}','${individualId}','preserved@example.test','62999990047',false,false,false,false,true) on conflict(guest_id) do update set email=excluded.email,whatsapp=excluded.whatsapp,consent_in_app=false,consent_push=false,consent_email=false,consent_whatsapp=false,notifications_revoked=true;`);
+  for (const [link, pin, name, guestId] of [
+    [code, "0047", "Pessoa CORS", individualId],
+    [familyCode, "1234", "Membro CORS", "bcbcbcbc-0000-4000-8000-000000000012"],
+  ]) {
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:8083",
+    });
+    try {
+      const guest = await context.newPage();
+      let identifyCalls = 0;
+      guest.on("request", (request) => {
+        if (request.url().includes("/rpc/identify_guest")) identifyCalls++;
+      });
+      await guest.goto(`/c/${link}`);
+      await guest.getByLabel("Senha de acesso", { exact: true }).fill(pin);
+      await guest
+        .getByRole("button", { name: "Abrir nosso convite", exact: true })
+        .click();
+      await expect(guest).toHaveURL(/\/inicio$/);
+      await guest.getByRole("link", { name: "Presença", exact: true }).click();
+      const card = guest
+        .getByRole("button", {
+          name: `Salvar presença de ${name}`,
+          exact: true,
+        })
+        .locator("..");
+      if (guestId === individualId) {
+        await expect(
+          card.getByRole("radio", { name: "Ainda vou decidir", exact: true }),
+        ).toHaveAttribute("aria-checked", "true");
+        expect(
+          db
+            .sql(`select status from rsvps where guest_id='${guestId}';`)
+            .trim(),
+        ).toBe("MAYBE");
+        await card
+          .getByRole("radio", { name: "Ainda vou decidir", exact: true })
+          .click();
+        await card
+          .getByRole("button", {
+            name: `Salvar presença de ${name}`,
+            exact: true,
+          })
+          .click();
+        await expect
+          .poll(() =>
+            db
+              .sql(`select status from rsvps where guest_id='${guestId}';`)
+              .trim(),
+          )
+          .toBe("PENDING");
+        await card
+          .getByRole("radio", { name: "Vou participar", exact: true })
+          .click();
+        await card
+          .getByRole("button", {
+            name: `Salvar presença de ${name}`,
+            exact: true,
+          })
+          .click();
+        await expect
+          .poll(() =>
+            db
+              .sql(`select status from rsvps where guest_id='${guestId}';`)
+              .trim(),
+          )
+          .toBe("CONFIRMED");
+      }
+      // Generate the individual QR before opening Profile, including shared FAMILY access.
+      await guest.getByRole("link", { name: "Ingressos", exact: true }).click();
+      await expect(
+        guest.getByLabel(`Ingresso individual de ${name}`, { exact: true }),
+      ).toBeVisible();
+      expect(
+        db
+          .sql(
+            `select count(*) from qr_credentials where guest_id='${guestId}' and revoked_at is null;`,
+          )
+          .trim(),
+      ).toBe("1");
+      expect(
+        db
+          .sql(
+            `select count(*) from invitation_sessions where invitation_id=(select invitation_id from guests where id='${guestId}') and identified_guest_id is not null;`,
+          )
+          .trim(),
+      ).toBe("0");
+      await guest.getByRole("link", { name: "Perfil", exact: true }).click();
+      await guest.getByRole("radio", { name, exact: true }).click();
+      await expect(
+        guest.getByText("Identificação salva neste aparelho.", { exact: true }),
+      ).toBeVisible();
+      expect(identifyCalls).toBe(0);
+      if (guestId === individualId) {
+        for (const channel of ["in app", "push", "email", "whatsapp"]) {
+          const toggle = guest.getByRole("checkbox", {
+            name: `Aceito receber mensagens por ${channel}`,
+            exact: true,
+          });
+          await expect(toggle).toHaveAttribute("aria-checked", "false");
+          await expect(toggle).toBeDisabled();
+        }
+        await guest
+          .getByLabel(`E-mail de ${name}`, { exact: true })
+          .fill("updated@example.test");
+        await guest
+          .getByRole("button", {
+            name: `Salvar contato de ${name}`,
+            exact: true,
+          })
+          .click();
+        await expect
+          .poll(() =>
+            db
+              .sql(
+                `select email from guest_contacts where guest_id='${guestId}';`,
+              )
+              .trim(),
+          )
+          .toBe("updated@example.test");
+        expect(
+          db
+            .sql(
+              `select notifications_revoked and not consent_in_app and not consent_push and not consent_email and not consent_whatsapp from guest_contacts where guest_id='${guestId}';`,
+            )
+            .trim(),
+        ).toBe("t");
+      }
+      expect(
+        db
+          .sql(
+            `select sharing_code from invitation_access where invitation_id=(select invitation_id from guests where id='${guestId}');`,
+          )
+          .trim(),
+      ).toBe(link);
+      await guest.reload();
+      await expect(
+        guest.getByRole("radio", { name, exact: true }),
+      ).toHaveAttribute("aria-checked", "true");
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 test("blocked links, administrative session and real network failure are distinguished", async ({
   page,
 }) => {

@@ -77,9 +77,6 @@ test("standalone creation, child/group, contact mask, email validation, detail a
   );
   await page.getByLabel("Nome", { exact: true }).fill("José Victor");
   await page
-    .getByLabel("Forma de tratamento", { exact: true })
-    .selectOption("MALE");
-  await page
     .getByRole("checkbox", { name: "Criança (até 10 anos)", exact: true })
     .click();
   await page
@@ -128,7 +125,6 @@ test("standalone creation, child/group, contact mask, email validation, detail a
     unit = db.invitations.find(
       (i: { id: string }) => i.id === guest.invitation_id,
     );
-  expect(guest.salutation).toBe("MALE");
   expect(unit.kind).toBe("INDIVIDUAL");
   expect(unit.pin).toBe("0047");
   expect(unit.sharing_code).toMatch(/^[a-f0-9]{48}$/);
@@ -155,12 +151,6 @@ test("standalone creation, child/group, contact mask, email validation, detail a
   await page
     .getByRole("button", { name: "Editar convidado", exact: true })
     .click();
-  await expect(
-    page.getByLabel("Forma de tratamento", { exact: true }),
-  ).toHaveValue("MALE");
-  await page
-    .getByLabel("Forma de tratamento", { exact: true })
-    .selectOption("NEUTRAL");
   await page.getByLabel("Nome", { exact: true }).fill("José Editado");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(
@@ -169,11 +159,6 @@ test("standalone creation, child/group, contact mask, email validation, detail a
       exact: true,
     }),
   ).toBeVisible();
-  const edited = await database(page);
-  expect(
-    edited.guests.find((g: { name: string }) => g.name === "José Editado")
-      .salutation,
-  ).toBe("NEUTRAL");
 });
 test("alphabetical list, exact filters, batch family association, detach and delete preserve guests", async ({
   page,
@@ -414,7 +399,7 @@ test("mobile selection has an explicit accessible alternative and remains respon
     page.getByRole("checkbox", { name: /^Selecionar / }),
   ).toHaveCount(0);
 });
-test("location saves separate GPS URL, rejects HTTP and hands the destination to Web Share", async ({
+test("location saves separate GPS URL, rejects HTTP and opens direct external destination", async ({
   page,
 }) => {
   await admin(page);
@@ -458,33 +443,21 @@ test("location saves separate GPS URL, rejects HTTP and hands the destination to
       .getByRole("heading", { name: "Villarejo Eventos", exact: true })
       .filter({ visible: true }),
   ).toBeVisible();
-  await page.context().route("https://maps.test/**", (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: "<p>Fixture destination</p>",
-    }),
-  );
-  await page.evaluate(() =>
-    Object.defineProperty(navigator, "share", {
-      configurable: true,
-      value: async (data: ShareData) => {
-        (window as unknown as { sharedLocation: ShareData }).sharedLocation =
-          data;
-      },
-    }),
-  );
+  await page
+    .context()
+    .route("https://maps.test/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<p>Fixture destination</p>",
+      }),
+    );
+  const popup = page.waitForEvent("popup");
   await page
     .getByRole("button", { name: "Abrir localização", exact: true })
     .click();
-  expect(
-    await page.evaluate(
-      () => (window as unknown as { sharedLocation: ShareData }).sharedLocation,
-    ),
-  ).toEqual({
-    title: "Local da celebração",
-    text: "Rua do Evento, 12",
-    url: "https://maps.test/evento",
-  });
+  const location = await popup;
+  await expect.poll(() => location.url()).toContain("maps.test/evento");
+  await location.close();
   await expect(
     page.getByRole("button", { name: "Abrir no Google Maps", exact: true }),
   ).toBeVisible();
