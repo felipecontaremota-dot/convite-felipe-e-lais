@@ -9,6 +9,10 @@ import {
 } from "../lib/errors";
 import type { OfflineMutation, Snapshot, Ticket } from "../types/domain";
 import { invitationCode, invitationPin } from "../utils/security";
+import {
+  guestSchemaMessage,
+  requireGuestBackend,
+} from "../features/guests/backendContract";
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (!supabase)
     throw new AppError(
@@ -16,6 +20,12 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     );
   const { data, error } = await supabase.rpc(fn, args);
   if (error) {
+    if (
+      ((fn === "identify_guest" || fn === "issue_family_ticket") &&
+        (error.code === "PGRST202" || error.code === "42883")) ||
+      (error.code === "22P02" && error.message.includes("rsvp_status"))
+    )
+      throw new AppError(guestSchemaMessage, "SCHEMA");
     if (
       error.message.includes("Failed to fetch") ||
       error.message.includes("Network")
@@ -37,6 +47,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 }
 export const getSnapshot = () =>
   rpc<Snapshot>("app_snapshot", { p_event: eventId });
+export const checkGuestBackend = async () =>
+  requireGuestBackend(await getSnapshot());
 export const mutate = (item: OfflineMutation) =>
   rpc("app_mutate", {
     p_event: eventId,

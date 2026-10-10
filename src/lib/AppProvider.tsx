@@ -24,7 +24,7 @@ import { dispatchCommittedMessage } from "../features/messages/recipients";
 import * as demo from "../repositories/demo";
 import { MutationQueue, type SyncResult } from "../storage/queue";
 import { storage, readCache, writeCache } from "../storage/driver";
-import { AppError, SyncError } from "./errors";
+import { AppError, SyncError, NetworkError } from "./errors";
 import { getDeviceTicket } from "../repositories/tickets";
 interface ContextValue {
   data: Snapshot | null;
@@ -372,6 +372,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     send: async (type, payload) => {
       if (!demoRole && !user) throw new AppError("Abra seu convite primeiro.");
+      // Detect a stale deployed schema before adding a new online operation.
+      // Existing queued mutations retain their IDs and remain retryable.
+      if (online && !demoRole && type === "RSVP_UPDATE") {
+        try {
+          await api.checkGuestBackend();
+        } catch (error) {
+          if (!(error instanceof NetworkError)) throw error;
+        }
+      }
       const item: OfflineMutation = {
         mutationId: demo.id(),
         type,
@@ -420,7 +429,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!online)
         throw new AppError("Conecte-se para identificar este aparelho.");
       if (demoRole) await demo.demoIdentifyGuest(guest);
-      else await api.identifyGuest(guest);
+      else {
+        await api.checkGuestBackend();
+        await api.identifyGuest(guest);
+      }
       await query.refetch();
     },
     familyTicket,

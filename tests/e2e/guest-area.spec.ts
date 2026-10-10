@@ -88,6 +88,8 @@ async function setup(
   }, session);
   const state = {
     fail: false,
+    legacySchema: false,
+    loseResponse: false,
     gate: null as Promise<void> | null,
     calls: [] as { fn: string; args: Record<string, unknown> }[],
   };
@@ -109,6 +111,19 @@ async function setup(
       } else
         try {
           data = db.rpc(uid, fn, args);
+          if (fn === "app_snapshot" && state.legacySchema) {
+            delete (data as Record<string, unknown>).current_guest_id;
+            delete (data as Record<string, unknown>).family_credentials;
+          }
+          if (
+            fn === "app_mutate" &&
+            args.p_type === "RSVP_UPDATE" &&
+            state.loseResponse
+          ) {
+            state.loseResponse = false;
+            await route.abort("failed");
+            return;
+          }
         } catch {
           status = 400;
           data = { message: "unauthorized" };
@@ -242,11 +257,9 @@ test("família: identificação persistente, chefe e membros, modal e isolamento
   ).toBeVisible();
   await nav(page, "Convites");
   await expect(
-    page.getByText(
-      "Identifique seu nome no Perfil para visualizar seu convite individual.",
-      { exact: true },
-    ),
+    page.getByRole("img", { name: "QR do convite da família", exact: true }),
   ).toBeVisible();
+  expect(state.calls.some((c) => c.fn === "identify_guest")).toBe(false);
   await nav(page, "Perfil");
   await page.getByRole("radio", { name: "Guilherme", exact: true }).click();
   await expect(
@@ -315,13 +328,13 @@ test("família: identificação persistente, chefe e membros, modal e isolamento
   ).toBeVisible();
   await expect(
     page.getByRole("img", { name: "QR do convite da família", exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     page.getByRole("img", {
       name: "QR do convite individual de Guilherme",
       exact: true,
     }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole("img", {
@@ -503,4 +516,112 @@ test("localização: Web Share e fallback seguro, Google Maps e endereço separa
     .click();
   await expect(await popup).toHaveURL(/google.com\/maps/);
   await noOverflow(page);
+});
+
+test("RSVP: resposta perdida após commit retoma o mesmo mutation_id sem duplicar ou revogar QR", async ({
+  page,
+}) => {
+  const { guests, state } = await setup(page, "INDIVIDUAL");
+  await nav(page, "Convites");
+  await expect(
+    page.getByRole("img", {
+      name: "QR do convite individual de Guilherme",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const original = db
+    .sql(
+      `select token_hash from qr_credentials where guest_id='${guests[0].id}' and revoked_at is null;`,
+    )
+    .trim();
+  await nav(page, "Presença");
+  state.loseResponse = true;
+  await page
+    .getByRole("radio", { name: "Ainda decidirei", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Confirmar que decidirei", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Salvo neste dispositivo. A sincronização falhou; tente novamente.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Sincronizar agora", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Sincronizar agora", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Editar confirmação", exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        state.calls.filter(
+          (c) => c.fn === "app_mutate" && c.args.p_type === "RSVP_UPDATE",
+        ).length,
+    )
+    .toBeGreaterThanOrEqual(2);
+  const sends = state.calls.filter(
+    (c) => c.fn === "app_mutate" && c.args.p_type === "RSVP_UPDATE",
+  );
+  expect(new Set(sends.map((c) => c.args.p_mutation)).size).toBe(1);
+  expect(
+    db.sql(`select status from rsvps where guest_id='${guests[0].id}';`).trim(),
+  ).toBe("MAYBE");
+  expect(
+    db
+      .sql(`select count(*) from rsvps where guest_id='${guests[0].id}';`)
+      .trim(),
+  ).toBe("1");
+  expect(
+    db
+      .sql(
+        `select token_hash from qr_credentials where guest_id='${guests[0].id}' and revoked_at is null;`,
+      )
+      .trim(),
+  ).toBe(original);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Editar confirmação", exact: true }),
+  ).toBeVisible();
+});
+test("schema antigo: erro de implantação não enfileira novo RSVP online nem finge identificação local", async ({
+  page,
+}) => {
+  const { state } = await setup(page, "FAMILY");
+  state.legacySchema = true;
+  await nav(page, "Presença");
+  const card = page.getByText("Guilherme", { exact: true }).locator("..");
+  await card
+    .getByRole("radio", { name: "Ainda decidirei", exact: true })
+    .click();
+  await card
+    .getByRole("button", { name: "Confirmar que decidirei", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "O serviço de convidados precisa ser atualizado" }),
+  ).toBeVisible();
+  expect(state.calls.filter((c) => c.fn === "app_mutate")).toHaveLength(0);
+  await nav(page, "Perfil");
+  await page.getByRole("radio", { name: "Guilherme", exact: true }).click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "O serviço de convidados precisa ser atualizado" }),
+  ).toBeVisible();
+  expect(state.calls.filter((c) => c.fn === "identify_guest")).toHaveLength(0);
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("queue:"))
+        .map((k) => JSON.parse(localStorage.getItem(k) || "[]"))
+        .flat(),
+    ),
+  ).toEqual([]);
 });

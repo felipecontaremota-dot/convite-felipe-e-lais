@@ -12,6 +12,10 @@ import {
 import { Confirmation } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
 import type { Ticket } from "../../types/domain";
+import {
+  guestSchemaMessage,
+  hasTicketContract,
+} from "../guests/backendContract";
 function TicketCard({
   target,
   name,
@@ -106,20 +110,27 @@ function TicketCard({
 export function TicketsScreen() {
   const app = useApp(),
     s = app.data,
-    unit = s?.invitations[0],
-    person = s?.current_guest_id;
-  const head = !!person && unit?.primary_guest_id === person;
-  const guests = s?.guests.filter((g) => head || g.id === person) || [];
+    unit = s?.invitations[0];
+  const ready = hasTicketContract(s);
+  const guests =
+    s?.guests.filter((g) => s.ticket_guest_ids?.includes(g.id)) || [];
   return (
     <Screen section="guest" title="Meus convites">
-      {unit?.kind === "FAMILY" && head ? (
+      {unit?.kind === "FAMILY" &&
+      s?.family_ticket_invitation_ids?.includes(unit.id) ? (
         <TicketCard target={unit.id} name={unit.name} family />
       ) : null}
       {guests.map((g) => (
         <TicketCard key={g.id} target={g.id} name={g.name} />
       ))}
       {!guests.length ? (
-        <Empty text="Identifique seu nome no Perfil para visualizar seu convite individual." />
+        <Empty
+          text={
+            ready
+              ? "Nenhum convite disponível para esta unidade de acesso."
+              : guestSchemaMessage
+          }
+        />
       ) : null}
     </Screen>
   );

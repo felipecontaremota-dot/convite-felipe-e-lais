@@ -24,11 +24,17 @@ function RsvpForm({ guest }: { guest: Guest }) {
   const [status, setStatus] = useState<RSVP>(effectiveRsvpStatus(record)),
     [dietary, setDietary] = useState(record?.dietary || ""),
     [note, setNote] = useState(record?.note || "");
-  const [editing, setEditing] = useState(
-      !(record?.responded_at || (record && record.status !== "PENDING")),
-    ),
+  const version = record?.responded_at || record?.status || "PENDING";
+  const pending = app.pending.some(
+    (m) => m.type === "RSVP_UPDATE" && m.payload.guest_id === guest.id,
+  );
+  const saved =
+    !pending &&
+    !!(record?.responded_at || (record && record.status !== "PENDING"));
+  const [editingVersion, setEditingVersion] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [celebrate, setCelebrate] = useState<RSVP | null>(null);
+  const editing = !saved || editingVersion === version;
   return (
     <Card>
       <Text style={styles.heading}>{guest.name}</Text>
@@ -76,7 +82,7 @@ function RsvpForm({ guest }: { guest: Guest }) {
                     ...rsvpSchema.parse({ status, dietary, note }),
                   });
                   if (app.online) {
-                    setEditing(false);
+                    setEditingVersion(null);
                     setCelebrate(status);
                     return "Confirmação salva.";
                   }
@@ -102,13 +108,13 @@ function RsvpForm({ guest }: { guest: Guest }) {
             title="Editar confirmação"
             onPress={() => {
               setCelebrate(null);
-              setEditing(true);
+              setEditingVersion(version);
             }}
           />
         </>
       )}
       {celebrate ? <RsvpFeedback status={celebrate} /> : null}
-      {feedback.node}
+      {feedback.error && !editing ? null : feedback.node}
     </Card>
   );
 }

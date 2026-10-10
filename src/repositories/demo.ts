@@ -153,14 +153,16 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
     s.role = role;
     if (role === "GUEST") {
       const identified = s.current_guest_id;
-      const head = s.invitations.find(
-        (i) => i.id === demoFamily,
-      )?.primary_guest_id;
-      s.credentials = s.credentials.filter(
-        (c) => identified === head || c.guest_id === identified,
+      s.guest_access_version = 8;
+      s.ticket_guest_ids = s.guests
+        .filter((g) => g.invitation_id === demoFamily)
+        .map((g) => g.id);
+      s.family_ticket_invitation_ids = [demoFamily];
+      s.credentials = s.credentials.filter((c) =>
+        s.ticket_guest_ids?.includes(c.guest_id),
       );
       s.family_credentials = (s.family_credentials || []).filter(
-        (c) => c.invitation_id === demoFamily && identified === head,
+        (c) => c.invitation_id === demoFamily,
       );
       s.invitations = s.invitations.filter((i) => i.id === demoFamily);
       s.guests = s.guests.filter((g) => g.invitation_id === demoFamily);
@@ -456,12 +458,7 @@ export async function demoTicket(
         i.id ===
         db.snapshot.guests.find((g) => g.id === guestId)?.invitation_id,
     );
-    if (
-      unit?.kind === "FAMILY" &&
-      db.snapshot.current_guest_id !== guestId &&
-      db.snapshot.current_guest_id !== unit.primary_guest_id
-    )
-      throw Error("Acesso restrito");
+    if (!unit || unit.id !== demoFamily) throw Error("Acesso restrito");
     if (
       !regenerate &&
       db.snapshot.credentials.some(
@@ -766,11 +763,7 @@ export async function demoFamilyTicket(invitation: string, regenerate = false) {
   return transaction(async (db) => {
     const s = db.snapshot,
       i = s.invitations.find((i) => i.id === invitation);
-    if (
-      i?.kind !== "FAMILY" ||
-      !i.primary_guest_id ||
-      s.current_guest_id !== i.primary_guest_id
-    )
+    if (i?.kind !== "FAMILY" || i.id !== demoFamily)
       throw Error("Acesso restrito");
     const credentials = s.family_credentials || [];
     if (
