@@ -1,10 +1,15 @@
 import React from "react";
-import { Platform, Text } from "react-native";
+import { Image, Platform, Text } from "react-native";
 import { Button, Card, Screen, styles, useFeedback } from "../../components/ui";
 import type { WeddingEvent } from "../../types/domain";
 import { useApp } from "../../lib/AppProvider";
-import { copyText, openExternal } from "../../utils/externalLinks";
+import {
+  copyText,
+  openExternal,
+  openLocation,
+} from "../../utils/externalLinks";
 import { mapsEmbedUrl, transportLinks } from "./transportLinks";
+import { villarejoImage } from "./venueImage";
 export function LocationScreen({
   section = "guest",
 }: {
@@ -13,15 +18,37 @@ export function LocationScreen({
   const app = useApp();
   return (
     <Screen section={section} title="Como chegar">
-      <LocationCard event={app.data?.event} />
+      <LocationCard
+        event={app.data?.event}
+        systemChooser={section === "guest"}
+      />
     </Screen>
   );
 }
-export function LocationCard({ event }: { event?: WeddingEvent }) {
+export function LocationCard({
+  event,
+  systemChooser = false,
+}: {
+  event?: WeddingEvent;
+  systemChooser?: boolean;
+}) {
   const feedback = useFeedback();
   const links = event ? transportLinks(event) : null;
   return (
     <Card>
+      {villarejoImage ? (
+        <Image
+          source={villarejoImage}
+          accessibilityLabel="Villarejo Eventos"
+          resizeMode="contain"
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: 36,
+            alignSelf: "center",
+          }}
+        />
+      ) : null}
       <Text accessibilityRole="header" style={styles.heading}>
         {event?.venue_name || "Local a definir"}
       </Text>
@@ -34,7 +61,14 @@ export function LocationCard({ event }: { event?: WeddingEvent }) {
         title="Abrir localização"
         disabled={!links?.gps && !links?.google}
         onPress={() =>
-          feedback.run(() => openExternal(links?.gps || links?.google || null))
+          feedback.run(() =>
+            systemChooser
+              ? openLocation(
+                  event?.address || null,
+                  links?.gps || links?.google || null,
+                )
+              : openExternal(links?.gps || links?.google || null),
+          )
         }
       />
       <Button

@@ -20,6 +20,8 @@ export default defineConfig({
         "staff-and-pin.spec.ts",
         "database-admin.spec.ts",
         "access-stabilization.spec.ts",
+        "guest-area.spec.ts",
+        "ceremonial-snapshot.spec.ts",
       ],
     },
     {
@@ -28,6 +30,8 @@ export default defineConfig({
         "staff-and-pin.spec.ts",
         "database-admin.spec.ts",
         "access-stabilization.spec.ts",
+        "guest-area.spec.ts",
+        "ceremonial-snapshot.spec.ts",
       ],
       use: { baseURL: "http://127.0.0.1:8083" },
     },

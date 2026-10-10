@@ -6,13 +6,14 @@ export const invitationCode = z
 export const contactSchema = z.object({
   email: z.union([z.string().email(), z.literal("")]),
   whatsapp: z.string().regex(/^(\+?[0-9 ()-]{8,20})?$/, "WhatsApp inválido."),
+  notifications_revoked: z.boolean().optional(),
   consent_in_app: z.boolean(),
   consent_push: z.boolean(),
   consent_email: z.boolean(),
   consent_whatsapp: z.boolean(),
 });
 export const rsvpSchema = z.object({
-  status: z.enum(["PENDING", "CONFIRMED", "DECLINED"]),
+  status: z.enum(["PENDING", "CONFIRMED", "DECLINED", "MAYBE"]),
   dietary: z.string().max(500),
   note: z.string().max(1000),
 });

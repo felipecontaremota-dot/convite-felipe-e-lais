@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Text } from "react-native";
 import {
   Button,
@@ -11,22 +11,13 @@ import {
   useFeedback,
 } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
-import { readCache } from "../../storage/driver";
 
 export function MessagesScreen() {
   const app = useApp(),
     feedback = useFeedback();
   const [content, setContent] = useState(""),
-    [sender, setSender] = useState("");
-  useEffect(() => {
-    let active = true;
-    void readCache<string>(`identity:${app.scope}`).then((value) => {
-      if (active && value) setSender(value);
-    });
-    return () => {
-      active = false;
-    };
-  }, [app.scope]);
+    [senderOverride, setSender] = useState<string | null>(null);
+  const sender = senderOverride ?? app.data?.current_guest_id ?? "";
   return (
     <Screen section="guest" title="Uma mensagem aos noivos">
       <Card>

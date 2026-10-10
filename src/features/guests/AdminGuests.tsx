@@ -62,6 +62,7 @@ function GuestForm({
   const [name, setName] = useState(guest?.name || ""),
     [child, setChild] = useState(!!guest?.is_child),
     [group, setGroup] = useState(guest?.group_label || ""),
+    [salutation, setSalutation] = useState(guest?.salutation || "NEUTRAL"),
     [phone, setPhone] = useState(formatPhone(contact?.whatsapp || "")),
     [email, setEmail] = useState(contact?.email || ""),
     [notes, setNotes] = useState(guest?.admin_notes || "");
@@ -71,6 +72,18 @@ function GuestForm({
       onClose={onClose}
     >
       <Field label="Nome" value={name} onChangeText={setName} maxLength={200} />
+      <Select
+        label="Forma de tratamento"
+        value={salutation}
+        onChange={(value) =>
+          setSalutation(value as NonNullable<Guest["salutation"]>)
+        }
+        options={[
+          { value: "NEUTRAL", label: "Neutra / não informada" },
+          { value: "MALE", label: "Masculina" },
+          { value: "FEMALE", label: "Feminina" },
+        ]}
+      />
       <Toggle label="Criança (até 10 anos)" value={child} onChange={setChild} />
       <Select
         label="Grupo / vínculo"
@@ -125,6 +138,7 @@ function GuestForm({
               name: name.trim(),
               is_child: child,
               group_label: group,
+              salutation,
               whatsapp: brazilPhone(phone),
               email: email.trim(),
               admin_notes: notes,

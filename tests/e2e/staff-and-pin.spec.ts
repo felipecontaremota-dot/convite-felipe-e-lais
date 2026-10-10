@@ -84,6 +84,7 @@ async function backend(
                 id: family,
                 event_id: event,
                 name: "Família Teste",
+                kind: "FAMILY",
                 active: true,
                 primary_guest_id: null,
                 version: 1,
