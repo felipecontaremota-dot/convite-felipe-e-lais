@@ -21,7 +21,11 @@ SQL
 if run_sql < <(printf "begin; select set_config('wedding.rebuild_confirmation','DISCARD_TEST_DATA_REBUILD_PR21',true);\n"; cat scripts/rebuild-pr21/cleanup-reviewed.sql) > /tmp/rebuild-restrict-error.log 2>&1; then
  echo 'ERROR: cleanup accepted an external dependency' >&2; exit 1
 fi
-if ! rg -q 'external_guard' /tmp/rebuild-restrict-error.log; then cat /tmp/rebuild-restrict-error.log; exit 1; fi
+# Bash builtin: GitHub runners need not have ripgrep installed.
+case "$(< /tmp/rebuild-restrict-error.log)" in
+ *external_guard*) printf 'External dependency blocked cleanup as expected\n' ;;
+ *) cat /tmp/rebuild-restrict-error.log; exit 1 ;;
+esac
 run_sql <<'SQL'
 do $$begin
  if to_regclass('public.family_qr_credentials') is null or not exists(select 1 from public.guests) then raise exception 'Failed cleanup did not roll back';end if;
