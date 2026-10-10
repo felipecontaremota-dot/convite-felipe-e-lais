@@ -26,7 +26,8 @@ set local role service_role;
 select prepare_invitation_delivery(:'event',:'request',:'gi') as di \gset
 select pg_temp.assert_delivery((:'di'::jsonb)->>'password'='0047' and (:'di'::jsonb)->>'email'='individual@example.test','individual server password and normalized email');
 select pg_temp.assert_delivery((:'di'::jsonb)->>'code'=(select sharing_code from invitation_access where invitation_id=:'ii'),'individual link');
-select finish_invitation_delivery((:'di'::jsonb->>'id')::uuid,'sent','resend','provider-id',null);
+select claim_invitation_delivery((:'di'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
+select finish_invitation_delivery((:'di'::jsonb->>'id')::uuid,'sent','resend','provider-id',null,(:'claim'::jsonb->>'token')::uuid);
 select pg_temp.assert_delivery((select sent_at is not null and sent_channel='EMAIL' from invitations where id=:'ii'),'accepted provider updates legacy dashboard');
 select pg_temp.assert_delivery((select not consent_email from guest_contacts where guest_id=:'gi'),'initial invitation is sent without recurring-message consent');
 update guest_contacts set email='changed@example.test' where guest_id=:'gi';
@@ -34,13 +35,15 @@ select prepare_invitation_delivery(:'event',:'request',:'gi') as duplicate \gset
 select pg_temp.assert_delivery((:'duplicate'::jsonb)->>'status'='sent' and (:'duplicate'::jsonb)->>'duplicate'='true' and not (:'duplicate'::jsonb ? 'password'),'same request returns earlier result without credentials');
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000002',:'gi') as resend \gset
 select pg_temp.assert_delivery((:'resend'::jsonb)->>'duplicate'='false','explicit resend with new ID');
-select finish_invitation_delivery((:'resend'::jsonb->>'id')::uuid,'failed','resend',null,'Falha sanitizada');
+select claim_invitation_delivery((:'resend'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
+select finish_invitation_delivery((:'resend'::jsonb->>'id')::uuid,'failed','resend',null,'Falha sanitizada',(:'claim'::jsonb->>'token')::uuid);
 select pg_temp.assert_delivery((select sent_at is not null from invitations where id=:'ii'),'failed resend does not clear first sent date');
 select prepare_invitation_delivery(:'event',:'request',:'ga') as da \gset
 select pg_temp.assert_delivery((:'da'::jsonb)->>'password'='1234' and (:'da'::jsonb)->>'code'=(select sharing_code from invitation_access where invitation_id=:'fi'),'family shared password/link');
 select prepare_invitation_delivery(:'event',:'request',:'gb') as db \gset
 select pg_temp.assert_delivery((:'db'::jsonb)->>'id'=(:'da'::jsonb)->>'id' and (:'db'::jsonb)->>'duplicate'='true','bulk deduplicates normalized email in same access unit');
-select finish_invitation_delivery((:'da'::jsonb->>'id')::uuid,'failed','resend',null,'Falha sanitizada');
+select claim_invitation_delivery((:'da'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
+select finish_invitation_delivery((:'da'::jsonb->>'id')::uuid,'failed','resend',null,'Falha sanitizada',(:'claim'::jsonb->>'token')::uuid);
 select pg_temp.assert_delivery((select sent_at is null from invitations where id=:'fi'),'Resend failure never marks sent_at');
 select prepare_invitation_delivery(:'event',:'request',:'go') as different_unit \gset
 select pg_temp.assert_delivery((:'different_unit'::jsonb)->>'duplicate'='false','same email across different units must not deduplicate');

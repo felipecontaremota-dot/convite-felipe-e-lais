@@ -20,3 +20,24 @@ export function lastInvitationDelivery(
       (a, b) => new Date(b.sent_at!).getTime() - new Date(a.sent_at!).getTime(),
     )[0];
 }
+
+export interface InvitationSendResult {
+  message: string;
+  complete: boolean;
+  pending: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+}
+export async function retainedInvitationRequest(
+  requests: Map<string, string>,
+  key: string,
+  makeId: () => string,
+  send: (request: string) => Promise<InvitationSendResult>,
+) {
+  const request = requests.get(key) || makeId();
+  requests.set(key, request);
+  const result = await send(request);
+  if (result.complete && result.pending === 0) requests.delete(key);
+  return result;
+}

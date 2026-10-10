@@ -1,5 +1,15 @@
-import { cors, eventAdmin, json, service } from "../_shared/http.ts";
-import { provider } from "../_shared/providers.ts";
+import {
+  cors,
+  eventAdmin,
+  json,
+  ProviderDefinitiveError,
+  service,
+} from "../_shared/http.ts";
+import {
+  type Delivery,
+  provider,
+  resendPayloadHash,
+} from "../_shared/providers.ts";
 import { invitationTemplate } from "./template.ts";
 const uuid = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 const validUuid = (value: unknown): value is string =>
@@ -40,18 +50,21 @@ export function invitationHandler(
     if (body.guest_id) ids = [body.guest_id];
     else {
       // SQL returns the complete scoped list, without PostgREST's default row cap.
-      const { data, error } = await db.rpc("invitation_delivery_targets", {
+      const { data, error } = await db.rpc("prepare_invitation_batch", {
         p_event: body.event_id,
+        p_request: body.request_id,
       });
       if (error) return json({ error: "recipient lookup failed" }, 503);
       ids = data || [];
     }
     const results: {
       guest_id: string;
+      delivery_id: string;
       status: string;
       reason?: string;
       duplicate?: boolean;
     }[] = [];
+    const handled = new Map<string, { status: string; reason?: string }>();
     for (const guest of ids) {
       const { data: reservation, error } = await db.rpc(
         "prepare_invitation_delivery",
@@ -60,51 +73,112 @@ export function invitationHandler(
       if (error || !reservation) {
         return json({ error: "reservation failed" }, 503);
       }
-      if (reservation.duplicate || reservation.status !== "pending") {
+      if (reservation.status === "pending" && !reservation.id) {
         results.push({
           guest_id: guest,
+          delivery_id: guest,
+          status: "pending",
+          reason: "payload_changed",
+        });
+        continue;
+      }
+      if (reservation.status !== "pending") {
+        results.push({
+          guest_id: guest,
+          delivery_id: reservation.id,
           status: reservation.status,
           reason: reservation.error || undefined,
           duplicate: reservation.duplicate,
         });
         continue;
       }
-      let status = "failed",
-        name = "EMAIL",
-        providerId: string | undefined,
-        reason: string | undefined;
+      const earlier = handled.get(reservation.id);
+      if (earlier) {
+        results.push({
+          guest_id: guest,
+          delivery_id: reservation.id,
+          ...earlier,
+          duplicate: true,
+        });
+        continue;
+      }
+      let url = "", configurationError = false;
       try {
         const base = new URL(deps.base() || "");
         if (
           base.protocol !== "https:" || base.username || base.password ||
           base.search || base.hash
-        ) throw Error("invalid base");
-        const url = `${base.href.replace(/\/$/, "")}/c/${
-          encodeURIComponent(reservation.code)
+        ) throw new ProviderDefinitiveError();
+        url = `${base.href.replace(/\/$/, "")}/c/${
+          encodeURIComponent(reservation.code || "")
         }`;
-        const template = invitationTemplate(
-          reservation.name,
-          url,
-          reservation.password,
-        );
-        const result = await deps.provider("EMAIL").send({
-          id: reservation.id,
-          key: reservation.id,
-          title: template.title,
-          body: template.text,
-          html: template.html,
-          email: reservation.email,
-          whatsapp: "",
-          tokens: [],
-        });
-        status = result.status;
-        name = result.provider;
-        providerId = result.providerId;
-        reason = result.reason;
       } catch {
-        // Never serialize provider errors: they may contain request content/credentials.
-        reason =
-          "Não foi possível enviar o convite. Verifique a configuração do serviço de e-mail.";
+        configurationError = true;
+      }
+      const template = invitationTemplate(
+        reservation.name || "",
+        url,
+        reservation.password || "",
+      );
+      const delivery: Delivery = {
+        id: reservation.id,
+        key: reservation.id,
+        title: template.title,
+        body: template.text,
+        html: template.html,
+        email: reservation.email || "",
+        whatsapp: "",
+        tokens: [],
+      };
+      const hash = await resendPayloadHash(delivery);
+      const { data: claim, error: claimError } = await db.rpc(
+        "claim_invitation_delivery",
+        { p_id: reservation.id, p_hash: hash },
+      );
+      if (claimError || !claim) return json({ error: "claim failed" }, 503);
+      if (!claim.claimed) {
+        handled.set(reservation.id, {
+          status: claim.status,
+          reason: claim.reason,
+        });
+        results.push({
+          guest_id: guest,
+          delivery_id: reservation.id,
+          status: claim.status,
+          reason: claim.reason,
+          duplicate: true,
+        });
+        continue;
+      }
+      let status = "pending",
+        name = "EMAIL",
+        providerId: string | undefined,
+        reason: string | undefined;
+      try {
+        if (configurationError) throw new ProviderDefinitiveError();
+        if (reservation.available === false) {
+          status = reservation.attempted ? "pending" : "skipped";
+          reason = reservation.attempted
+            ? "payload_changed"
+            : "Convite indisponível";
+        } else {
+          const result = await deps.provider("EMAIL").send(delivery);
+          status = reservation.attempted && result.status === "skipped"
+            ? "pending"
+            : result.status;
+          name = result.provider;
+          providerId = result.providerId;
+          reason = status === "pending" ? "uncertain" : result.reason;
+        }
+      } catch (error) {
+        if (error instanceof ProviderDefinitiveError) {
+          status = "failed";
+          reason =
+            "O serviço de e-mail rejeitou o envio. Verifique a configuração.";
+        } else {
+          status = "pending";
+          reason = "uncertain";
+        }
       }
       const finished = await db.rpc("finish_invitation_delivery", {
         p_id: reservation.id,
@@ -112,18 +186,29 @@ export function invitationHandler(
         p_provider: name,
         p_provider_id: providerId || null,
         p_error: reason || null,
+        p_claim: claim.token,
       });
-      if (finished.error) {
+      if (finished.error || finished.data === false) {
         return json({ error: "delivery recording failed" }, 503);
       }
-      results.push({ guest_id: guest, status, ...(reason ? { reason } : {}) });
+      handled.set(reservation.id, { status, reason });
+      results.push({
+        guest_id: guest,
+        delivery_id: reservation.id,
+        status,
+        ...(reason ? { reason } : {}),
+      });
     }
+    const uniqueResults = [
+      ...new Map(results.map((r) => [r.delivery_id, r])).values(),
+    ];
     return json({
       results,
-      sent: results.filter((r) => r.status === "sent" && !r.duplicate).length,
-      skipped: results.filter((r) => r.status === "skipped").length,
-      failed: results.filter((r) => r.status === "failed").length,
-      pending: results.filter((r) => r.status === "pending").length,
+      complete: !results.some((r) => r.status === "pending"),
+      sent: uniqueResults.filter((r) => r.status === "sent").length,
+      skipped: uniqueResults.filter((r) => r.status === "skipped").length,
+      failed: uniqueResults.filter((r) => r.status === "failed").length,
+      pending: uniqueResults.filter((r) => r.status === "pending").length,
     });
   };
 }

@@ -1,3 +1,4 @@
+import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import React, {
   createContext,
   useContext,
@@ -49,7 +50,10 @@ interface ContextValue {
   sync: () => Promise<SyncResult>;
   syncNow: () => Promise<string>;
   discardFailed: (id: string) => Promise<void>;
-  sendInvitations: (request: string, guest?: string) => Promise<string>;
+  sendInvitations: (
+    request: string,
+    guest?: string,
+  ) => Promise<InvitationSendResult>;
 }
 const Context = createContext<ContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -274,7 +278,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if ((query.data || cached)?.role !== "ADMIN")
         throw new AppError("Acesso restrito.");
       if (!online) throw new AppError("O envio de convites exige conexão.");
-      if (demoRole) return "Demonstração: nenhum e-mail foi enviado.";
+      if (demoRole)
+        return {
+          message: "Demonstração: nenhum e-mail foi enviado.",
+          complete: true,
+          pending: 0,
+          sent: 0,
+          skipped: 1,
+          failed: 0,
+        };
       const result = await api.sendInvitations(request, guest);
       await query.refetch();
       return result;

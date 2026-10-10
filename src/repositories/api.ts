@@ -1,3 +1,4 @@
+import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import { validMessageId } from "../features/messages/recipients";
 import { supabase, eventId } from "../lib/supabase";
 import {
@@ -182,7 +183,10 @@ export async function dispatchMessage(channels: string[], message: string) {
     return "Mensagem registrada, mas não foi possível confirmar o processamento dos envios. Tente novamente pelo histórico.";
   }
 }
-export async function sendInvitations(request: string, guest?: string) {
+export async function sendInvitations(
+  request: string,
+  guest?: string,
+): Promise<InvitationSendResult> {
   if (!supabase)
     throw new AppError("O serviço de envio de convites está indisponível.");
   const { data, error } = await supabase.functions.invoke("send-invitations", {
@@ -196,9 +200,37 @@ export async function sendInvitations(request: string, guest?: string) {
     throw new AppError(
       "Não foi possível confirmar o envio. Tente novamente; a mesma operação será retomada sem duplicar e-mails.",
     );
-  if (guest && data.results[0]?.reason)
-    return `Convite não enviado: ${data.results[0].reason}.`;
-  if (data.pending)
-    return "O convite está em processamento. Nenhum novo envio foi iniciado.";
-  return `${data.sent} convite(s) enviado(s), ${data.skipped} não enviado(s), ${data.failed} falha(s).${data.results.some((r: { duplicate?: boolean }) => r.duplicate) ? " Operação já registrada: nenhum e-mail duplicado." : ""}`;
+  if (
+    !Array.isArray(data?.results) ||
+    ![data.pending, data.sent, data.skipped, data.failed].every(
+      (n) => Number.isInteger(n) && n >= 0,
+    )
+  )
+    throw new AppError(
+      "Não foi possível confirmar o resultado do envio. Tente novamente com a mesma operação.",
+    );
+  let message: string;
+  if (data.pending) {
+    const reasons = data.results
+      .filter((r: { status: string }) => r.status === "pending")
+      .map((r: { reason?: string }) => r.reason);
+    message = reasons.includes("payload_changed")
+      ? "Os dados do convite mudaram desde a tentativa anterior. O resultado do envio anterior precisa ser confirmado antes de reenviar."
+      : reasons.includes("expired")
+        ? "O resultado deste envio não pôde ser confirmado. Verifique o histórico antes de iniciar um novo envio."
+        : reasons.every((r: unknown) => r === "processing")
+          ? "O envio ainda está sendo processado."
+          : "Não foi possível confirmar o resultado do envio. O sistema manterá esta operação para verificação sem reenviar um convite duplicado.";
+  } else if (guest && data.results[0]?.reason)
+    message = `Convite não enviado: ${data.results[0].reason}.`;
+  else
+    message = `${data.sent} convite(s) confirmado(s), ${data.skipped} não enviado(s), ${data.failed} falha(s).`;
+  return {
+    message,
+    complete: data.pending === 0,
+    pending: data.pending,
+    sent: data.sent,
+    skipped: data.skipped,
+    failed: data.failed,
+  };
 }

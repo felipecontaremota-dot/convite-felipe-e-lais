@@ -1,4 +1,4 @@
-import { requestJson } from "./http.ts";
+import { ProviderUncertainError, requestJson } from "./http.ts";
 export interface Delivery {
   id: string;
   key: string;
@@ -28,6 +28,24 @@ export class DisabledProvider implements Provider {
     };
   }
 }
+export function resendPayload(d: Delivery) {
+  return {
+    from: Deno.env.get("EMAIL_FROM") || "",
+    to: [d.email],
+    subject: d.title,
+    text: d.body,
+    ...(d.html ? { html: d.html } : {}),
+  };
+}
+export async function resendPayloadHash(d: Delivery) {
+  // Fixed property order and the exact same builder used for the POST.
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(resendPayload(d))),
+  );
+  return [...new Uint8Array(digest)].map((v) => v.toString(16).padStart(2, "0"))
+    .join("");
+}
 export class ResendProvider implements Provider {
   async send(d: Delivery): Promise<ProviderResult> {
     const data = await requestJson("https://api.resend.com/emails", {
@@ -37,14 +55,11 @@ export class ResendProvider implements Provider {
         "Content-Type": "application/json",
         "Idempotency-Key": d.key,
       },
-      body: JSON.stringify({
-        from: Deno.env.get("EMAIL_FROM"),
-        to: [d.email],
-        subject: d.title,
-        text: d.body,
-        ...(d.html ? { html: d.html } : {}),
-      }),
+      body: JSON.stringify(resendPayload(d)),
     });
+    if (typeof data?.id !== "string" || !data.id) {
+      throw new ProviderUncertainError();
+    }
     return { status: "sent", provider: "resend", providerId: data.id };
   }
 }

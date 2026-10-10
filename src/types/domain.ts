@@ -160,6 +160,10 @@ export interface Snapshot {
   sheet_jobs: SheetJob[];
   invitation_deliveries?: {
     id: string;
+    request_id?: string;
+    bulk?: boolean;
+    attempts?: number;
+    last_attempt_at?: string | null;
     guest_id: string;
     invitation_id: string;
     recipient_email: string;

@@ -39,3 +39,47 @@ it("last means accepted sent_at, not reservation order; failed/pending not shown
     ),
   ).toBeUndefined();
 });
+
+it("pending and transport errors keep request IDs; definitive results permit a new operation", async () => {
+  const { retainedInvitationRequest } =
+    await import("../src/features/guests/invitationDelivery");
+  const requests = new Map<string, string>();
+  let ids = 0;
+  const used: string[] = [];
+  const make = () => `request-${++ids}`;
+  const send = async (request: string) => {
+    used.push(request);
+    return {
+      message: "unknown",
+      complete: false,
+      pending: 1,
+      sent: 1,
+      skipped: 1,
+      failed: 0,
+    };
+  };
+  await retainedInvitationRequest(requests, "bulk", make, send);
+  await retainedInvitationRequest(requests, "bulk", make, send);
+  expect(used).toEqual(["request-1", "request-1"]);
+  expect(requests.get("bulk")).toBe("request-1");
+  await expect(
+    retainedInvitationRequest(requests, "bulk", make, async () => {
+      throw Error("transport");
+    }),
+  ).rejects.toThrow();
+  expect(requests.get("bulk")).toBe("request-1");
+  await retainedInvitationRequest(requests, "bulk", make, async (request) => {
+    used.push(request);
+    return {
+      message: "done",
+      complete: true,
+      pending: 0,
+      sent: 2,
+      skipped: 1,
+      failed: 0,
+    };
+  });
+  expect(requests.has("bulk")).toBe(false);
+  await retainedInvitationRequest(requests, "bulk", make, send);
+  expect(used.at(-1)).toBe("request-2");
+});

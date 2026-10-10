@@ -5,6 +5,8 @@ create table invitation_deliveries (
  request_id uuid not null, status text not null default 'pending' check(status in ('pending','sent','skipped','failed')),
  recipient_email text not null, provider text, provider_id text, error text check(length(error)<=300),
  created_at timestamptz not null default now(), sent_at timestamptz,
+ attempts integer not null default 0 check(attempts>=0), locked_at timestamptz, last_attempt_at timestamptz,
+ first_attempt_at timestamptz, claim_token uuid, payload_hash text check(payload_hash ~ '^[a-f0-9]{64}$'),
  foreign key(event_id,invitation_id) references invitations(event_id,id) on delete cascade,
  foreign key(event_id,guest_id) references guests(event_id,id) on delete cascade,
  unique(event_id,request_id,guest_id,channel),
@@ -16,45 +18,100 @@ create policy admin_read on invitation_deliveries for select to authenticated us
 grant select on invitation_deliveries to authenticated;
 grant select,insert,update on invitation_deliveries to service_role;
 
--- Atomic reservation. Only its winner receives credentials, exclusively over service_role RPC.
--- A duplicate returns the recorded status even if the contact or access unit has since changed.
+-- Keep operation identity if a guest/delivery is later deleted; no contact or credentials.
+create table invitation_delivery_members(event_id uuid references events(id) on delete cascade,request_id uuid not null,guest_id uuid not null,delivery_id uuid references invitation_deliveries(id) on delete set null,primary key(event_id,request_id,guest_id));
+alter table invitation_delivery_members enable row level security;
+
+-- Atomic reservation; credentials are returned only by the service_role RPC.
+-- Terminal duplicates return their recorded status; pending retries must acquire a lease.
 create function prepare_invitation_delivery(p_event uuid,p_request uuid,p_guest uuid) returns jsonb
 language plpgsql security definer set search_path=public,extensions,pg_temp as $$
-declare g guests;i invitations; a invitation_access; d invitation_deliveries; email text;
+declare g guests;i invitations; a invitation_access; d invitation_deliveries; email text; duplicate boolean:=false;
 begin
  perform pg_advisory_xact_lock(hashtextextended('invitation-send:'||p_event||':'||p_request,0));
- select * into d from invitation_deliveries where event_id=p_event and request_id=p_request and guest_id=p_guest and channel='EMAIL';
- if found then return jsonb_build_object('id',d.id,'status',d.status,'error',d.error,'duplicate',true);end if;
- select * into g from guests where event_id=p_event and id=p_guest;
- if not found then raise exception 'invalid recipient';end if;
+ if exists(select 1 from invitation_delivery_members where event_id=p_event and request_id=p_request and guest_id=p_guest and delivery_id is null) then return jsonb_build_object('id',null,'status','pending','reason','payload_changed');end if;
+ select * into d from invitation_deliveries where event_id=p_event and request_id=p_request and (guest_id=p_guest or id=(select delivery_id from invitation_delivery_members where event_id=p_event and request_id=p_request and guest_id=p_guest)) and channel='EMAIL';
+ if not found then
+   select * into g from guests where event_id=p_event and id=p_guest;
+   if not found then raise exception 'invalid recipient';end if;
+   select * into i from invitations where event_id=p_event and id=g.invitation_id;
+   select lower(trim(c.email)) into email from guest_contacts c where c.event_id=p_event and c.guest_id=p_guest;
+   email=coalesce(email,'');
+   select * into d from invitation_deliveries where event_id=p_event and request_id=p_request and invitation_id=i.id and recipient_email=email and channel='EMAIL';
+   if not found then
+     select * into a from invitation_access where event_id=p_event and invitation_id=i.id;
+     insert into invitation_deliveries(event_id,invitation_id,guest_id,request_id,recipient_email,status,error)
+     values(p_event,i.id,g.id,p_request,email,
+     case when not i.active or i.archived_at is not null or i.code_hash is null or a.sharing_code is null or a.pin is null or email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then 'skipped' else 'pending' end,
+     case when email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then 'E-mail ausente ou inválido' when not i.active or i.archived_at is not null or i.code_hash is null or a.sharing_code is null or a.pin is null then 'Convite indisponível' end) returning * into d;
+   else duplicate=true;end if;
+ else duplicate=true;end if;
+ insert into invitation_delivery_members(event_id,request_id,guest_id,delivery_id) values(p_event,p_request,p_guest,d.id) on conflict do nothing;
+ if d.status<>'pending' then return jsonb_build_object('id',d.id,'status',d.status,'error',d.error,'duplicate',duplicate);end if;
+ -- Reconstruct using the reservation's original guest, including family dedup aliases.
+ select * into g from guests where event_id=p_event and id=d.guest_id;
  select * into i from invitations where event_id=p_event and id=g.invitation_id;
- select lower(trim(c.email)) into email from guest_contacts c where c.event_id=p_event and c.guest_id=p_guest;
- email=coalesce(email,'');
- select * into d from invitation_deliveries where event_id=p_event and request_id=p_request and invitation_id=i.id and recipient_email=email and channel='EMAIL';
- if found then return jsonb_build_object('id',d.id,'status',d.status,'error',d.error,'duplicate',true);end if;
  select * into a from invitation_access where event_id=p_event and invitation_id=i.id;
- insert into invitation_deliveries(event_id,invitation_id,guest_id,request_id,recipient_email,status,error)
- values(p_event,i.id,g.id,p_request,email,
- case when not i.active or i.archived_at is not null or i.code_hash is null or a.sharing_code is null or a.pin is null or email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then 'skipped' else 'pending' end,
- case when email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then 'E-mail ausente ou inválido' when not i.active or i.archived_at is not null or i.code_hash is null or a.sharing_code is null or a.pin is null then 'Convite indisponível' end)
- on conflict do nothing returning * into d;
- if not found then raise exception 'delivery reservation conflict';end if;
- return jsonb_build_object('id',d.id,'status',d.status,'error',d.error,'duplicate',false)
- ||case when d.status='pending' then jsonb_build_object('email',email,'name',g.name,'unit_name',i.name,'code',a.sharing_code,'password',a.pin) else '{}'::jsonb end;
+ select lower(trim(c.email)) into email from guest_contacts c where c.event_id=p_event and c.guest_id=g.id;
+ return jsonb_build_object('id',d.id,'status',d.status,'duplicate',duplicate,'email',coalesce(email,''),'name',g.name,'code',a.sharing_code,'password',a.pin,
+ 'attempted',d.attempts>0,'available',coalesce(i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null,false));
 end $$;
-create function finish_invitation_delivery(p_id uuid,p_status text,p_provider text,p_provider_id text,p_error text) returns void
+create function claim_invitation_delivery(p_id uuid,p_hash text) returns jsonb
+language plpgsql security definer set search_path=public,extensions,pg_temp as $$
+declare d invitation_deliveries; token uuid;
+begin
+ if p_hash is null or p_hash !~ '^[a-f0-9]{64}$' then raise exception 'invalid payload hash';end if;
+ select * into d from invitation_deliveries where id=p_id for update;
+ if not found then raise exception 'invalid delivery';end if;
+ if d.status<>'pending' then return jsonb_build_object('claimed',false,'status',d.status);end if;
+ if d.locked_at>clock_timestamp()-interval '2 minutes' then return jsonb_build_object('claimed',false,'status','pending','reason','processing');end if;
+ -- Use the FIRST attempt as the fixed 24h deadline; retries must not slide the window.
+ if d.first_attempt_at<=clock_timestamp()-interval '24 hours' then
+   update invitation_deliveries set error='Resultado não confirmado; janela segura expirada' where id=p_id;
+   return jsonb_build_object('claimed',false,'status','pending','reason','expired');
+ end if;
+ if d.payload_hash is not null and d.payload_hash<>p_hash then
+   update invitation_deliveries set error='Dados do convite alterados; resultado anterior não confirmado' where id=p_id;
+   return jsonb_build_object('claimed',false,'status','pending','reason','payload_changed');
+ end if;
+ token=gen_random_uuid();
+ update invitation_deliveries set attempts=attempts+1,locked_at=clock_timestamp(),last_attempt_at=clock_timestamp(),first_attempt_at=coalesce(first_attempt_at,clock_timestamp()),payload_hash=coalesce(payload_hash,p_hash),claim_token=token where id=p_id;
+ return jsonb_build_object('claimed',true,'status','pending','token',token);
+end $$;
+create function finish_invitation_delivery(p_id uuid,p_status text,p_provider text,p_provider_id text,p_error text,p_claim uuid) returns boolean
 language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 declare d invitation_deliveries;
 begin
- if p_status not in ('sent','skipped','failed') then raise exception 'invalid status';end if;
- update invitation_deliveries set status=p_status,provider=p_provider,provider_id=p_provider_id,error=left(p_error,300),sent_at=case when p_status='sent' then now() end
- where id=p_id and status='pending' returning * into d;
- if found and p_status='sent' then
- update invitations set sent_at=coalesce(sent_at,now()),sent_channel='EMAIL' where event_id=d.event_id and id=d.invitation_id;
- end if;
+ if p_status not in ('pending','sent','skipped','failed') then raise exception 'invalid status';end if;
+ update invitation_deliveries set status=p_status,provider=p_provider,provider_id=p_provider_id,error=left(p_error,300),sent_at=case when p_status='sent' then clock_timestamp() end,locked_at=null,claim_token=null
+ where id=p_id and status='pending' and claim_token=p_claim returning * into d;
+ if not found then return false;end if;
+ if p_status='sent' then update invitations set sent_at=coalesce(sent_at,clock_timestamp()),sent_channel='EMAIL' where event_id=d.event_id and id=d.invitation_id;end if;
+ return true;
 end $$;
-revoke all on function prepare_invitation_delivery(uuid,uuid,uuid),finish_invitation_delivery(uuid,text,text,text,text) from public,anon,authenticated;
-grant execute on function prepare_invitation_delivery(uuid,uuid,uuid),finish_invitation_delivery(uuid,text,text,text,text) to service_role;
+revoke all on function prepare_invitation_delivery(uuid,uuid,uuid),claim_invitation_delivery(uuid,text),finish_invitation_delivery(uuid,text,text,text,text,uuid) from public,anon,authenticated;
+grant execute on function prepare_invitation_delivery(uuid,uuid,uuid),claim_invitation_delivery(uuid,text),finish_invitation_delivery(uuid,text,text,text,text,uuid) to service_role;
+
+-- Freeze the bulk membership and reserve every item atomically before the first POST.
+create table invitation_delivery_batches(event_id uuid references events(id) on delete cascade,request_id uuid,guest_ids uuid[] not null,primary key(event_id,request_id));
+alter table invitation_delivery_batches enable row level security;
+create function prepare_invitation_batch(p_event uuid,p_request uuid) returns jsonb
+language plpgsql security definer set search_path=public,extensions,pg_temp as $$
+declare ids uuid[]; guest uuid;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('invitation-send:'||p_event||':'||p_request,0));
+ select guest_ids into ids from invitation_delivery_batches where event_id=p_event and request_id=p_request;
+ if not found then
+   select array_agg(g.id order by g.id) into ids from guests g join invitations i on i.event_id=g.event_id and i.id=g.invitation_id join guest_contacts c on c.event_id=g.event_id and c.guest_id=g.id
+   where g.event_id=p_event and i.active and i.archived_at is null and trim(c.email) ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$';
+   ids=coalesce(ids,'{}'::uuid[]);
+   insert into invitation_delivery_batches values(p_event,p_request,ids);
+   foreach guest in array ids loop perform prepare_invitation_delivery(p_event,p_request,guest);end loop;
+ end if;
+ return to_jsonb(ids);
+end $$;
+revoke all on function prepare_invitation_batch(uuid,uuid) from public,anon,authenticated;
+grant execute on function prepare_invitation_batch(uuid,uuid) to service_role;
 
 -- Preserve the worker API; add a bounded, event-specific claim for authenticated ADMIN dispatch.
 create function claim_event_notifications(p_event uuid,p_limit integer default 50,p_message uuid default null) returns setof notification_jobs
@@ -71,7 +128,7 @@ revoke all on function app_snapshot_v5(uuid) from public,anon,authenticated,serv
 create function app_snapshot(p_event uuid) returns jsonb language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 begin
  return app_snapshot_v5(p_event)||jsonb_build_object('invitation_deliveries',(
- select coalesce(jsonb_agg(jsonb_build_object('id',id,'guest_id',guest_id,'invitation_id',invitation_id,'recipient_email',recipient_email,'status',status,'sent_at',sent_at,'created_at',created_at) order by created_at desc),'[]')
+ select coalesce(jsonb_agg(jsonb_build_object('id',id,'guest_id',guest_id,'invitation_id',invitation_id,'recipient_email',recipient_email,'status',status,'sent_at',sent_at,'created_at',created_at,'request_id',request_id,'bulk',exists(select 1 from invitation_delivery_batches b where b.event_id=invitation_deliveries.event_id and b.request_id=invitation_deliveries.request_id),'attempts',attempts,'last_attempt_at',last_attempt_at) order by created_at desc),'[]')
  from invitation_deliveries where event_id=p_event and event_role(p_event)='ADMIN'));
 end $$;
 revoke all on function app_snapshot(uuid) from public,anon;

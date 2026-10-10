@@ -1,6 +1,10 @@
 import { invitationHandler } from "./handler.ts";
 import { invitationTemplate } from "./template.ts";
-import { service } from "../_shared/http.ts";
+import {
+  ProviderDefinitiveError,
+  ProviderUncertainError,
+  service,
+} from "../_shared/http.ts";
 import {
   type Delivery,
   DisabledProvider,
@@ -37,7 +41,14 @@ function fixture(
         const key = `${args.p_request}:${args.p_guest}`;
         if (stored.has(key)) {
           return {
-            data: { ...stored.get(key), duplicate: true },
+            data: {
+              ...stored.get(key),
+              email: "guest@example.test",
+              name: "<Convidado>",
+              code: "CodeSeguroNaoEnumeravelCom32Chars",
+              password: "0047",
+              duplicate: true,
+            },
             error: null,
           };
         }
@@ -55,9 +66,39 @@ function fixture(
           error: null,
         };
       }
+      if (name === "claim_invitation_delivery") {
+        const row = stored.get(String(args.p_id))!;
+        if (row.status !== "pending" || row.locked) {
+          return {
+            data: { claimed: false, status: row.status, reason: "processing" },
+            error: null,
+          };
+        }
+        if (row.expired) {
+          return {
+            data: { claimed: false, status: "pending", reason: "expired" },
+            error: null,
+          };
+        }
+        if (row.hash && row.hash !== args.p_hash) {
+          return {
+            data: {
+              claimed: false,
+              status: "pending",
+              reason: "payload_changed",
+            },
+            error: null,
+          };
+        }
+        row.locked = true;
+        row.hash = args.p_hash;
+        return { data: { claimed: true, token: "lease" }, error: null };
+      }
       assert(name === "finish_invitation_delivery", "finish RPC");
       finishes.push(args);
       stored.set(String(args.p_id), {
+        ...stored.get(String(args.p_id)),
+        locked: false,
         id: args.p_id,
         status: args.p_status,
         error: args.p_error,
@@ -91,7 +132,7 @@ function fixture(
               "escaped template",
             );
             if (mode === "failed") {
-              throw Error("provider secret/password must never escape");
+              throw new ProviderDefinitiveError(401);
             }
             return {
               status: "sent" as const,
@@ -106,6 +147,7 @@ function fixture(
     finishes,
     sends: () => sends,
     reservations: () => reservations,
+    stored,
   };
 }
 Deno.test("successful invitation uses server credentials, no consent gate, records sent; same request never resends; new click can resend", async () => {
@@ -173,7 +215,7 @@ Deno.test("bulk targets complete authorized event list; database duplicates do n
   ];
   const db = {
     rpc: async (name: string, args: Record<string, unknown>) => {
-      if (name === "invitation_delivery_targets") {
+      if (name === "prepare_invitation_batch") {
         assert(args.p_event === event, "scoped target lookup");
         return { data: ids, error: null };
       }
@@ -182,6 +224,9 @@ Deno.test("bulk targets complete authorized event list; database duplicates do n
           data: null,
           error: null,
         };
+      }
+      if (name === "claim_invitation_delivery") {
+        return { data: { claimed: true, token: "lease" }, error: null };
       }
       assert(
         name === "prepare_invitation_delivery" && args.p_event === event,
@@ -259,7 +304,7 @@ Deno.test("real Resend abstraction mocked at HTTP boundary records accepted invi
       await f.handler(request());
       assert(
         calls === 1 &&
-          f.finishes[0].p_status === (accepted ? "sent" : "failed"),
+          f.finishes[0].p_status === (accepted ? "sent" : "pending"),
         "truthful provider outcome recorded",
       );
       assert(
@@ -280,5 +325,171 @@ Deno.test("simultaneous retries reserve once and never call email provider twice
   assert(
     responses.every((r) => r.status === 200) && f.sends() === 1,
     "concurrent duplicate prevented",
+  );
+});
+
+Deno.test("accepted email with lost response stays pending; retry uses the identical key/payload and confirms one logical email", async () => {
+  const previous = globalThis.fetch;
+  const accepted = new Map<string, string>();
+  let posts = 0;
+  Deno.env.set("EMAIL_FROM", "sender@example.test");
+  globalThis.fetch = async (_input, init) => {
+    posts++;
+    const key = (init?.headers as Record<string, string>)["Idempotency-Key"],
+      body = String(init?.body);
+    if (!accepted.has(key)) {
+      accepted.set(key, body);
+      throw new DOMException("untrusted password 0047", "TimeoutError");
+    }
+    assert(accepted.get(key) === body, "identical canonical POST on retry");
+    return Response.json({ id: "one-logical-email" });
+  };
+  try {
+    const f = fixture("resend");
+    const first = await (await f.handler(request())).json();
+    assert(
+      first.pending === 1 && first.complete === false &&
+        f.finishes[0].p_status === "pending",
+      "timeout is pending, not failed",
+    );
+    assert(!JSON.stringify(first).includes("0047"), "sanitized response");
+    const second = await (await f.handler(request())).json();
+    assert(
+      second.sent === 1 && second.complete === true &&
+        f.finishes[1].p_provider_id === "one-logical-email",
+      "confirmed retry",
+    );
+    assert(
+      accepted.size === 1 && posts === 2 && f.stored.size === 1,
+      "one reservation and logical email",
+    );
+    await f.handler(request());
+    assert(posts === 2, "definitive sent is never reposted");
+  } finally {
+    globalThis.fetch = previous;
+    Deno.env.delete("EMAIL_FROM");
+  }
+});
+Deno.test("pending invitation refuses changed payload or expired window without a provider POST", async () => {
+  const previous = globalThis.fetch;
+  let posts = 0;
+  globalThis.fetch = async () => {
+    posts++;
+    throw new TypeError("network");
+  };
+  try {
+    for (const changed of [true, false]) {
+      const f = fixture("resend");
+      await f.handler(request());
+      const row = [...f.stored.values()][0];
+      if (changed) row.hash = "changed-hash";
+      else row.expired = true;
+      const before = posts;
+      const retry = await (await f.handler(request())).json();
+      assert(
+        posts === before && retry.pending === 1 && retry.complete === false,
+        "unsafe retry does not POST",
+      );
+      assert(
+        retry.results[0].reason === (changed ? "payload_changed" : "expired"),
+        "safe reason",
+      );
+      assert(f.finishes.length === 1, "no finalization when blocked");
+    }
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
+
+Deno.test("mixed bulk retries only pending reservations, with original keys; family aliases never immediately retry uncertainty", async () => {
+  const ids = [
+    guest,
+    "dddddddd-0000-4000-8000-000000000002",
+    "dddddddd-0000-4000-8000-000000000003",
+    "dddddddd-0000-4000-8000-000000000004",
+  ];
+  const rows = new Map<
+    string,
+    { status: string; locked: boolean; hash?: string }
+  >();
+  const posts: string[] = [];
+  let pendingAttempts = 0;
+  const db = {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === "prepare_invitation_batch") {
+        return { data: ids, error: null };
+      }
+      if (name === "prepare_invitation_delivery") {
+        const id = args.p_guest === ids[3] ? ids[1] : String(args.p_guest);
+        if (!rows.has(id)) {
+          rows.set(id, {
+            status: id === ids[2] ? "skipped" : "pending",
+            locked: false,
+          });
+        }
+        return {
+          data: {
+            id,
+            ...rows.get(id),
+            email: "guest@example.test",
+            name: "Guest",
+            code: "code",
+            password: "0047",
+          },
+          error: null,
+        };
+      }
+      const row = rows.get(String(args.p_id))!;
+      if (name === "claim_invitation_delivery") {
+        if (row.locked || row.status !== "pending") {
+          return {
+            data: { claimed: false, status: row.status, reason: "processing" },
+            error: null,
+          };
+        }
+        assert(!row.hash || row.hash === args.p_hash, "same bulk payload");
+        row.hash = String(args.p_hash);
+        row.locked = true;
+        return { data: { claimed: true, token: "lease" }, error: null };
+      }
+      assert(name === "finish_invitation_delivery", "finish");
+      row.status = String(args.p_status);
+      row.locked = false;
+      return { data: true, error: null };
+    },
+  } as unknown as ReturnType<typeof service>;
+  const handler = invitationHandler({
+    service: () => db,
+    eventAdmin: async () => {},
+    base: () => "https://example.test",
+    provider: () => ({
+      send: async (d) => {
+        posts.push(d.key);
+        if (d.key === ids[1] && pendingAttempts++ === 0) {
+          throw new ProviderUncertainError();
+        }
+        return { status: "sent", provider: "resend", providerId: d.key };
+      },
+    }),
+  });
+  const bulk = () => request({ guest_id: undefined });
+  const first = await (await handler(bulk())).json();
+  assert(
+    first.sent === 1 && first.pending === 1 && first.skipped === 1 &&
+      first.complete === false,
+    "unique reservation counts and mixed pending batch",
+  );
+  assert(
+    posts.join(",") === ids.slice(0, 2).join(","),
+    "alias does not retry pending in same invocation",
+  );
+  const retry = await (await handler(bulk())).json();
+  assert(
+    retry.sent === 2 && retry.pending === 0 && retry.complete === true,
+    "batch completed",
+  );
+  assert(
+    posts.join(",") === [ids[0], ids[1], ids[1]].join(","),
+    "only original pending reservation reposted",
   );
 });

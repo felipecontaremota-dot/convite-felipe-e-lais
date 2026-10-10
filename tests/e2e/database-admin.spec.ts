@@ -379,14 +379,12 @@ test("real RPC: local edit refreshes saved card and official Maps iframe immedia
   expect(url.searchParams.get("q")).toBe(
     "Espaço da celebração, Rua São João, 12",
   );
-  await page
-    .context()
-    .route("https://maps.test/**", (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: "<p>Fixture destination</p>",
-      }),
-    );
+  await page.context().route("https://maps.test/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<p>Fixture destination</p>",
+    }),
+  );
   const popup = page.waitForEvent("popup");
   await page
     .getByRole("button", { name: "Abrir localização", exact: true })
@@ -485,5 +483,105 @@ test("real conflict stays in confirmation; pending deletion blocks Escape and ca
       name: "Abrir ficha de Pessoa concorrência",
       exact: true,
     }),
+  ).toHaveCount(0);
+});
+
+test("uncertain invitation keeps request ID; explicit resend requires confirmation", async ({
+  page,
+}) => {
+  const guest = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: {
+      name: "Uncertain delivery guest",
+      email: "uncertain@example.test",
+    },
+  });
+  await backend(page);
+  const requests: string[] = [];
+  await page.route(
+    "http://127.0.0.1:54321/functions/v1/send-invitations",
+    async (route) => {
+      const args = route.request().postDataJSON();
+      requests.push(args.request_id);
+      const pending = requests.length < 4;
+      await route.fulfill({
+        json: {
+          complete: !pending,
+          pending: pending ? 1 : 0,
+          sent: pending ? 0 : 1,
+          failed: 0,
+          skipped: 0,
+          results: [
+            {
+              guest_id: guest.id,
+              status: pending ? "pending" : "sent",
+              reason: pending
+                ? requests.length === 3
+                  ? "expired"
+                  : "uncertain"
+                : undefined,
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Enviar convite para Uncertain delivery guest",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByText("Não foi possível confirmar o resultado do envio. O sistema manterá esta operação para verificação sem reenviar um convite duplicado.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Enviar todos os convites", exact: true }).click();
+  await page.getByRole("button", { name: "Enviar", exact: true }).click();
+  await expect(page.getByText("Há convites individuais com resultado não confirmado. Verifique essas operações antes de iniciar um envio em massa.", { exact: true })).toBeVisible();
+  expect(requests).toHaveLength(1);
+  await page
+    .getByRole("button", {
+      name: "Enviar convite para Uncertain delivery guest",
+      exact: true,
+    })
+    .click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests[1]).toBe(requests[0]);
+  await page
+    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .click();
+  await expect(page.getByText("O resultado deste envio não pôde ser confirmado. Verifique o histórico antes de iniciar um novo envio.", { exact: true })).toBeVisible();
+  expect(requests[2]).toBe(requests[0]);
+  await page
+    .getByRole("button", {
+      name: "Iniciar novo envio após verificação",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(
+      "O resultado do envio anterior não pôde ser confirmado. Um novo envio pode fazer o convidado receber o convite novamente. Deseja continuar?",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  expect(requests).toHaveLength(3);
+  await page
+    .getByRole("button", {
+      name: "Iniciar novo envio após verificação",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Reenviar mesmo assim", exact: true })
+    .click();
+  await expect.poll(() => requests.length).toBe(4);
+  expect(requests[3]).not.toBe(requests[0]);
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
   ).toHaveCount(0);
 });
