@@ -143,6 +143,7 @@ function fixture(
         },
   });
   return {
+    db,
     handler,
     finishes,
     sends: () => sends,
@@ -492,4 +493,42 @@ Deno.test("mixed bulk retries only pending reservations, with original keys; fam
     posts.join(",") === [ids[0], ids[1], ids[1]].join(","),
     "only original pending reservation reposted",
   );
+});
+
+Deno.test("explicit resend acknowledges and reserves atomically before POST; failed reservation never sends", async () => {
+  for (const failure of [true, false]) {
+    const f = fixture();
+    const original = f.db.rpc.bind(f.db);
+    let acknowledged = false;
+    f.db.rpc = ((name: string, args: Record<string, unknown>) => {
+      if (name === "prepare_invitation_resend") {
+        assert(f.sends() === 0, "acknowledgment precedes provider call");
+        assert(
+          args.p_event === event &&
+            args.p_previous === "eeeeeeee-1000-4000-8000-000000000001" &&
+            args.p_guest === guest,
+          "scoped explicit override",
+        );
+        acknowledged = true;
+        return Promise.resolve({
+          data: null,
+          error: failure ? { message: "unavailable" } : null,
+        });
+      }
+      return original(name, args);
+    }) as typeof f.db.rpc;
+    const response = await f.handler(
+      request({
+        supersedes_request_id: "eeeeeeee-1000-4000-8000-000000000001",
+      }),
+    );
+    assert(
+      acknowledged && response.status === (failure ? 503 : 200),
+      "durable override checked",
+    );
+    assert(
+      f.sends() === (failure ? 0 : 1),
+      "no POST without replacement reservation",
+    );
+  }
 });

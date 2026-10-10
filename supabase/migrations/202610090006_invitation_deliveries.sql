@@ -6,7 +6,7 @@ create table invitation_deliveries (
  recipient_email text not null, provider text, provider_id text, error text check(length(error)<=300),
  created_at timestamptz not null default now(), sent_at timestamptz,
  attempts integer not null default 0 check(attempts>=0), locked_at timestamptz, last_attempt_at timestamptz,
- first_attempt_at timestamptz, claim_token uuid, payload_hash text check(payload_hash ~ '^[a-f0-9]{64}$'),
+ first_attempt_at timestamptz, claim_token uuid, superseded_by uuid, payload_hash text check(payload_hash ~ '^[a-f0-9]{64}$'),
  foreign key(event_id,invitation_id) references invitations(event_id,id) on delete cascade,
  foreign key(event_id,guest_id) references guests(event_id,id) on delete cascade,
  unique(event_id,request_id,guest_id,channel),
@@ -53,8 +53,8 @@ begin
  select * into i from invitations where event_id=p_event and id=g.invitation_id;
  select * into a from invitation_access where event_id=p_event and invitation_id=i.id;
  select lower(trim(c.email)) into email from guest_contacts c where c.event_id=p_event and c.guest_id=g.id;
- return jsonb_build_object('id',d.id,'status',d.status,'duplicate',duplicate,'email',coalesce(email,''),'name',g.name,'code',a.sharing_code,'password',a.pin,
- 'attempted',d.attempts>0,'available',coalesce(i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null,false));
+ return jsonb_build_object('id',d.id,'status',d.status,'duplicate',duplicate,'email',d.recipient_email,'name',g.name,'code',a.sharing_code,'password',a.pin,
+ 'attempted',d.attempts>0,'available',coalesce(i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null and (d.attempts=0 or email=d.recipient_email),false));
 end $$;
 create function claim_invitation_delivery(p_id uuid,p_hash text) returns jsonb
 language plpgsql security definer set search_path=public,extensions,pg_temp as $$
@@ -64,6 +64,7 @@ begin
  select * into d from invitation_deliveries where id=p_id for update;
  if not found then raise exception 'invalid delivery';end if;
  if d.status<>'pending' then return jsonb_build_object('claimed',false,'status',d.status);end if;
+ if d.superseded_by is not null then return jsonb_build_object('claimed',false,'status','pending','reason','superseded');end if;
  if d.locked_at>clock_timestamp()-interval '2 minutes' then return jsonb_build_object('claimed',false,'status','pending','reason','processing');end if;
  -- Use the FIRST attempt as the fixed 24h deadline; retries must not slide the window.
  if d.first_attempt_at<=clock_timestamp()-interval '24 hours' then
@@ -113,6 +114,25 @@ end $$;
 revoke all on function prepare_invitation_batch(uuid,uuid) from public,anon,authenticated;
 grant execute on function prepare_invitation_batch(uuid,uuid) to service_role;
 
+-- An explicit override reserves its replacement and acknowledges the old request atomically.
+create function prepare_invitation_resend(p_event uuid,p_previous uuid,p_request uuid,p_guest uuid default null) returns void
+language plpgsql security definer set search_path=public,extensions,pg_temp as $$
+begin
+ if p_previous=p_request then raise exception 'invalid resend';end if;
+ perform pg_advisory_xact_lock(hashtextextended('invitation-send:'||p_event||':'||p_previous,0));
+ if exists(select 1 from invitation_deliveries where event_id=p_event and request_id=p_previous and superseded_by is not null and superseded_by<>p_request) then raise exception 'operation already superseded';end if;
+ if exists(select 1 from invitation_delivery_batches where event_id=p_event and request_id=p_previous) then
+   if p_guest is not null then raise exception 'bulk resend requires whole operation';end if;
+   perform prepare_invitation_batch(p_event,p_request);
+ else
+   if p_guest is null or not exists(select 1 from invitation_delivery_members where event_id=p_event and request_id=p_previous and guest_id=p_guest) then raise exception 'invalid previous operation';end if;
+   perform prepare_invitation_delivery(p_event,p_request,p_guest);
+ end if;
+ update invitation_deliveries set superseded_by=p_request where event_id=p_event and request_id=p_previous and status='pending';
+end $$;
+revoke all on function prepare_invitation_resend(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function prepare_invitation_resend(uuid,uuid,uuid,uuid) to service_role;
+
 -- Preserve the worker API; add a bounded, event-specific claim for authenticated ADMIN dispatch.
 create function claim_event_notifications(p_event uuid,p_limit integer default 50,p_message uuid default null) returns setof notification_jobs
 language sql security definer set search_path=public,extensions,pg_temp as $$
@@ -128,7 +148,7 @@ revoke all on function app_snapshot_v5(uuid) from public,anon,authenticated,serv
 create function app_snapshot(p_event uuid) returns jsonb language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 begin
  return app_snapshot_v5(p_event)||jsonb_build_object('invitation_deliveries',(
- select coalesce(jsonb_agg(jsonb_build_object('id',id,'guest_id',guest_id,'invitation_id',invitation_id,'recipient_email',recipient_email,'status',status,'sent_at',sent_at,'created_at',created_at,'request_id',request_id,'bulk',exists(select 1 from invitation_delivery_batches b where b.event_id=invitation_deliveries.event_id and b.request_id=invitation_deliveries.request_id),'attempts',attempts,'last_attempt_at',last_attempt_at) order by created_at desc),'[]')
+ select coalesce(jsonb_agg(jsonb_build_object('id',id,'guest_id',guest_id,'invitation_id',invitation_id,'recipient_email',recipient_email,'status',status,'sent_at',sent_at,'created_at',created_at,'request_id',request_id,'bulk',exists(select 1 from invitation_delivery_batches b where b.event_id=invitation_deliveries.event_id and b.request_id=invitation_deliveries.request_id),'attempts',attempts,'last_attempt_at',last_attempt_at,'superseded_by',superseded_by) order by created_at desc),'[]')
  from invitation_deliveries where event_id=p_event and event_role(p_event)='ADMIN'));
 end $$;
 revoke all on function app_snapshot(uuid) from public,anon;

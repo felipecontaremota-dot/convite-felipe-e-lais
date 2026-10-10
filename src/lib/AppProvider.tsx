@@ -53,6 +53,7 @@ interface ContextValue {
   sendInvitations: (
     request: string,
     guest?: string,
+    supersedes?: string,
   ) => Promise<InvitationSendResult>;
 }
 const Context = createContext<ContextValue | null>(null);
@@ -274,7 +275,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await queue.discardFailed(id);
       setPending(await queue.list());
     },
-    sendInvitations: async (request, guest) => {
+    sendInvitations: async (request, guest, supersedes) => {
       if ((query.data || cached)?.role !== "ADMIN")
         throw new AppError("Acesso restrito.");
       if (!online) throw new AppError("O envio de convites exige conexão.");
@@ -287,7 +288,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           skipped: 1,
           failed: 0,
         };
-      const result = await api.sendInvitations(request, guest);
+      const result = await api.sendInvitations(request, guest, supersedes);
       await query.refetch();
       return result;
     },

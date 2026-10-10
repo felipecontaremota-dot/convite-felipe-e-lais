@@ -186,6 +186,7 @@ export async function dispatchMessage(channels: string[], message: string) {
 export async function sendInvitations(
   request: string,
   guest?: string,
+  supersedes?: string,
 ): Promise<InvitationSendResult> {
   if (!supabase)
     throw new AppError("O serviço de envio de convites está indisponível.");
@@ -194,6 +195,7 @@ export async function sendInvitations(
       event_id: eventId,
       request_id: request,
       ...(guest ? { guest_id: guest } : {}),
+      ...(supersedes ? { supersedes_request_id: supersedes } : {}),
     },
   });
   if (error)

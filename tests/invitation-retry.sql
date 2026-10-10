@@ -44,6 +44,17 @@ select prepare_invitation_batch(:'event','bcbcbcbc-1000-4000-8000-000000000003')
 update guest_contacts set email='' where guest_id=:'gid';
 select pg_temp.assert_invite(prepare_invitation_batch(:'event','bcbcbcbc-1000-4000-8000-000000000003')=:'batch'::jsonb,'bulk membership is frozen even if contacts change');
 select pg_temp.assert_invite(not has_function_privilege('authenticated','claim_invitation_delivery(uuid,text)','execute'),'lease RPC is server only');
+select prepare_invitation_delivery(:'event','bcbcbcbc-1000-4000-8000-000000000003',:'gid') as frozen \gset
+select pg_temp.assert_invite((:'frozen'::jsonb)->>'email'='lease@example.test' and (:'frozen'::jsonb)->>'available'='true','unattempted reservation sends only to its frozen address despite contact edit');
+select prepare_invitation_delivery(:'event','bcbcbcbc-1000-4000-8000-000000000002',:'gid') as changed_contact \gset
+select pg_temp.assert_invite((:'changed_contact'::jsonb)->>'email'='lease@example.test' and (:'changed_contact'::jsonb)->>'available'='false','contact changed after uncertain attempt blocks retry without sending to a different address');
+update guest_contacts set email='lease@example.test' where guest_id=:'gid';
+select prepare_invitation_resend(:'event','bcbcbcbc-1000-4000-8000-000000000002','bcbcbcbc-1000-4000-8000-000000000004',:'gid');
+select prepare_invitation_resend(:'event','bcbcbcbc-1000-4000-8000-000000000002','bcbcbcbc-1000-4000-8000-000000000004',:'gid');
+select pg_temp.assert_invite((select superseded_by='bcbcbcbc-1000-4000-8000-000000000004'::uuid and status='pending' and sent_at is null from invitation_deliveries where id=:'oldid'),'explicit override durably acknowledges uncertainty without inventing an outcome');
+select pg_temp.assert_invite(claim_invitation_delivery(:'oldid',repeat('a',64))->>'reason'='superseded','superseded request cannot send again in another browser');
+select pg_temp.assert_invite((select count(*)=1 from invitation_deliveries where event_id=:'event' and request_id='bcbcbcbc-1000-4000-8000-000000000004'),'replacement reserved atomically once and survives lost response/reload');
+select pg_temp.assert_invite(not has_function_privilege('authenticated','prepare_invitation_resend(uuid,uuid,uuid,uuid)','execute'),'override reservation RPC is server only');
 reset role;
 delete from guests where event_id=:'event' and id=:'gid';
 set local role service_role;

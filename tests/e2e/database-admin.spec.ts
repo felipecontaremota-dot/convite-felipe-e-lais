@@ -538,10 +538,22 @@ test("uncertain invitation keeps request ID; explicit resend requires confirmati
       exact: true,
     })
     .click();
-  await expect(page.getByText("Não foi possível confirmar o resultado do envio. O sistema manterá esta operação para verificação sem reenviar um convite duplicado.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Enviar todos os convites", exact: true }).click();
+  await expect(
+    page.getByText(
+      "Não foi possível confirmar o resultado do envio. O sistema manterá esta operação para verificação sem reenviar um convite duplicado.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Enviar todos os convites", exact: true })
+    .click();
   await page.getByRole("button", { name: "Enviar", exact: true }).click();
-  await expect(page.getByText("Há convites individuais com resultado não confirmado. Verifique essas operações antes de iniciar um envio em massa.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "Há convites individuais com resultado não confirmado. Verifique essas operações antes de iniciar um envio em massa.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   expect(requests).toHaveLength(1);
   await page
     .getByRole("button", {
@@ -554,7 +566,12 @@ test("uncertain invitation keeps request ID; explicit resend requires confirmati
   await page
     .getByRole("button", { name: "Tentar novamente", exact: true })
     .click();
-  await expect(page.getByText("O resultado deste envio não pôde ser confirmado. Verifique o histórico antes de iniciar um novo envio.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "O resultado deste envio não pôde ser confirmado. Verifique o histórico antes de iniciar um novo envio.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   expect(requests[2]).toBe(requests[0]);
   await page
     .getByRole("button", {
@@ -584,4 +601,139 @@ test("uncertain invitation keeps request ID; explicit resend requires confirmati
   await expect(
     page.getByRole("button", { name: "Tentar novamente", exact: true }),
   ).toHaveCount(0);
+});
+
+test("reload restores one bulk operation; explicit override remains acknowledged after another reload", async ({
+  page,
+}) => {
+  const oldRequest = "dededede-1000-4000-8000-000000000001";
+  const guest = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: {
+      name: "Bulk restore guest",
+      email: "bulk-restore@example.test",
+    },
+  });
+  db.sql(`select prepare_invitation_batch('${event}','${oldRequest}');`);
+  await backend(page);
+  const calls: {
+    request_id: string;
+    guest_id?: string;
+    supersedes_request_id?: string;
+  }[] = [];
+  await page.route(
+    "http://127.0.0.1:54321/functions/v1/send-invitations",
+    async (route) => {
+      const args = route.request().postDataJSON();
+      calls.push(args);
+      if (args.supersedes_request_id) {
+        db.sql(
+          `select prepare_invitation_resend('${event}','${args.supersedes_request_id}','${args.request_id}',null);`,
+        );
+      }
+      const pending = calls.length < 3;
+      if (!pending)
+        db.sql(
+          `update invitation_deliveries set status='sent',sent_at=now() where event_id='${event}' and request_id='${args.request_id}';`,
+        );
+      await route.fulfill({
+        json: {
+          pending: pending ? 1 : 0,
+          sent: pending ? 0 : 1,
+          failed: 0,
+          skipped: 0,
+          results: [
+            {
+              guest_id: guest.id,
+              status: pending ? "pending" : "sent",
+              reason: pending ? "uncertain" : undefined,
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText("Envio em massa: resultado não confirmado.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Enviar convite para Bulk restore guest",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(
+      "Há um envio em massa com resultado não confirmado. Use Tentar novamente nessa operação antes de iniciar um envio individual.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(calls).toHaveLength(0);
+  await page
+    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toEqual(expect.objectContaining({ request_id: oldRequest }));
+  expect(calls[0].guest_id).toBeUndefined();
+  await page
+    .getByRole("button", {
+      name: "Iniciar novo envio após verificação",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Reenviar mesmo assim", exact: true })
+    .click();
+  await expect.poll(() => calls.length).toBe(2);
+  const replacement = calls[1].request_id;
+  expect(replacement).not.toBe(oldRequest);
+  expect(calls[1].supersedes_request_id).toBe(oldRequest);
+  expect(calls[1].guest_id).toBeUndefined();
+  await expect
+    .poll(() =>
+      db
+        .sql(
+          `select bool_and(superseded_by='${replacement}'::uuid) from invitation_deliveries where request_id='${oldRequest}';`,
+        )
+        .trim(),
+    )
+    .toBe("t");
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .click();
+  await expect.poll(() => calls.length).toBe(3);
+  expect(calls[2].request_id).toBe(replacement);
+  expect(calls[2].guest_id).toBeUndefined();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", {
+      name: "Enviar convite para Bulk restore guest",
+      exact: true,
+    })
+    .click();
+  await expect.poll(() => calls.length).toBe(4);
+  expect(calls[3].request_id).not.toBe(oldRequest);
+  expect(calls[3].request_id).not.toBe(replacement);
 });

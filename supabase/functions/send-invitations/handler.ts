@@ -36,8 +36,12 @@ export function invitationHandler(
     if (
       !validUuid(body?.event_id) || !validUuid(body?.request_id) ||
       (body.guest_id !== undefined && !validUuid(body.guest_id)) ||
+      (body.supersedes_request_id !== undefined &&
+        (!validUuid(body.supersedes_request_id) ||
+          body.supersedes_request_id === body.request_id)) ||
       Object.keys(body).some((key) =>
-        !["event_id", "request_id", "guest_id"].includes(key)
+        !["event_id", "request_id", "guest_id", "supersedes_request_id"]
+          .includes(key)
       )
     ) return json({ error: "invalid request" }, 400);
     try {
@@ -46,6 +50,15 @@ export function invitationHandler(
       return json({ error: "unauthorized" }, 403);
     }
     const db = deps.service();
+    if (body.supersedes_request_id) {
+      const { error } = await db.rpc("prepare_invitation_resend", {
+        p_event: body.event_id,
+        p_previous: body.supersedes_request_id,
+        p_request: body.request_id,
+        p_guest: body.guest_id || null,
+      });
+      if (error) return json({ error: "resend reservation failed" }, 503);
+    }
     let ids: string[];
     if (body.guest_id) ids = [body.guest_id];
     else {

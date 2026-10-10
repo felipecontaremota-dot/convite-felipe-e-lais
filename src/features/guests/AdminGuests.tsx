@@ -143,6 +143,7 @@ export function GuestsScreen() {
   const [sendAllOpen, setSendAllOpen] = useState(false);
   const requests = useRef(new Map<string, string>());
   const acknowledged = useRef(new Set<string>());
+  const overrides = useRef(new Map<string, string>());
   const [pendingKeys, setPendingKeys] = useState<string[]>([]);
   const [overrideKey, setOverrideKey] = useState<string | null>(null);
 
@@ -152,29 +153,34 @@ export function GuestsScreen() {
     const history = app.data?.invitation_deliveries || [];
     for (const [key, request] of requests.current) {
       const rows = history.filter((d) => d.request_id === request);
-      if (rows.length && rows.every((d) => d.status !== "pending"))
+      if (
+        rows.length &&
+        rows.every((d) => d.status !== "pending" || d.superseded_by)
+      )
         requests.current.delete(key);
     }
     for (const delivery of history) {
       if (
         delivery.status !== "pending" ||
+        delivery.superseded_by ||
         !delivery.request_id ||
         acknowledged.current.has(delivery.request_id)
       )
         continue;
-      const keys = (app.data?.guests || [])
-        .filter(
-          (g) =>
-            g.id === delivery.guest_id ||
-            (g.invitation_id === delivery.invitation_id &&
-              app.data?.contacts.some(
-                (c) =>
-                  c.guest_id === g.id &&
-                  c.email.trim().toLowerCase() === delivery.recipient_email,
-              )),
-        )
-        .map((g) => g.id);
-      if (delivery.bulk) keys.push("bulk");
+      const keys = delivery.bulk
+        ? ["bulk"]
+        : (app.data?.guests || [])
+            .filter(
+              (g) =>
+                g.id === delivery.guest_id ||
+                (g.invitation_id === delivery.invitation_id &&
+                  app.data?.contacts.some(
+                    (c) =>
+                      c.guest_id === g.id &&
+                      c.email.trim().toLowerCase() === delivery.recipient_email,
+                  )),
+            )
+            .map((g) => g.id);
       for (const key of keys)
         if (!requests.current.has(key))
           requests.current.set(key, delivery.request_id);
@@ -195,7 +201,8 @@ export function GuestsScreen() {
         requests.current,
         key,
         Crypto.randomUUID,
-        (request) => app.sendInvitations(request, guest),
+        (request) =>
+          app.sendInvitations(request, guest, overrides.current.get(request)),
       );
     } finally {
       setPendingKeys([...requests.current.keys()]);
@@ -338,7 +345,9 @@ export function GuestsScreen() {
             const key = overrideKey;
             const previous = requests.current.get(key);
             if (previous) acknowledged.current.add(previous);
-            requests.current.set(key, Crypto.randomUUID());
+            const replacement = Crypto.randomUUID();
+            if (previous) overrides.current.set(replacement, previous);
+            requests.current.set(key, replacement);
             setOverrideKey(null);
             await feedback.run(() => deliver(key === "bulk" ? undefined : key));
           }}

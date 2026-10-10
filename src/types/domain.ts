@@ -161,6 +161,7 @@ export interface Snapshot {
   invitation_deliveries?: {
     id: string;
     request_id?: string;
+    superseded_by?: string | null;
     bulk?: boolean;
     attempts?: number;
     last_attempt_at?: string | null;
