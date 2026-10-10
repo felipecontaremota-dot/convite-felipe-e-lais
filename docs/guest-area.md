@@ -16,6 +16,8 @@ A migration `202610100007_guest_invitations.sql` é incremental sobre 006. Não 
 
 `checkins` mantém pessoa, horário, operador e método QR/MANUAL, independentemente do RSVP. Uma pessoa com NO/MAYBE/PENDING pode comparecer. A busca manual existente também inclui essas pessoas.
 
+O snapshot real de CEREMONIALIST inclui todos os convidados das unidades ativas do evento e seus estados de RSVP, sem contatos, observações ou restrições alimentares privadas. A regressão é testada com sessão real, sem depender da lista do modo demo.
+
 `resolve_checkin_ticket(event, token)` é exclusiva de ADMIN/CEREMONIALIST. Retorna tipo, título e integrantes elegíveis com `selected=true` e `checked_in`. QR individual resolve uma pessoa; familiar resolve os membros atuais da unidade ativa. O contrato prepara a futura seleção do cerimonialista; não foi construído um novo painel/scanner familiar nesta tarefa.
 
 `CHECKIN_FAMILY` recebe `token_hash` e `guest_ids`, valida o conjunto contra a família, bloqueia a credencial e convidados em ordem estável, registra somente selecionados e guarda o resultado no receipt na mesma transação. Unique por evento/pessoa e receipts evitam duplicações, inclusive entre conexões. `CHECKIN_CREATE` preserva o contrato individual e a idempotência, sem depender de RSVP.

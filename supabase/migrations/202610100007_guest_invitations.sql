@@ -165,6 +165,12 @@ create function app_snapshot(p_event uuid) returns jsonb language plpgsql securi
 declare s jsonb;role app_role:=event_role(p_event);
 begin
  s=app_snapshot_v6(p_event);
+ -- Attendance is independent of RSVP. Keep the ceremonial projection limited
+ -- to active access units and continue withholding contacts and RSVP notes.
+ if role='CEREMONIALIST' then
+ s=jsonb_set(s,'{guests}',(select coalesce(jsonb_agg(to_jsonb(g) order by g.name),'[]') from guests g join invitations i on i.id=g.invitation_id where g.event_id=p_event and i.event_id=p_event and i.active and i.archived_at is null));
+ s=jsonb_set(s,'{rsvps}',(select coalesce(jsonb_agg(jsonb_build_object('event_id',r.event_id,'guest_id',r.guest_id,'status',r.status,'dietary','','note','','responded_at',r.responded_at,'source',r.source)),'[]') from rsvps r join guests g on g.id=r.guest_id join invitations i on i.id=g.invitation_id where r.event_id=p_event and g.event_id=p_event and i.event_id=p_event and i.active and i.archived_at is null));
+ end if;
  s=jsonb_set(s,'{credentials}',(select coalesce(jsonb_agg(to_jsonb(q)),'[]') from qr_credentials q where event_id=p_event and revoked_at is null and (role in ('ADMIN','CEREMONIALIST') or role='GUEST' and manages_guest_ticket(p_event,q.guest_id))));
  return s||jsonb_build_object('current_guest_id',current_guest(p_event),'family_credentials',(select coalesce(jsonb_agg(to_jsonb(q)),'[]') from family_qr_credentials q join invitations i on i.id=q.invitation_id where q.event_id=p_event and q.revoked_at is null and (role in ('ADMIN','CEREMONIALIST') or role='GUEST' and i.id=my_invitation(p_event) and i.primary_guest_id=current_guest(p_event))),
  'checkin_notices',(select coalesce(jsonb_agg(to_jsonb(n) order by n.created_at desc),'[]') from guest_checkin_notices n where event_id=p_event and (role='ADMIN' or role='GUEST' and recipient_guest_id=current_guest(p_event) and not coalesce((select notifications_revoked from guest_contacts where guest_id=n.recipient_guest_id),false))));

@@ -54,6 +54,8 @@ select pg_temp.assert_guest((select count(*)=1 from jsonb_array_elements(app_sna
 select issue_family_ticket(:'event',:'familyid',true) as newfamily \gset
 select pg_temp.assert_guest((select count(*)=1 from jsonb_array_elements(app_snapshot(:'event')->'credentials') q where q->>'guest_id'=:'gm' and q->>'token_hash'=pg_temp.guest_hash(:'newmember'::jsonb->>'token')),'family regeneration does not revoke individual QR');
 set local request.jwt.claim.sub=:'staff';
+select pg_temp.assert_guest((select count(*)=4 from jsonb_array_elements(app_snapshot(:'event')->'guests') g where g->>'id' in (:'gh',:'gm',:'gl',:'gx')),'real ceremonial snapshot includes pending, maybe and declined family members');
+select pg_temp.assert_guest((select count(*)=2 from jsonb_array_elements(app_snapshot(:'event')->'rsvps') r where r->>'guest_id' in (:'gm',:'gl') and r->>'status' in ('DECLINED','MAYBE') and r->>'note'='' and r->>'dietary'=''),'ceremonial RSVP projection includes non-confirmed states without private notes');
 create function pg_temp.invalid_qr(e uuid,t text) returns boolean language plpgsql as $$begin perform resolve_checkin_ticket(e,t);return false;exception when others then return sqlerrm='invalid QR';end$$;
 select pg_temp.assert_guest(pg_temp.invalid_qr(:'event',:'memberticket'::jsonb->>'token'),'old individual token invalid immediately');
 select pg_temp.assert_guest(pg_temp.invalid_qr(:'event',:'familyticket'::jsonb->>'token'),'old family token invalid immediately');
