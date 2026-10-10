@@ -14,6 +14,8 @@ const paths = {
   delete: "M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7",
   copy: "M9 9h12v12H9zM15 9V3H3v12h6",
   add: "M8 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0M4 21v-3a7 7 0 0 1 14 0M20 4v6m-3-3h6",
+  send: "M3 5h18v14H3zM3 5l9 7 9-7",
+  remove: "M7 7l10 10M17 7L7 17",
   note: "M12 3v11m0 4v2",
 } as const;
 export function IconButton({

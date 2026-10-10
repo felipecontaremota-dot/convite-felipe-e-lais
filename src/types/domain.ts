@@ -158,6 +158,21 @@ export interface Snapshot {
   checkins: Checkin[];
   notification_jobs: DeliveryJob[];
   sheet_jobs: SheetJob[];
+  invitation_deliveries?: {
+    id: string;
+    request_id?: string;
+    superseded_by?: string | null;
+    guest_ids?: string[];
+    bulk?: boolean;
+    attempts?: number;
+    last_attempt_at?: string | null;
+    guest_id: string;
+    invitation_id: string;
+    recipient_email: string;
+    status: string;
+    sent_at: string | null;
+    created_at: string;
+  }[];
 }
 export type MutationType =
   | "RSVP_UPDATE"

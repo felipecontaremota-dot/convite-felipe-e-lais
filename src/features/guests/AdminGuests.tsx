@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Platform,
   Pressable,
@@ -26,7 +26,12 @@ import {
 } from "../../components/adminUi";
 import { AdminModal, SelectedChips } from "../../components/AdminModal";
 import { useApp } from "../../lib/AppProvider";
+import {
+  lastInvitationDelivery,
+  retainedInvitationRequest,
+} from "./invitationDelivery";
 import type { Guest } from "../../types/domain";
+import * as Crypto from "expo-crypto";
 import { copyText } from "../../utils/externalLinks";
 import {
   AccessControls,
@@ -135,8 +140,94 @@ function GuestForm({
   );
 }
 export function GuestsScreen() {
+  const [sendAllOpen, setSendAllOpen] = useState(false);
+  const requests = useRef(new Map<string, string>());
+  const acknowledged = useRef(new Set<string>());
+  const overrides = useRef(new Map<string, string>());
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
+  const [overrideKey, setOverrideKey] = useState<string | null>(null);
+
   const app = useApp(),
     feedback = useFeedback();
+  useEffect(() => {
+    const history = app.data?.invitation_deliveries || [];
+    for (const [key, request] of requests.current) {
+      const rows = history.filter((d) => d.request_id === request);
+      if (
+        rows.length &&
+        rows.every((d) => d.status !== "pending" || d.superseded_by)
+      )
+        requests.current.delete(key);
+    }
+    for (const delivery of history) {
+      if (
+        delivery.status !== "pending" ||
+        delivery.superseded_by ||
+        !delivery.request_id ||
+        acknowledged.current.has(delivery.request_id)
+      )
+        continue;
+      const keys = delivery.bulk
+        ? ["bulk"]
+        : (app.data?.guests || [])
+            .filter(
+              (g) =>
+                (delivery.guest_ids || [delivery.guest_id]).includes(g.id) ||
+                (g.invitation_id === delivery.invitation_id &&
+                  app.data?.contacts.some(
+                    (c) =>
+                      c.guest_id === g.id &&
+                      c.email.trim().toLowerCase() === delivery.recipient_email,
+                  )),
+            )
+            .map((g) => g.id);
+      for (const key of keys)
+        if (!requests.current.has(key))
+          requests.current.set(key, delivery.request_id);
+    }
+    setPendingKeys([...requests.current.keys()]);
+  }, [app.data]);
+  const deliver = async (guest?: string) => {
+    const key = guest || "bulk";
+    if (!requests.current.has(key)) {
+      if (guest && requests.current.has("bulk"))
+        return "Há um envio em massa com resultado não confirmado. Use Tentar novamente nessa operação antes de iniciar um envio individual.";
+      if (!guest && requests.current.size)
+        return "Há convites individuais com resultado não confirmado. Verifique essas operações antes de iniciar um envio em massa.";
+    }
+    let result;
+    try {
+      result = await retainedInvitationRequest(
+        requests.current,
+        key,
+        Crypto.randomUUID,
+        (request) =>
+          app.sendInvitations(request, guest, overrides.current.get(request)),
+      );
+    } finally {
+      setPendingKeys([...requests.current.keys()]);
+    }
+    return result.message;
+  };
+  const activePeople = (app.data?.guests || []).filter((g) =>
+    app.data?.invitations.some(
+      (i) => i.id === g.invitation_id && i.active && !i.archived_at,
+    ),
+  );
+  const sendable = activePeople.filter((g) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      app.data?.contacts.find((c) => c.guest_id === g.id)?.email.trim() || "",
+    ),
+  );
+  const uniqueRecipients = new Set(
+    sendable.map(
+      (g) =>
+        `${g.invitation_id}:${app.data?.contacts
+          .find((c) => c.guest_id === g.id)
+          ?.email.trim()
+          .toLowerCase()}`,
+    ),
+  ).size;
   const { guest: routeGuest, edit: routeEdit } = useLocalSearchParams<{
     guest?: string;
     edit?: string;
@@ -218,6 +309,82 @@ export function GuestsScreen() {
           closeDetail();
         }}
       />
+      <Button
+        secondary
+        title="Enviar todos os convites"
+        onPress={() => setSendAllOpen(true)}
+      />
+      {pendingKeys.map((key) => (
+        <Card key={`pending-${key}`}>
+          <Text style={styles.text}>
+            {key === "bulk"
+              ? "Envio em massa"
+              : `Convite de ${app.data?.guests.find((g) => g.id === key)?.name || "convidado"}`}
+            : resultado não confirmado.
+          </Text>
+          <Button
+            secondary
+            title="Tentar novamente"
+            onPress={() =>
+              feedback.run(() => deliver(key === "bulk" ? undefined : key))
+            }
+          />
+          <Button
+            secondary
+            title="Iniciar novo envio após verificação"
+            onPress={() => setOverrideKey(key)}
+          />
+        </Card>
+      ))}
+      {overrideKey ? (
+        <Confirmation
+          text="O resultado do envio anterior não pôde ser confirmado. Um novo envio pode fazer o convidado receber o convite novamente. Deseja continuar?"
+          confirmLabel="Reenviar mesmo assim"
+          onCancel={() => setOverrideKey(null)}
+          onConfirm={async () => {
+            const key = overrideKey;
+            const previous = requests.current.get(key);
+            if (previous) acknowledged.current.add(previous);
+            const replacement = Crypto.randomUUID();
+            if (previous) overrides.current.set(replacement, previous);
+            requests.current.set(key, replacement);
+            setOverrideKey(null);
+            await feedback.run(() => deliver(key === "bulk" ? undefined : key));
+          }}
+        />
+      ) : null}
+      {sendAllOpen ? (
+        <AdminModal
+          title="Enviar todos os convites"
+          onClose={() => setSendAllOpen(false)}
+        >
+          <Text style={styles.text}>
+            {activePeople.length} convidados ativos · {sendable.length} com
+            e-mail válido · {activePeople.length - sendable.length} sem e-mail
+            válido.
+          </Text>
+          <Text style={styles.text}>
+            {uniqueRecipients} convites serão enviados. E-mails iguais na mesma
+            unidade recebem somente um convite neste envio.
+          </Text>
+          <Button
+            title="Enviar"
+            onPress={() =>
+              feedback.run(async () => {
+                const result = await deliver();
+                setSendAllOpen(false);
+                return result;
+              })
+            }
+          />
+          <Button
+            secondary
+            title="Cancelar"
+            onPress={() => setSendAllOpen(false)}
+          />
+          {feedback.node}
+        </AdminModal>
+      ) : null}
       {notice ? (
         <Text role="status" style={styles.small}>
           {notice}
@@ -354,6 +521,7 @@ export function GuestsScreen() {
           </Text>
           <AccessControls
             key={invitation.id}
+            showUrl={false}
             invitation={invitation}
             phone={
               data?.contacts.find(
@@ -361,6 +529,20 @@ export function GuestsScreen() {
               )?.whatsapp
             }
           />
+          <Text style={styles.small}>
+            {(() => {
+              const last = lastInvitationDelivery(
+                data?.invitation_deliveries,
+                current.id,
+                invitation.id,
+                data?.contacts.find((c) => c.guest_id === current.id)?.email ||
+                  "",
+              );
+              return last?.sent_at
+                ? `Último convite enviado em ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(last.sent_at))}`
+                : "Convite ainda não enviado";
+            })()}
+          </Text>
           <Button
             title="Editar convidado"
             onPress={() => setForm(current.id)}
@@ -442,6 +624,22 @@ export function GuestsScreen() {
                     if (unit)
                       await copyText(await resolveAccessLink(unit, app.scope));
                     return "Link copiado.";
+                  })
+                }
+              />
+              <IconButton
+                icon="send"
+                label={`Enviar convite para ${g.name}`}
+                onPress={() =>
+                  feedback.run(async () => {
+                    if (
+                      !requests.current.has(g.id) &&
+                      !data?.contacts
+                        .find((c) => c.guest_id === g.id)
+                        ?.email.trim()
+                    )
+                      return "Este convidado não possui e-mail cadastrado.";
+                    return deliver(g.id);
                   })
                 }
               />

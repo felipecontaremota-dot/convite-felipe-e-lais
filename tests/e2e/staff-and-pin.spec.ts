@@ -122,7 +122,7 @@ async function backend(
           data = { name: "Família Teste", activated: state.bound };
         else {
           status = 429;
-          data = { error: "Código ou senha inválido." };
+          data = { code: "invalid_link" };
         }
       } else {
         state.attempts++;
@@ -137,7 +137,12 @@ async function backend(
           data = { linked: true };
         } else {
           status = 429;
-          data = { error: "Código ou senha inválido." };
+          data = {
+            code:
+              state.active && body.code === code
+                ? "invalid_password"
+                : "invalid_link",
+          };
         }
       }
     }
@@ -245,7 +250,7 @@ test("family identification never activates; PIN 0047 activates once, session re
   ).toBeVisible();
   expect(state.activations).toBe(1);
 });
-test("manual PIN errors are uniform; blocked link never reuses an old binding", async ({
+test("manual password errors are distinct from invalid/blocked links; old binding is not reused", async ({
   page,
 }) => {
   const state = await backend(page, null);
@@ -256,7 +261,7 @@ test("manual PIN errors are uniform; blocked link never reuses an old binding", 
     .getByRole("button", { name: "Abrir meu convite", exact: true })
     .click();
   await expect(
-    page.getByText("Código ou senha inválido.", { exact: true }),
+    page.getByText("Senha inválida.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
@@ -265,13 +270,17 @@ test("manual PIN errors are uniform; blocked link never reuses an old binding", 
   await expect(page).toHaveURL(/\/inicio$/);
   await page.goto("/c/OutroCodigoNaoEnumeravelCom32Chars");
   await expect(
-    page.getByText("Código ou senha inválido.", { exact: true }),
+    page.getByText("Este link de convite é inválido ou não está mais ativo.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(page.url()).toContain("/c/");
   state.active = false;
   await page.goto(`/c/${code}`);
   await expect(
-    page.getByText("Código ou senha inválido.", { exact: true }),
+    page.getByText("Este link de convite é inválido ou não está mais ativo.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(page.url()).toContain("/c/");
 });
@@ -295,7 +304,7 @@ test("revocation refresh removes cached family; new PIN is required for reactiva
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
   await expect(
-    page.getByText("Código ou senha inválido.", { exact: true }),
+    page.getByText("Senha inválida.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Senha de acesso", { exact: true }).fill("3478");
   await page

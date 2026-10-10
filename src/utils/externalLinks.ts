@@ -5,7 +5,10 @@ import { ValidationError } from "../lib/errors";
 export async function openExternal(url: string | null) {
   const safe = safeHttps(url);
   if (!safe) throw new ValidationError("Este link ainda não está disponível.");
-  await Linking.openURL(safe);
+  if (Platform.OS === "web") {
+    const opened = window.open(safe, "_blank", "noopener,noreferrer");
+    if (opened) opened.opener = null;
+  } else await Linking.openURL(safe);
 }
 export const copyText = (text: string) => Clipboard.setStringAsync(text);
 export async function shareText(text: string) {

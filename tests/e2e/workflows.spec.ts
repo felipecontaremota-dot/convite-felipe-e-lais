@@ -35,7 +35,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
   await expect(
-    page.getByText("Código ou senha inválido.", { exact: true }),
+    page.getByText("Senha inválida.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
@@ -263,7 +263,7 @@ test("uma sessão existente não autoriza um novo código inválido", async ({
   await page.goto("/c/CodigoInvalidoMesmoComSessaoExistente");
   await expect(
     page.getByText(
-      "O convite ainda não está disponível. Tente novamente mais tarde.",
+      "Não foi possível carregar o convite agora. Tente novamente.",
       { exact: true },
     ),
   ).toBeVisible();
@@ -311,6 +311,7 @@ test("cadastro familiar: senha sugerida/customizada, copiar e regenerar link", a
   await page
     .getByRole("button", { name: "Regenerar link", exact: true })
     .click();
+  await page.getByRole("button", { name: /^Membros \(0\)$/ }).click();
   await page
     .getByRole("button", { name: "Adicionar membro à família", exact: true })
     .click();

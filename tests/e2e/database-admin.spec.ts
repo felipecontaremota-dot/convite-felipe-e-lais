@@ -107,9 +107,10 @@ test("real RPC: remove member and delete family preserve guests; direct deletion
       exact: true,
     })
     .click();
+  await page.getByRole("button", { name: "Membros (2)", exact: true }).click();
   await page
     .getByRole("button", {
-      name: "Remover da família: Membro preservado",
+      name: "Remover Membro preservado da família",
       exact: true,
     })
     .click();
@@ -124,7 +125,7 @@ test("real RPC: remove member and delete family preserve guests; direct deletion
   await expect(confirm).toHaveCount(0);
   await expect(
     page.getByRole("button", {
-      name: "Remover da família: Membro preservado",
+      name: "Remover Membro preservado da família",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -378,12 +379,22 @@ test("real RPC: local edit refreshes saved card and official Maps iframe immedia
   expect(url.searchParams.get("q")).toBe(
     "Espaço da celebração, Rua São João, 12",
   );
+  await page.context().route("https://maps.test/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<p>Fixture destination</p>",
+    }),
+  );
+  const popup = page.waitForEvent("popup");
   await page
     .getByRole("button", { name: "Abrir localização", exact: true })
     .click();
+  const destination = await popup;
+  await expect(destination).toHaveURL("https://maps.test/local-salvo");
+  await destination.close();
   await expect(
     page.getByRole("button", { name: "Abrir link de GPS", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   expect(db.rpc(uid, "app_snapshot", { p_event: event }).event).toMatchObject({
     venue_name: "Espaço da celebração",
     address: "Rua São João, 12",
@@ -473,4 +484,429 @@ test("real conflict stays in confirmation; pending deletion blocks Escape and ca
       exact: true,
     }),
   ).toHaveCount(0);
+});
+
+test("uncertain invitation keeps request ID; explicit resend requires confirmation", async ({
+  page,
+}) => {
+  const guest = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: {
+      name: "Uncertain delivery guest",
+      email: "uncertain@example.test",
+    },
+  });
+  await backend(page);
+  const requests: string[] = [];
+  await page.route(
+    "http://127.0.0.1:54321/functions/v1/send-invitations",
+    async (route) => {
+      const args = route.request().postDataJSON();
+      requests.push(args.request_id);
+      const pending = requests.length < 4;
+      await route.fulfill({
+        json: {
+          complete: !pending,
+          pending: pending ? 1 : 0,
+          sent: pending ? 0 : 1,
+          failed: 0,
+          skipped: 0,
+          results: [
+            {
+              guest_id: guest.id,
+              status: pending ? "pending" : "sent",
+              reason: pending
+                ? requests.length === 3
+                  ? "expired"
+                  : "uncertain"
+                : undefined,
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Enviar convite para Uncertain delivery guest",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(
+      "Não foi possível confirmar o resultado do envio. O sistema manterá esta operação para verificação sem reenviar um convite duplicado.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Enviar todos os convites", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Enviar", exact: true }).click();
+  await expect(
+    page.getByText(
+      "Há convites individuais com resultado não confirmado. Verifique essas operações antes de iniciar um envio em massa.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(requests).toHaveLength(1);
+  await page
+    .getByRole("button", {
+      name: "Enviar convite para Uncertain delivery guest",
+      exact: true,
+    })
+    .click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests[1]).toBe(requests[0]);
+  await page
+    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "O resultado deste envio não pôde ser confirmado. Verifique o histórico antes de iniciar um novo envio.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(requests[2]).toBe(requests[0]);
+  await page
+    .getByRole("button", {
+      name: "Iniciar novo envio após verificação",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(
+      "O resultado do envio anterior não pôde ser confirmado. Um novo envio pode fazer o convidado receber o convite novamente. Deseja continuar?",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  expect(requests).toHaveLength(3);
+  await page
+    .getByRole("button", {
+      name: "Iniciar novo envio após verificação",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Reenviar mesmo assim", exact: true })
+    .click();
+  await expect.poll(() => requests.length).toBe(4);
+  expect(requests[3]).not.toBe(requests[0]);
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("reload preserves uncertain family after canonical deletion; bulk override stays acknowledged", async ({
+  page,
+}) => {
+  const oldRequest = "dededede-1000-4000-8000-000000000001";
+  const guest = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: {
+      name: "Bulk restore guest",
+      email: "bulk-restore@example.test",
+    },
+  });
+  const alias = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: {
+      name: "Bulk restore alias",
+      email: "bulk-restore@example.test",
+    },
+  });
+  const family = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "INVITATION_SAVE",
+    p_payload: { name: "Bulk retry family", pin: "1234" },
+  });
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "CODE_ROTATE",
+    p_payload: { id: family.id, version: 1 },
+  });
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "FAMILY_ADD_MEMBERS",
+    p_payload: {
+      target_id: family.id,
+      target_version: 2,
+      guests: [
+        { id: guest.id, version: 1, invitation_version: 1 },
+        { id: alias.id, version: 1, invitation_version: 1 },
+      ],
+    },
+  });
+  db.sql(`select prepare_invitation_batch('${event}','${oldRequest}');`);
+  const canonical = JSON.parse(
+    db.sql(
+      `select jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version) from invitation_deliveries d join guests g on g.id=d.guest_id join invitations i on i.id=g.invitation_id where d.request_id='${oldRequest}' and d.invitation_id='${family.id}';`,
+    ),
+  );
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_DELETE",
+    p_payload: { guests: [canonical] },
+  });
+  const survivorName =
+    canonical.id === guest.id ? "Bulk restore alias" : "Bulk restore guest";
+  expect(
+    db
+      .sql(
+        `select count(*) from invitation_deliveries where request_id='${oldRequest}' and invitation_id='${family.id}' and status='pending';`,
+      )
+      .trim(),
+  ).toBe("1");
+  await backend(page);
+  const calls: {
+    request_id: string;
+    guest_id?: string;
+    supersedes_request_id?: string;
+  }[] = [];
+  await page.route(
+    "http://127.0.0.1:54321/functions/v1/send-invitations",
+    async (route) => {
+      const args = route.request().postDataJSON();
+      calls.push(args);
+      if (args.supersedes_request_id) {
+        db.sql(
+          `select prepare_invitation_resend('${event}','${args.supersedes_request_id}','${args.request_id}',null);`,
+        );
+      }
+      const pending = calls.length < 3;
+      if (!pending)
+        db.sql(
+          `update invitation_deliveries set status='sent',sent_at=now() where event_id='${event}' and request_id='${args.request_id}';`,
+        );
+      await route.fulfill({
+        json: {
+          pending: pending ? 1 : 0,
+          sent: pending ? 0 : 1,
+          failed: 0,
+          skipped: 0,
+          results: [
+            {
+              guest_id: guest.id,
+              status: pending ? "pending" : "sent",
+              reason: pending ? "uncertain" : undefined,
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText("Envio em massa: resultado não confirmado.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: `Enviar convite para ${survivorName}`,
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(
+      "Há um envio em massa com resultado não confirmado. Use Tentar novamente nessa operação antes de iniciar um envio individual.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(calls).toHaveLength(0);
+  await page
+    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toEqual(expect.objectContaining({ request_id: oldRequest }));
+  expect(calls[0].guest_id).toBeUndefined();
+  await page
+    .getByRole("button", {
+      name: "Iniciar novo envio após verificação",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Reenviar mesmo assim", exact: true })
+    .click();
+  await expect.poll(() => calls.length).toBe(2);
+  const replacement = calls[1].request_id;
+  expect(replacement).not.toBe(oldRequest);
+  expect(calls[1].supersedes_request_id).toBe(oldRequest);
+  expect(calls[1].guest_id).toBeUndefined();
+  await expect
+    .poll(() =>
+      db
+        .sql(
+          `select bool_and(superseded_by='${replacement}'::uuid) from invitation_deliveries where request_id='${oldRequest}';`,
+        )
+        .trim(),
+    )
+    .toBe("t");
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .click();
+  await expect.poll(() => calls.length).toBe(3);
+  expect(calls[2].request_id).toBe(replacement);
+  expect(calls[2].guest_id).toBeUndefined();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", {
+      name: `Enviar convite para ${survivorName}`,
+      exact: true,
+    })
+    .click();
+  await expect.poll(() => calls.length).toBe(4);
+  expect(calls[3].request_id).not.toBe(oldRequest);
+  expect(calls[3].request_id).not.toBe(replacement);
+});
+
+test("surviving family alias confirms individual resend directly without retrying the deleted recipient", async ({
+  page,
+}) => {
+  const admin = (action: string, payload: Record<string, unknown>) =>
+    db.rpc(uid, "admin_action", {
+      p_event: event,
+      p_action: action,
+      p_payload: payload,
+    });
+  const a = admin("GUEST_CREATE", {
+    name: "Individual canonical",
+    email: "individual-alias@example.test",
+  });
+  const b = admin("GUEST_CREATE", {
+    name: "Individual surviving alias",
+    email: "individual-alias@example.test",
+  });
+  const family = admin("INVITATION_SAVE", {
+    name: "Individual alias family",
+    pin: "1234",
+  });
+  admin("CODE_ROTATE", { id: family.id, version: 1 });
+  admin("FAMILY_ADD_MEMBERS", {
+    target_id: family.id,
+    target_version: 2,
+    guests: [
+      { id: a.id, version: 1, invitation_version: 1 },
+      { id: b.id, version: 1, invitation_version: 1 },
+    ],
+  });
+  const previous = "dfdfdfdf-1000-4000-8000-000000000001";
+  const reservation = JSON.parse(
+    db.sql(
+      `select prepare_invitation_delivery('${event}','${previous}','${a.id}');`,
+    ),
+  );
+  const claim = JSON.parse(
+    db.sql(
+      `select claim_invitation_delivery('${reservation.id}',repeat('a',64),'${reservation.credential_hash}');`,
+    ),
+  );
+  db.sql(
+    `select finish_invitation_delivery('${reservation.id}','pending','resend',null,'uncertain','${claim.token}');`,
+  );
+  const expected = JSON.parse(
+    db.sql(
+      `select jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version) from guests g join invitations i on i.id=g.invitation_id where g.id='${a.id}';`,
+    ),
+  );
+  admin("GUEST_DELETE", { guests: [expected] });
+  expect(
+    db
+      .sql(
+        `select count(*) from invitation_delivery_members where request_id='${previous}' and guest_id='${b.id}';`,
+      )
+      .trim(),
+  ).toBe("0");
+  await backend(page);
+  const calls: {
+    request_id: string;
+    supersedes_request_id?: string;
+    guest_id: string;
+  }[] = [];
+  await page.route(
+    "http://127.0.0.1:54321/functions/v1/send-invitations",
+    async (route) => {
+      const args = route.request().postDataJSON();
+      calls.push(args);
+      db.sql(
+        `select prepare_invitation_resend('${event}','${args.supersedes_request_id}','${args.request_id}','${args.guest_id}');`,
+      );
+      db.sql(
+        `update invitation_deliveries set status='sent',sent_at=now() where request_id='${args.request_id}';`,
+      );
+      await route.fulfill({
+        json: {
+          pending: 0,
+          sent: 1,
+          failed: 0,
+          skipped: 0,
+          results: [{ guest_id: b.id, status: "sent" }],
+        },
+      });
+    },
+  );
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  await page.reload();
+  await expect(
+    page.getByText(
+      "Convite de Individual surviving alias: resultado não confirmado.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Iniciar novo envio após verificação",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Reenviar mesmo assim", exact: true })
+    .click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toEqual(
+    expect.objectContaining({
+      supersedes_request_id: previous,
+      guest_id: b.id,
+    }),
+  );
+  expect(calls[0].request_id).not.toBe(previous);
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Tentar novamente", exact: true }),
+  ).toHaveCount(0);
+  expect(calls).toHaveLength(1);
 });

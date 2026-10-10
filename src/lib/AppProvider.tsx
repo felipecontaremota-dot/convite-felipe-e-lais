@@ -1,9 +1,11 @@
+import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import React, {
   createContext,
   useContext,
   useEffect,
   useState,
   useCallback,
+  useRef,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import NetInfo from "@react-native-community/netinfo";
@@ -17,10 +19,11 @@ import type {
 } from "../types/domain";
 import { demoEnabled, supabase, eventId } from "./supabase";
 import * as api from "../repositories/api";
+import { dispatchCommittedMessage } from "../features/messages/recipients";
 import * as demo from "../repositories/demo";
-import { MutationQueue } from "../storage/queue";
+import { MutationQueue, type SyncResult } from "../storage/queue";
 import { storage, readCache, writeCache } from "../storage/driver";
-import { AppError } from "./errors";
+import { AppError, SyncError } from "./errors";
 import { getDeviceTicket } from "../repositories/tickets";
 interface ContextValue {
   data: Snapshot | null;
@@ -44,7 +47,14 @@ interface ContextValue {
     payload: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
   ticket: (guest: string, regenerate?: boolean) => Promise<Ticket>;
-  sync: () => Promise<void>;
+  sync: () => Promise<SyncResult>;
+  syncNow: () => Promise<string>;
+  discardFailed: (id: string) => Promise<void>;
+  sendInvitations: (
+    request: string,
+    guest?: string,
+    supersedes?: string,
+  ) => Promise<InvitationSendResult>;
 }
 const Context = createContext<ContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -65,6 +75,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [scope],
   );
   const client = useQueryClient();
+  const deliveryResults = useRef(new Map<string, string>());
   useEffect(() => {
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data }) => {
@@ -140,20 +151,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [scope, queue]);
   const sync = useCallback(async () => {
-    if (!online || (!user && !demoRole)) return;
-    const items = await queue.flush(async (item) => {
+    if (!online || (!user && !demoRole)) {
+      const items = await queue.list();
+      return {
+        initial: items.length,
+        synced: 0,
+        remaining: items.length,
+        firstFailure: items[0] || null,
+        message: "Sem conexão. As alterações permanecem neste dispositivo.",
+      };
+    }
+    const result = await queue.flushDetailed(async (item) => {
       if (demoRole) await demo.demoMutate(item, demoRole);
-      else await api.mutate(item);
+      else {
+        const result = (await api.mutate(item)) as { id?: string };
+        if (
+          item.type === "MESSAGE_SEND_TO_GUESTS" ||
+          (item.type === "MESSAGE_SEND" && Array.isArray(item.payload.channels))
+        ) {
+          const summary = await dispatchCommittedMessage(
+            result,
+            (item.payload.channels as string[]) || [],
+            api.dispatchMessage,
+          );
+          deliveryResults.current.set(item.mutationId, summary);
+          if (deliveryResults.current.size > 100)
+            deliveryResults.current.delete(
+              deliveryResults.current.keys().next().value!,
+            );
+        }
+      }
     });
-    setPending(items);
+    setPending(await queue.list());
     await client.invalidateQueries({ queryKey: ["snapshot", scope] });
+    return result;
   }, [online, user, demoRole, queue, client, scope]);
   useEffect(() => {
-    void Promise.resolve().then(sync);
+    void Promise.resolve()
+      .then(sync)
+      .catch(() => undefined);
   }, [sync]);
   useEffect(() => {
     const interval = setInterval(() => {
-      if (online && (user || demoRole)) void sync();
+      if (online && (user || demoRole)) void sync().catch(() => undefined);
     }, 30000);
     return () => clearInterval(interval);
   }, [online, user, demoRole, sync]);
@@ -223,6 +263,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isDemo: !!demoRole,
     refresh: async () => (user || demoRole ? query.refetch() : null),
     sync,
+    syncNow: async () => {
+      const result = await sync();
+      if (result.remaining)
+        throw new SyncError(
+          `${result.message} ${result.firstFailure?.lastError || "Tente novamente."}`,
+        );
+      return result.message;
+    },
+    discardFailed: async (id) => {
+      await queue.discardFailed(id);
+      setPending(await queue.list());
+    },
+    sendInvitations: async (request, guest, supersedes) => {
+      if ((query.data || cached)?.role !== "ADMIN")
+        throw new AppError("Acesso restrito.");
+      if (!online) throw new AppError("O envio de convites exige conexão.");
+      if (demoRole)
+        return {
+          message: "Demonstração: nenhum e-mail foi enviado.",
+          complete: true,
+          pending: 0,
+          sent: 0,
+          skipped: 1,
+          failed: 0,
+        };
+      const result = await api.sendInvitations(request, guest, supersedes);
+      await query.refetch();
+      return result;
+    },
     demoLogin: async (role) => {
       if (!demoEnabled) throw new AppError("Demo indisponível em produção.");
       await writeCache("demo-session", role);
@@ -238,8 +307,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     enter: async (code, pin) => {
       if (demoEnabled && code === demo.DEMO_CODE) {
-        if (pin !== demo.DEMO_PIN)
-          throw new AppError("Código ou senha inválido.");
+        if (pin !== demo.DEMO_PIN) throw new AppError("Senha inválida.");
         await writeCache("demo-session", "GUEST");
         setDemoRole("GUEST");
         return;
@@ -285,6 +353,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           throw new AppError(
             "Salvo neste dispositivo. A sincronização falhou; tente novamente.",
           );
+        if (
+          (type === "MESSAGE_SEND" || type === "MESSAGE_SEND_TO_GUESTS") &&
+          (query.data || cached)?.role === "ADMIN"
+        ) {
+          if (demoRole)
+            return "Demonstração: mensagem registrada no aplicativo. Nenhum e-mail foi enviado.";
+          const summary =
+            deliveryResults.current.get(item.mutationId) ||
+            "Mensagem registrada. O processamento está pendente.";
+          deliveryResults.current.delete(item.mutationId);
+          return summary;
+        }
         return "Sincronizado com sucesso.";
       }
       return "Salvo neste dispositivo. Será sincronizado quando houver conexão.";

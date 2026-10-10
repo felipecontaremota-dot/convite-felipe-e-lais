@@ -222,7 +222,7 @@ describe("offline queue", () => {
       throw Error("Sem rede");
     });
     expect(await q.list()).toMatchObject([
-      { attempts: 1, lastError: "Sem rede" },
+      { attempts: 1, lastError: "Não foi possível concluir. Verifique os dados e tente novamente." },
     ]);
     await q.flush(async () => {});
     expect(await q.list()).toEqual([]);

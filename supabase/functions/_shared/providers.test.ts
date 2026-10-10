@@ -236,3 +236,127 @@ Deno.test("Sheets update finds stable UUID and preserves unmapped cells", async 
     Deno.env.delete("GOOGLE_SHEETS_TAB_GUESTS");
   }
 });
+Deno.test("Resend supports invitation HTML without breaking plain text messages", async () => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body));
+    assert(
+      body.text === delivery.body && body.html === "<p>Provisório</p>",
+      "text plus HTML",
+    );
+    return Response.json({ id: "html-provider-id" });
+  };
+  try {
+    await new ResendProvider().send({ ...delivery, html: "<p>Provisório</p>" });
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
+
+Deno.test("Resend distinguishes definitive rejection from uncertain transport without sensitive errors", async () => {
+  const { ProviderDefinitiveError, ProviderUncertainError } = await import(
+    "./http.ts"
+  );
+  const previous = globalThis.fetch;
+  try {
+    for (
+      const [status, code, uncertain] of [
+        [400, "rejected", false],
+        [401, "auth", false],
+        [403, "auth", false],
+        [408, "timeout", true],
+        [429, "rate", true],
+        [500, "server", true],
+        [503, "server", true],
+        [409, "concurrent_idempotent_requests", true],
+        [409, "invalid_idempotent_request", false],
+      ] as const
+    ) {
+      globalThis.fetch = async () =>
+        Response.json({
+          name: code,
+          message: "API key, person@example.com, password 0047",
+        }, { status });
+      let caught: unknown;
+      try {
+        await new ResendProvider().send(delivery);
+      } catch (error) {
+        caught = error;
+      }
+      assert(
+        caught instanceof
+          (uncertain ? ProviderUncertainError : ProviderDefinitiveError),
+        `${status}/${code} classification`,
+      );
+      assert(
+        !String(caught).includes("0047") && !String(caught).includes("person@"),
+        "sanitized error",
+      );
+    }
+    for (
+      const failure of [
+        new DOMException("sensitive", "TimeoutError"),
+        new DOMException("sensitive", "AbortError"),
+        new TypeError("sensitive network"),
+      ]
+    ) {
+      globalThis.fetch = async () => {
+        throw failure;
+      };
+      try {
+        await new ResendProvider().send(delivery);
+        throw Error("expected uncertain");
+      } catch (error) {
+        assert(error instanceof ProviderUncertainError, "network uncertainty");
+      }
+    }
+    globalThis.fetch = async () => Response.json({});
+    try {
+      await new ResendProvider().send(delivery);
+      throw Error("missing provider ID accepted");
+    } catch (error) {
+      assert(
+        error instanceof ProviderUncertainError,
+        "2xx without ID is not confirmed",
+      );
+    }
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
+
+Deno.test("payload hash covers exactly from/to/subject/text/html, not reservation key", async () => {
+  const { resendPayloadHash } = await import("./providers.ts");
+  const before = Deno.env.get("EMAIL_FROM");
+  Deno.env.set("EMAIL_FROM", "sender@example.test");
+  try {
+    const original = { ...delivery, html: "<p>Invitation</p>" };
+    const hash = await resendPayloadHash(original);
+    assert(
+      hash.length === 64 && hash === await resendPayloadHash(original),
+      "deterministic SHA256",
+    );
+    for (
+      const altered of [
+        { ...original, email: "different@example.test" },
+        { ...original, title: "changed" },
+        { ...original, body: "changed" },
+        { ...original, html: "changed" },
+      ]
+    ) {
+      assert(
+        hash !== await resendPayloadHash(altered),
+        "every POST field guarded",
+      );
+    }
+    assert(
+      hash === await resendPayloadHash({ ...original, key: "other-operation" }),
+      "key excluded from payload",
+    );
+    Deno.env.set("EMAIL_FROM", "other@example.test");
+    assert(hash !== await resendPayloadHash(original), "sender guarded");
+  } finally {
+    if (before === undefined) Deno.env.delete("EMAIL_FROM");
+    else Deno.env.set("EMAIL_FROM", before);
+  }
+});

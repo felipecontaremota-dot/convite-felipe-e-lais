@@ -134,3 +134,5 @@ Para um futuro domínio próprio, configure o domínio no Pages e altere as vari
 - [Publicação nas lojas](docs/store-publishing.md)
 
 `eas.json` prepara development/preview/production; bundle/package IDs e domínio são configuráveis. EAS, associação do domínio, builds nativos assinados, contas de lojas, política final e credenciais de push devem ser configurados antes da distribuição. Nenhuma publicação, cobrança ou pagamento foi implementado nesta fase.
+
+A estabilização de acesso, fila e envios, a migration 006 e os passos de publicação das Functions estão documentados em [Estabilização e envios](docs/stabilization-deliveries.md). O roadmap da futura tela “Seu convite” consta nesse documento.

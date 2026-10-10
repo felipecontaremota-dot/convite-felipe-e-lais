@@ -263,16 +263,17 @@ test("alphabetical list, exact filters, batch family association, detach and del
       exact: true,
     })
     .click();
+  await page.getByRole("button", { name: /^Membros \(/ }).click();
   await page
     .getByRole("button", {
-      name: "Remover da família: José Victor",
+      name: "Remover José Victor da família",
       exact: true,
     })
     .click();
   await page.getByRole("button", { name: "Remover", exact: true }).click();
   await expect(
     page.getByRole("button", {
-      name: "Remover da família: José Victor",
+      name: "Remover José Victor da família",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -398,7 +399,7 @@ test("mobile selection has an explicit accessible alternative and remains respon
     page.getByRole("checkbox", { name: /^Selecionar / }),
   ).toHaveCount(0);
 });
-test("location saves separate GPS URL, rejects HTTP and offers web map/share fallback", async ({
+test("location saves separate GPS URL, rejects HTTP and opens direct external destination", async ({
   page,
 }) => {
   await admin(page);
@@ -443,17 +444,36 @@ test("location saves separate GPS URL, rejects HTTP and offers web map/share fal
       .filter({ visible: true }),
   ).toBeVisible();
   await page
+    .context()
+    .route("https://maps.test/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<p>Fixture destination</p>",
+      }),
+    );
+  const popup = page.waitForEvent("popup");
+  await page
     .getByRole("button", { name: "Abrir localização", exact: true })
     .click();
+  const location = await popup;
+  await expect.poll(() => location.url()).toContain("maps.test/evento");
+  await location.close();
+  await expect(
+    page.getByRole("button", { name: "Abrir no Google Maps", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Copiar endereço", exact: true }),
+  ).toBeVisible();
   for (const name of [
-    "Google Maps",
     "Waze",
     "Uber",
     "Abrir link de GPS",
-    "Copiar endereço",
     "Compartilhar com 99 / outros aplicativos",
-  ])
-    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+  ]) {
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
+      0,
+    );
+  }
 });
 
 test("individual deletion is confirmed separately and a member pencil opens its edit form", async ({
@@ -507,6 +527,7 @@ test("individual deletion is confirmed separately and a member pencil opens its 
   await page
     .getByRole("button", { name: "Editar família Família Demo", exact: true })
     .click();
+  await page.getByRole("button", { name: /^Membros \(/ }).click();
   await page
     .getByRole("button", { name: "Editar convidado Convidado Um", exact: true })
     .click();

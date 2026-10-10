@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.3";
 export const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-worker-secret",
+    "authorization, apikey, content-type, x-client-info, x-worker-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 export const json = (body: unknown, status = 200) =>
@@ -27,11 +27,72 @@ export function workerAuthorized(request: Request) {
   const expected = Deno.env.get("WORKER_SECRET");
   return !!expected && request.headers.get("x-worker-secret") === expected;
 }
+export class ProviderDefinitiveError extends Error {
+  constructor(readonly status?: number, readonly code?: string) {
+    super("Provider rejeitou o envio");
+  }
+}
+export class ProviderUncertainError extends Error {
+  constructor(readonly status?: number, readonly code?: string) {
+    super("Resultado do provider não confirmado");
+  }
+}
 export async function requestJson(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!response.ok) throw Error(`Provider HTTP ${response.status}`);
-  return response.json();
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch {
+    throw new ProviderUncertainError();
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    if (response.ok) throw new ProviderUncertainError(response.status);
+  }
+  if (!response.ok) {
+    const raw = data?.name || data?.code;
+    const code =
+      ["concurrent_idempotent_requests", "invalid_idempotent_request"].includes(
+          raw,
+        )
+        ? raw
+        : undefined;
+    if (code === "invalid_idempotent_request") {
+      throw new ProviderDefinitiveError(response.status, code);
+    }
+    if (
+      code === "concurrent_idempotent_requests" || response.status === 408 ||
+      response.status === 429 || response.status >= 500 ||
+      response.status === 409
+    ) {
+      throw new ProviderUncertainError(response.status, code);
+    }
+    throw new ProviderDefinitiveError(response.status, code);
+  }
+  return data;
+}
+
+export async function eventAdmin(request: Request, event: string) {
+  if (
+    typeof event !== "string" ||
+    !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(event)
+  ) throw Error("invalid event");
+  await authenticated(request);
+  const client = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        headers: { Authorization: request.headers.get("Authorization")! },
+      },
+    },
+  );
+  const result = await client.rpc("event_role", { p_event: event });
+  if (result.error) throw Error("role validation failed");
+  if (result.data !== "ADMIN") throw Error("unauthorized");
 }
