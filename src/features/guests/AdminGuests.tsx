@@ -172,7 +172,7 @@ export function GuestsScreen() {
         : (app.data?.guests || [])
             .filter(
               (g) =>
-                g.id === delivery.guest_id ||
+                (delivery.guest_ids || [delivery.guest_id]).includes(g.id) ||
                 (g.invitation_id === delivery.invitation_id &&
                   app.data?.contacts.some(
                     (c) =>

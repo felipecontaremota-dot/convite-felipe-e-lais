@@ -8,7 +8,7 @@ create table invitation_deliveries (
  attempts integer not null default 0 check(attempts>=0), locked_at timestamptz, last_attempt_at timestamptz,
  first_attempt_at timestamptz, claim_token uuid, superseded_by uuid, payload_hash text check(payload_hash ~ '^[a-f0-9]{64}$'),
  foreign key(event_id,invitation_id) references invitations(event_id,id) on delete cascade,
- foreign key(event_id,guest_id) references guests(event_id,id) on delete cascade,
+ -- guest_id is a historical identifier: guest deletion must not erase uncertain delivery outcomes.
  unique(event_id,request_id,guest_id,channel),
  unique(event_id,request_id,invitation_id,recipient_email,channel)
 );
@@ -148,7 +148,7 @@ revoke all on function app_snapshot_v5(uuid) from public,anon,authenticated,serv
 create function app_snapshot(p_event uuid) returns jsonb language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 begin
  return app_snapshot_v5(p_event)||jsonb_build_object('invitation_deliveries',(
- select coalesce(jsonb_agg(jsonb_build_object('id',id,'guest_id',guest_id,'invitation_id',invitation_id,'recipient_email',recipient_email,'status',status,'sent_at',sent_at,'created_at',created_at,'request_id',request_id,'bulk',exists(select 1 from invitation_delivery_batches b where b.event_id=invitation_deliveries.event_id and b.request_id=invitation_deliveries.request_id),'attempts',attempts,'last_attempt_at',last_attempt_at,'superseded_by',superseded_by) order by created_at desc),'[]')
+ select coalesce(jsonb_agg(jsonb_build_object('id',id,'guest_id',guest_id,'invitation_id',invitation_id,'recipient_email',recipient_email,'status',status,'sent_at',sent_at,'created_at',created_at,'request_id',request_id,'bulk',exists(select 1 from invitation_delivery_batches b where b.event_id=invitation_deliveries.event_id and b.request_id=invitation_deliveries.request_id),'attempts',attempts,'last_attempt_at',last_attempt_at,'superseded_by',superseded_by,'guest_ids',(select coalesce(jsonb_agg(m.guest_id),'[]') from invitation_delivery_members m where m.event_id=invitation_deliveries.event_id and m.delivery_id=invitation_deliveries.id)) order by created_at desc),'[]')
  from invitation_deliveries where event_id=p_event and event_role(p_event)='ADMIN'));
 end $$;
 revoke all on function app_snapshot(uuid) from public,anon;

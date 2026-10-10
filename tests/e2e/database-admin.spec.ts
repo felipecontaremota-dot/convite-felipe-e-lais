@@ -603,7 +603,7 @@ test("uncertain invitation keeps request ID; explicit resend requires confirmati
   ).toHaveCount(0);
 });
 
-test("reload restores one bulk operation; explicit override remains acknowledged after another reload", async ({
+test("reload preserves uncertain family after canonical deletion; bulk override stays acknowledged", async ({
   page,
 }) => {
   const oldRequest = "dededede-1000-4000-8000-000000000001";
@@ -615,7 +615,56 @@ test("reload restores one bulk operation; explicit override remains acknowledged
       email: "bulk-restore@example.test",
     },
   });
+  const alias = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: {
+      name: "Bulk restore alias",
+      email: "bulk-restore@example.test",
+    },
+  });
+  const family = db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "INVITATION_SAVE",
+    p_payload: { name: "Bulk retry family", pin: "1234" },
+  });
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "CODE_ROTATE",
+    p_payload: { id: family.id, version: 1 },
+  });
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "FAMILY_ADD_MEMBERS",
+    p_payload: {
+      target_id: family.id,
+      target_version: 2,
+      guests: [
+        { id: guest.id, version: 1, invitation_version: 1 },
+        { id: alias.id, version: 1, invitation_version: 1 },
+      ],
+    },
+  });
   db.sql(`select prepare_invitation_batch('${event}','${oldRequest}');`);
+  const canonical = JSON.parse(
+    db.sql(
+      `select jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version) from invitation_deliveries d join guests g on g.id=d.guest_id join invitations i on i.id=g.invitation_id where d.request_id='${oldRequest}' and d.invitation_id='${family.id}';`,
+    ),
+  );
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_DELETE",
+    p_payload: { guests: [canonical] },
+  });
+  const survivorName =
+    canonical.id === guest.id ? "Bulk restore alias" : "Bulk restore guest";
+  expect(
+    db
+      .sql(
+        `select count(*) from invitation_deliveries where request_id='${oldRequest}' and invitation_id='${family.id}' and status='pending';`,
+      )
+      .trim(),
+  ).toBe("1");
   await backend(page);
   const calls: {
     request_id: string;
@@ -670,7 +719,7 @@ test("reload restores one bulk operation; explicit override remains acknowledged
   ).toBeVisible();
   await page
     .getByRole("button", {
-      name: "Enviar convite para Bulk restore guest",
+      name: `Enviar convite para ${survivorName}`,
       exact: true,
     })
     .click();
@@ -729,7 +778,7 @@ test("reload restores one bulk operation; explicit override remains acknowledged
   ).toHaveCount(0);
   await page
     .getByRole("button", {
-      name: "Enviar convite para Bulk restore guest",
+      name: `Enviar convite para ${survivorName}`,
       exact: true,
     })
     .click();

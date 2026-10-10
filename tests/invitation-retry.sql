@@ -59,7 +59,7 @@ reset role;
 delete from guests where event_id=:'event' and id=:'gid';
 set local role service_role;
 select prepare_invitation_delivery(:'event','bcbcbcbc-1000-4000-8000-000000000002',:'gid') as removed_retry \gset
-select pg_temp.assert_invite((:'removed_retry'::jsonb)->>'status'='pending' and (:'removed_retry'::jsonb)->>'id' is null,'deleted guest cannot recreate reservation or silently complete an uncertain operation');
+select pg_temp.assert_invite((:'removed_retry'::jsonb)->>'status'='pending' and (:'removed_retry'::jsonb)->>'id'=:'oldid','deleted guest preserves original reservation and cannot silently complete an uncertain operation');
 select pg_temp.assert_invite(prepare_invitation_batch(:'event','bcbcbcbc-1000-4000-8000-000000000003')=:'batch'::jsonb,'bulk identity survives deletion without creating a fresh operation');
 rollback;
 \echo Invitation retry regression passed: pending, lease/fencing, same reservation/hash, fixed 24h window, bulk membership and sent_at.

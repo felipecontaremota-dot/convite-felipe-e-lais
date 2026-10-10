@@ -162,6 +162,7 @@ export interface Snapshot {
     id: string;
     request_id?: string;
     superseded_by?: string | null;
+    guest_ids?: string[];
     bulk?: boolean;
     attempts?: number;
     last_attempt_at?: string | null;

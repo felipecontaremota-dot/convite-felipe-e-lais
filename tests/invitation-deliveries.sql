@@ -60,5 +60,22 @@ select pg_temp.assert_delivery(not has_function_privilege('authenticated','prepa
 set local request.jwt.claim.sub=:'anon';
 select pg_temp.assert_delivery((select count(*)=0 from invitation_deliveries),'guest cannot read deliveries');
 select pg_temp.assert_delivery(jsonb_array_length(app_snapshot(:'event')->'invitation_deliveries')=0,'public snapshot no delivery history');
+reset role;
+set local role service_role;
+select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000003',:'ga') as uncertain_family \gset
+select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000003',:'gb');
+select (:'uncertain_family'::jsonb)->>'id' as uncertain_id \gset
+select claim_invitation_delivery(:'uncertain_id',repeat('c',64)) as uncertain_claim \gset
+select finish_invitation_delivery(:'uncertain_id','pending','resend',null,'uncertain',(:'uncertain_claim'::jsonb->>'token')::uuid);
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select admin_action(:'event','GUEST_DELETE',jsonb_build_object('guests',jsonb_build_array((select jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version) from guests g join invitations i on i.id=g.invitation_id where g.id=:'ga'))));
+select pg_temp.assert_delivery((select status='pending' and sent_at is null from invitation_deliveries where id=:'uncertain_id'),'canonical guest deletion never cascades uncertain history');
+select pg_temp.assert_delivery(exists(select 1 from jsonb_array_elements(app_snapshot(:'event')->'invitation_deliveries') d where d->>'id'=:'uncertain_id' and d->'guest_ids' @> jsonb_build_array(:'gb')),'snapshot retains active alias identity after canonical guest deletion');
+reset role;
+set local role service_role;
+select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000003',:'gb') as alias_retry \gset
+select pg_temp.assert_delivery((:'alias_retry'::jsonb)->>'id'=:'uncertain_id' and (:'alias_retry'::jsonb)->>'status'='pending' and (:'alias_retry'::jsonb)->>'available'='false','remaining alias restores same uncertain operation without a new reservation');
 rollback;
 \echo Invitation delivery regression: individual/family, missing email, dedup, retry, resend, privacy, RLS and sent_at passed.
