@@ -9,14 +9,28 @@ import {
 } from "../lib/errors";
 import type { OfflineMutation, Snapshot, Ticket } from "../types/domain";
 import { invitationCode, invitationPin } from "../utils/security";
+import {
+  guestSchemaMessage,
+  requireGuestBackend,
+} from "../features/guests/backendContract";
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (!supabase)
     throw new AppError(
       "O convite ainda não está disponível. Tente novamente mais tarde.",
     );
-  const { data, error } = await supabase.rpc(fn, args);
+  const { data, error, status } = await supabase.rpc(fn, args);
   if (error) {
     if (
+      ((fn === "identify_guest" || fn === "issue_family_ticket") &&
+        (error.code === "PGRST202" || error.code === "42883")) ||
+      (error.code === "22P02" && error.message.includes("rsvp_status"))
+    )
+      throw new AppError(guestSchemaMessage, "SCHEMA");
+    if (
+      status >= 500 ||
+      status === 408 ||
+      status === 429 ||
+      ["PGRST000", "PGRST001", "PGRST002", "PGRST003"].includes(error.code) ||
       error.message.includes("Failed to fetch") ||
       error.message.includes("Network")
     )
@@ -37,6 +51,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 }
 export const getSnapshot = () =>
   rpc<Snapshot>("app_snapshot", { p_event: eventId });
+export const checkGuestBackend = async (status?: unknown) =>
+  requireGuestBackend(await getSnapshot(), status);
 export const mutate = (item: OfflineMutation) =>
   rpc("app_mutate", {
     p_event: eventId,

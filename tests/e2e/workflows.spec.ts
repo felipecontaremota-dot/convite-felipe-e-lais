@@ -220,7 +220,7 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     .getByLabel("Token ou conteúdo do QR (entrada acessível)")
     .fill(`wedding://ticket/${token}`);
   await page
-    .getByRole("button", { name: "Validar ingresso", exact: true })
+    .getByRole("button", { name: "Validar convite", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Confirmar entrada", exact: true }),
@@ -235,7 +235,7 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     page.getByText("1 / 3 presentes", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Validar ingresso", exact: true })
+    .getByRole("button", { name: "Validar convite", exact: true })
     .click();
   await expect(
     page.getByText("CONVIDADO JÁ REGISTRADO", { exact: true }),

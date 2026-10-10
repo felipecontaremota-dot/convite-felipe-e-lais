@@ -26,20 +26,24 @@ select pg_temp.assert_guest((select salutation='NEUTRAL' from guests where id=:'
 select pg_temp.assert_guest((select salutation='FEMALE' from guests where id=:'gm'),'gender is stored independently of name');
 reset role;
 insert into invitation_sessions(event_id,user_id,invitation_id,pin_verified_at) values(:'event',:'guestuser',:'familyid',now());
+insert into auth.users(id,is_anonymous) values('70707070-0000-4000-8000-000000000004',true);
+insert into invitation_sessions(event_id,user_id,invitation_id,pin_verified_at) values(:'event','70707070-0000-4000-8000-000000000004',:'io',now());
 set local role authenticated;
 set local request.jwt.claim.sub=:'guestuser';
 select pg_temp.assert_guest(current_guest(:'event') is null,'family access does not silently identify the head');
 create function pg_temp.denied_ticket(e uuid,g uuid,f uuid) returns boolean language plpgsql as $$begin perform issue_ticket(e,g);return false;exception when others then return sqlerrm='unauthorized';end$$;
-select pg_temp.assert_guest(pg_temp.denied_ticket(:'event',:'gh',:'familyid'),'unidentified family session cannot issue head QR');
+select pg_temp.assert_guest(not pg_temp.denied_ticket(:'event',:'gh',:'familyid'),'shared family access issues head QR without profile identification');
 select identify_guest(:'event',:'gm');
+create function pg_temp.denied_identity(e uuid,g uuid) returns boolean language plpgsql as $$begin perform identify_guest(e,g);return false;exception when others then return sqlerrm='unauthorized';end$$;
+select pg_temp.assert_guest(pg_temp.denied_identity(:'event',:'go') and current_guest(:'event')=:'gm'::uuid,'cross-unit identity is rejected without changing the selected member');
 select issue_ticket(:'event',:'gm') as memberticket \gset
-select pg_temp.assert_guest(pg_temp.denied_ticket(:'event',:'gh',:'familyid'),'member cannot issue another member QR');
+select pg_temp.assert_guest(pg_temp.denied_ticket(:'event',:'go',:'familyid'),'family access cannot issue another unit QR');
 create function pg_temp.denied_family(e uuid,f uuid) returns boolean language plpgsql as $$begin perform issue_family_ticket(e,f);return false;exception when others then return sqlerrm='unauthorized';end$$;
-select pg_temp.assert_guest(pg_temp.denied_family(:'event',:'familyid'),'ordinary member cannot issue family QR');
-select pg_temp.assert_guest(jsonb_array_length(app_snapshot(:'event')->'credentials')=1 and jsonb_array_length(app_snapshot(:'event')->'family_credentials')=0,'member snapshot exposes only own credential');
+select pg_temp.assert_guest(pg_temp.denied_family(:'event',:'io'),'individual unit cannot be used as a family QR');
+select pg_temp.assert_guest(jsonb_array_length(app_snapshot(:'event')->'credentials')=2 and jsonb_array_length(app_snapshot(:'event')->'family_credentials')=0,'family snapshot retains authorized head and member credentials regardless of profile selection');
 select identify_guest(:'event',:'gh');
 select issue_family_ticket(:'event',:'familyid') as familyticket \gset
-select issue_ticket(:'event',:'gh') as headticket \gset
+select issue_ticket(:'event',:'gh',true) as headticket \gset
 select issue_ticket(:'event',:'gl') as legacyticket \gset
 select issue_ticket(:'event',:'gx') as extraticket \gset
 select pg_temp.assert_guest(jsonb_array_length(app_snapshot(:'event')->'credentials')=4 and jsonb_array_length(app_snapshot(:'event')->'family_credentials')=1,'head sees family QR and all individual hashes');
@@ -84,6 +88,16 @@ create function pg_temp.reject_head(e uuid,f uuid,g uuid) returns boolean langua
 -- Run as the migration/test owner to assert the database constraint independently of RPC authorization.
 reset role;
 select pg_temp.assert_guest(pg_temp.reject_head(:'event',:'familyid',:'go'),'database rejects a head from another unit');
+set local role authenticated;
+set local request.jwt.claim.sub='70707070-0000-4000-8000-000000000004';
+select pg_temp.assert_guest(current_guest(:'event')=:'go'::uuid,'individual identity is automatic before any Profile choice');
+select pg_temp.assert_guest(jsonb_array_length(app_snapshot(:'event')->'ticket_guest_ids')=1 and app_snapshot(:'event')->'ticket_guest_ids' ? :'go' and jsonb_array_length(app_snapshot(:'event')->'family_ticket_invitation_ids')=0,'individual snapshot authorizes only the titular and no family');
+select issue_ticket(:'event',:'go');
+select pg_temp.assert_guest(pg_temp.denied_ticket(:'event',:'gh',:'familyid'),'individual cannot issue a QR of another unit');
+select pg_temp.assert_guest(pg_temp.denied_family(:'event',:'familyid'),'individual cannot issue another family QR');
+select identify_guest(:'event',:'go');
+select identify_guest(:'event',:'go');
+select pg_temp.assert_guest(pg_temp.denied_identity(:'event',:'gh') and current_guest(:'event')=:'go'::uuid,'individual cannot identify as another unit member');
 reset role;
 rollback;
 \echo Guest invitation regression passed: session identity, structured gender/head, opt-out, independent QR rotation, partial/idempotent check-in and RSVP isolation.

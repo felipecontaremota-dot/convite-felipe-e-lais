@@ -145,6 +145,10 @@ export interface SheetJob {
   version: number;
 }
 export interface Snapshot {
+  guest_access_version?: number;
+  rsvp_statuses?: RSVP[];
+  ticket_guest_ids?: string[];
+  family_ticket_invitation_ids?: string[];
   current_guest_id?: string | null;
   family_credentials?: (Omit<Credential, "guest_id"> & {
     invitation_id: string;

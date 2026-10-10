@@ -6,9 +6,9 @@ A migration `202610100007_guest_invitations.sql` é incremental sobre 006. Não 
 
 - `guests.salutation`: `NEUTRAL` (legados), `MALE` ou `FEMALE`, editável no cadastro administrativo. Não há inferência pelo nome.
 - `invitations.primary_guest_id` continua sendo o responsável explícito. Constraints diferidas verificam que pertence à unidade. Um campo permite no máximo um responsável; a edição existente transfere responsabilidade sem recriar a família.
-- `invitation_sessions.identified_guest_id`: identidade do integrante no servidor. A escolha exige pertencer à unidade da sessão. INDIVIDUAL usa seu único titular automaticamente; FAMILY exige identificar-se no Perfil antes de visualizar QRs.
-- Conforme a política escolhida pelo usuário, mantém-se a confiança do link/senha familiar compartilhado. Selecionar um nome **não é autenticação individual**: quem conhece a senha familiar pode escolher qualquer integrante. A RPC e o snapshot aplicam os poderes correspondentes à identidade selecionada. Prova individual exigiria outra política/credencial.
-- Responsável: QR familiar e QRs individuais dos integrantes. Membro: somente seu próprio QR. ADMIN pode emitir/regenerar; CEREMONIALIST pode resolver e validar para check-in.
+- `invitation_sessions.identified_guest_id`: identidade do integrante no servidor. A escolha exige pertencer à unidade da sessão. INDIVIDUAL usa seu único titular automaticamente; FAMILY usa a identificação somente para personalização, recados e contatos; a 008 autoriza QRs pela unidade compartilhada, independentemente dessa escolha.
+- Conforme a política escolhida pelo usuário, mantém-se a confiança do link/senha familiar compartilhado. Selecionar um nome **não é autenticação individual**: quem conhece a senha familiar pode escolher qualquer integrante. A seleção não é utilizada como prova para autorizar QRs. Prova individual exigiria outra política/credencial.
+- Acesso FAMILY compartilhado: QR familiar e individuais da própria unidade. Acesso INDIVIDUAL: somente seu titular. Identificar um integrante de outra unidade é rejeitado. ADMIN pode emitir/regenerar; CEREMONIALIST pode resolver e validar para check-in. O acesso compartilhado já permitia selecionar o responsável; a 008 retira essa seleção artificial, sem permitir outras unidades.
 
 ## RSVP e check-in
 
@@ -50,14 +50,14 @@ Imagem Villarejo pendente, pois não foi fornecida no workspace: colocar o origi
 - Localização: mecanismo por plataforma, fallback seguro, Google Maps/endereço separados; asset original único pendente.
 - Presença: Irei/Não irei/Ainda decidirei, botão contextual, estado salvo e edição posterior.
 - Feedback: somente após retorno confirmado online; erro preserva escolha/possibilidade de retry; formas animadas leves, sem emojis e com reduced motion Web/nativo.
-- Convites: terminologia atualizada, texto antigo removido, cards familiar/individuais, poderes de responsável/membro, tokens opacos distintos, modal e rotação isolada.
+- Convites: terminologia atualizada, texto antigo removido, cards familiar/individuais, autorizações da unidade FAMILY/INDIVIDUAL, tokens opacos distintos, modal e rotação isolada.
 - Check-in: contrato familiar/parcial e individual, transacional/idempotente, sem alterar RSVP; aviso privado único ao responsável.
 - Mobile 390×844, modais com foco/Escape, labels, QR identificado por texto, estados desabilitados e ausência de overflow cobertos por E2E.
 - Sem redesign geral, novo cronômetro, painel completo, template de e-mail, WhatsApp de produção ou mudanças no Resend.
 
 ## Após eventual merge
 
-1. Conferir o projeto Supabase e que 001–006 estão aplicadas; aplicar somente 007 pelo fluxo de migrations após conferir a lista pendente.
+1. Conferir o projeto Supabase e que 001–006 estão aplicadas; aplicar somente as migrations pendentes em ordem (007 antes de 008); não reaplicar nem editar migrations antigas. A 008 termina com reload explícito do cache PostgREST.
 2. Validar FAMILY/INDIVIDUAL, identidade/roles, RSVP, opt-out, emissão/rotação e contratos de check-in em ambiente autorizado.
 3. Acompanhar o deploy Pages do frontend da main, mantendo variables e base path existentes. Atualizar builds nativos conforme o fluxo habitual do projeto.
 4. Incluir a imagem original quando fornecida, em mudança revisada.

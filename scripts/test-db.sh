@@ -26,7 +26,13 @@ for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql
  if [[ "$source" == supabase/migrations/202610100007_guest_invitations.sql ]]; then
   run_sql < tests/guest-upgrade-prepare.sql
  fi
+ if [[ "$source" == supabase/migrations/202610100008_guest_access.sql ]]; then
+  run_sql < tests/guest-access-upgrade-prepare.sql
+ fi
  run_sql < "$source"
+ if [[ "$source" == supabase/migrations/202610100008_guest_access.sql ]]; then
+  run_sql < tests/guest-access-upgrade-verify.sql
+ fi
  if [[ "$source" == supabase/migrations/202610100007_guest_invitations.sql ]]; then
   run_sql < tests/guest-upgrade-verify.sql
  fi

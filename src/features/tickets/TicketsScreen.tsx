@@ -12,6 +12,11 @@ import {
 import { Confirmation } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
 import type { Ticket } from "../../types/domain";
+import { friendlyError } from "../../lib/errors";
+import {
+  guestSchemaMessage,
+  hasTicketContract,
+} from "../guests/backendContract";
 function TicketCard({
   target,
   name,
@@ -26,7 +31,8 @@ function TicketCard({
   const [ticket, setTicket] = useState<Ticket | null>(null),
     [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [loadError, setLoadError] = useState<string | null>(null);
   const issue = family ? app.familyTicket : app.ticket;
   const load = useCallback(() => issue(target), [issue, target]);
   useEffect(() => {
@@ -35,8 +41,11 @@ function TicketCard({
       .then((t) => {
         if (active) setTicket(t);
       })
-      .catch(() => {
-        if (active) setTicket(null);
+      .catch((error) => {
+        if (active) {
+          setTicket(null);
+          setLoadError(friendlyError(error));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -67,9 +76,14 @@ function TicketCard({
           />
         </View>
       ) : (
-        <Text style={styles.text}>
-          Conecte-se para disponibilizar o convite. Se ele já foi emitido em
-          outro aparelho, gere um novo convite para este dispositivo.
+        <Text
+          accessibilityRole={loadError ? "alert" : undefined}
+          style={loadError ? styles.error : styles.text}
+        >
+          {loadError ||
+            (loading
+              ? "Preparando convite…"
+              : "Conecte-se para disponibilizar o convite.")}
         </Text>
       )}
       <Text style={styles.text}>
@@ -106,20 +120,27 @@ function TicketCard({
 export function TicketsScreen() {
   const app = useApp(),
     s = app.data,
-    unit = s?.invitations[0],
-    person = s?.current_guest_id;
-  const head = !!person && unit?.primary_guest_id === person;
-  const guests = s?.guests.filter((g) => head || g.id === person) || [];
+    unit = s?.invitations[0];
+  const ready = hasTicketContract(s);
+  const guests =
+    s?.guests.filter((g) => s.ticket_guest_ids?.includes(g.id)) || [];
   return (
     <Screen section="guest" title="Meus convites">
-      {unit?.kind === "FAMILY" && head ? (
+      {unit?.kind === "FAMILY" &&
+      s?.family_ticket_invitation_ids?.includes(unit.id) ? (
         <TicketCard target={unit.id} name={unit.name} family />
       ) : null}
       {guests.map((g) => (
         <TicketCard key={g.id} target={g.id} name={g.name} />
       ))}
       {!guests.length ? (
-        <Empty text="Identifique seu nome no Perfil para visualizar seu convite individual." />
+        <Empty
+          text={
+            ready
+              ? "Nenhum convite disponível para esta unidade de acesso."
+              : guestSchemaMessage
+          }
+        />
       ) : null}
     </Screen>
   );
