@@ -67,6 +67,10 @@ select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-00000000000
 select (:'uncertain_family'::jsonb)->>'id' as uncertain_id \gset
 select claim_invitation_delivery(:'uncertain_id',repeat('c',64)) as uncertain_claim \gset
 select finish_invitation_delivery(:'uncertain_id','pending','resend',null,'uncertain',(:'uncertain_claim'::jsonb->>'token')::uuid);
+select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000004',:'ga') as individual_uncertain \gset
+select (:'individual_uncertain'::jsonb)->>'id' as individual_uncertain_id \gset
+select claim_invitation_delivery(:'individual_uncertain_id',repeat('d',64)) as individual_claim \gset
+select finish_invitation_delivery(:'individual_uncertain_id','pending','resend',null,'uncertain',(:'individual_claim'::jsonb->>'token')::uuid);
 reset role;
 set local role authenticated;
 set local request.jwt.claim.sub=:'admin';
@@ -74,7 +78,16 @@ select admin_action(:'event','GUEST_DELETE',jsonb_build_object('guests',jsonb_bu
 select pg_temp.assert_delivery((select status='pending' and sent_at is null from invitation_deliveries where id=:'uncertain_id'),'canonical guest deletion never cascades uncertain history');
 select pg_temp.assert_delivery(exists(select 1 from jsonb_array_elements(app_snapshot(:'event')->'invitation_deliveries') d where d->>'id'=:'uncertain_id' and d->'guest_ids' @> jsonb_build_array(:'gb')),'snapshot retains active alias identity after canonical guest deletion');
 reset role;
+select pg_temp.assert_delivery(not exists(select 1 from invitation_delivery_members where event_id=:'event' and request_id='eeeeeeee-1000-4000-8000-000000000004' and guest_id=:'gb'),'individual alias has not incidentally retried the old request');
 set local role service_role;
+create function pg_temp.reject_unrelated_alias(e uuid,r uuid,n uuid,g uuid) returns boolean language plpgsql as $$begin perform prepare_invitation_resend(e,r,n,g);return false;exception when others then return sqlerrm='invalid previous operation';end$$;
+select pg_temp.assert_delivery(pg_temp.reject_unrelated_alias(:'event','eeeeeeee-1000-4000-8000-000000000004','eeeeeeee-1000-4000-8000-000000000006',:'go'),'same email in another access unit cannot supersede the family operation');
+select prepare_invitation_resend(:'event','eeeeeeee-1000-4000-8000-000000000004','eeeeeeee-1000-4000-8000-000000000005',:'gb');
+select pg_temp.assert_delivery((select superseded_by='eeeeeeee-1000-4000-8000-000000000005'::uuid from invitation_deliveries where id=:'individual_uncertain_id'),'surviving same-family/email alias can explicitly override without first retrying');
+update guest_contacts set email='changed-alias@example.test' where guest_id=:'gb';
+select prepare_invitation_resend(:'event','eeeeeeee-1000-4000-8000-000000000004','eeeeeeee-1000-4000-8000-000000000005',:'gb');
+update guest_contacts set email='same@example.test' where guest_id=:'gb';
+select pg_temp.assert_delivery((select count(*)=1 from invitation_deliveries where request_id='eeeeeeee-1000-4000-8000-000000000005' and guest_id=:'gb'),'individual alias replacement reserved exactly once');
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000003',:'gb') as alias_retry \gset
 select pg_temp.assert_delivery((:'alias_retry'::jsonb)->>'id'=:'uncertain_id' and (:'alias_retry'::jsonb)->>'status'='pending' and (:'alias_retry'::jsonb)->>'available'='false','remaining alias restores same uncertain operation without a new reservation');
 rollback;

@@ -121,11 +121,16 @@ begin
  if p_previous=p_request then raise exception 'invalid resend';end if;
  perform pg_advisory_xact_lock(hashtextextended('invitation-send:'||p_event||':'||p_previous,0));
  if exists(select 1 from invitation_deliveries where event_id=p_event and request_id=p_previous and superseded_by is not null and superseded_by<>p_request) then raise exception 'operation already superseded';end if;
+ -- The replacement was reserved in the same transaction; retry must not revalidate mutable aliases.
+ if exists(select 1 from invitation_deliveries where event_id=p_event and request_id=p_previous and superseded_by=p_request) then return;end if;
  if exists(select 1 from invitation_delivery_batches where event_id=p_event and request_id=p_previous) then
    if p_guest is not null then raise exception 'bulk resend requires whole operation';end if;
    perform prepare_invitation_batch(p_event,p_request);
  else
-   if p_guest is null or not exists(select 1 from invitation_delivery_members where event_id=p_event and request_id=p_previous and guest_id=p_guest) then raise exception 'invalid previous operation';end if;
+   if p_guest is null or not (
+     exists(select 1 from invitation_delivery_members where event_id=p_event and request_id=p_previous and guest_id=p_guest)
+     or exists(select 1 from invitation_deliveries d join guests g on g.event_id=d.event_id and g.invitation_id=d.invitation_id join guest_contacts c on c.event_id=g.event_id and c.guest_id=g.id where d.event_id=p_event and d.request_id=p_previous and g.id=p_guest and lower(trim(c.email))=d.recipient_email)
+   ) then raise exception 'invalid previous operation';end if;
    perform prepare_invitation_delivery(p_event,p_request,p_guest);
  end if;
  update invitation_deliveries set superseded_by=p_request where event_id=p_event and request_id=p_previous and status='pending';
