@@ -91,6 +91,7 @@ function fixture(
           };
         }
         row.locked = true;
+        row.attempted = true;
         row.hash = args.p_hash;
         return { data: { claimed: true, token: "lease" }, error: null };
       }
@@ -556,5 +557,61 @@ Deno.test("reserved guest moved to another unit never calls provider: unattempte
       result.pending === (attempted ? 1 : 0) && result.complete === !attempted,
       "request retained only for an uncertain prior attempt",
     );
+  }
+});
+
+Deno.test("definitive retry rejection cannot erase an earlier uncertain acceptance; fresh rejections remain failed", async () => {
+  const previous = globalThis.fetch;
+  try {
+    for (
+      const [status, code] of [[401, undefined], [403, undefined], [
+        400,
+        undefined,
+      ], [409, "invalid_idempotent_request"]] as const
+    ) {
+      globalThis.fetch = async () => Response.json({ name: code }, { status });
+      const fresh = fixture("resend");
+      const rejected = await (await fresh.handler(request())).json();
+      assert(
+        rejected.failed === 1 && rejected.pending === 0 && rejected.complete,
+        "first rejection definitively failed",
+      );
+      const retry = fixture("resend");
+      const keys: string[] = [];
+      let calls = 0;
+      globalThis.fetch = async (_input, init) => {
+        keys.push(new Headers(init?.headers).get("Idempotency-Key")!);
+        if (++calls === 1) {
+          throw new DOMException(
+            "response lost after acceptance",
+            "TimeoutError",
+          );
+        }
+        return Response.json({ name: code }, { status });
+      };
+      const uncertain = await (await retry.handler(request())).json();
+      assert(
+        uncertain.pending === 1 && !uncertain.complete,
+        "timeout remains pending",
+      );
+      const afterRejection = await (await retry.handler(request())).json();
+      assert(
+        afterRejection.pending === 1 && afterRejection.failed === 0 &&
+          afterRejection.sent === 0 && !afterRejection.complete,
+        "definitive retry cannot confirm earlier non-delivery",
+      );
+      assert(
+        retry.finishes.every((f) =>
+          f.p_status === "pending" && f.p_provider_id === null
+        ),
+        "no failed/sent finalization, frontend retains request",
+      );
+      assert(
+        keys.length === 2 && keys[0] === keys[1] && retry.stored.size === 1,
+        "same reservation/idempotency key throughout",
+      );
+    }
+  } finally {
+    globalThis.fetch = previous;
   }
 });

@@ -185,9 +185,11 @@ export function invitationHandler(
         }
       } catch (error) {
         if (error instanceof ProviderDefinitiveError) {
-          status = "failed";
-          reason =
-            "O serviço de e-mail rejeitou o envio. Verifique a configuração.";
+          // Rejection of this retry does not disprove acceptance of a prior uncertain POST.
+          status = reservation.attempted ? "pending" : "failed";
+          reason = reservation.attempted
+            ? "uncertain"
+            : "O serviço de e-mail rejeitou o envio. Verifique a configuração.";
         } else {
           status = "pending";
           reason = "uncertain";
