@@ -532,3 +532,29 @@ Deno.test("explicit resend acknowledges and reserves atomically before POST; fai
     );
   }
 });
+
+Deno.test("reserved guest moved to another unit never calls provider: unattempted is skipped, uncertain remains pending", async () => {
+  for (const attempted of [false, true]) {
+    const f = fixture();
+    const key = `${requestId}:${guest}`;
+    f.stored.set(key, {
+      id: key,
+      status: "pending",
+      available: false,
+      attempted,
+    });
+    const result = await (await f.handler(request())).json();
+    assert(
+      f.sends() === 0 && result.sent === 0,
+      "no POST with another unit's credentials",
+    );
+    assert(
+      f.finishes[0].p_status === (attempted ? "pending" : "skipped"),
+      "uncertainty never becomes definitive failure",
+    );
+    assert(
+      result.pending === (attempted ? 1 : 0) && result.complete === !attempted,
+      "request retained only for an uncertain prior attempt",
+    );
+  }
+});

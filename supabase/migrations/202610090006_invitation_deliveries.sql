@@ -50,11 +50,11 @@ begin
  if d.status<>'pending' then return jsonb_build_object('id',d.id,'status',d.status,'error',d.error,'duplicate',duplicate);end if;
  -- Reconstruct using the reservation's original guest, including family dedup aliases.
  select * into g from guests where event_id=p_event and id=d.guest_id;
- select * into i from invitations where event_id=p_event and id=g.invitation_id;
- select * into a from invitation_access where event_id=p_event and invitation_id=i.id;
+ select * into i from invitations where event_id=p_event and id=d.invitation_id;
+ select * into a from invitation_access where event_id=p_event and invitation_id=d.invitation_id;
  select lower(trim(c.email)) into email from guest_contacts c where c.event_id=p_event and c.guest_id=g.id;
  return jsonb_build_object('id',d.id,'status',d.status,'duplicate',duplicate,'email',d.recipient_email,'name',g.name,'code',a.sharing_code,'password',a.pin,
- 'attempted',d.attempts>0,'available',coalesce(i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null and (d.attempts=0 or email=d.recipient_email),false));
+ 'attempted',d.attempts>0,'available',coalesce(g.invitation_id=d.invitation_id and i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null and (d.attempts=0 or email=d.recipient_email),false));
 end $$;
 create function claim_invitation_delivery(p_id uuid,p_hash text) returns jsonb
 language plpgsql security definer set search_path=public,extensions,pg_temp as $$
@@ -128,7 +128,7 @@ begin
    perform prepare_invitation_batch(p_event,p_request);
  else
    if p_guest is null or not (
-     exists(select 1 from invitation_delivery_members where event_id=p_event and request_id=p_previous and guest_id=p_guest)
+     exists(select 1 from invitation_delivery_members m join invitation_deliveries d on d.id=m.delivery_id and d.event_id=m.event_id join guests g on g.event_id=m.event_id and g.id=m.guest_id and g.invitation_id=d.invitation_id where m.event_id=p_event and m.request_id=p_previous and m.guest_id=p_guest)
      or exists(select 1 from invitation_deliveries d join guests g on g.event_id=d.event_id and g.invitation_id=d.invitation_id join guest_contacts c on c.event_id=g.event_id and c.guest_id=g.id where d.event_id=p_event and d.request_id=p_previous and g.id=p_guest and lower(trim(c.email))=d.recipient_email)
    ) then raise exception 'invalid previous operation';end if;
    perform prepare_invitation_delivery(p_event,p_request,p_guest);
