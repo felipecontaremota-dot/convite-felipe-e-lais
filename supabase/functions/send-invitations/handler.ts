@@ -146,7 +146,11 @@ export function invitationHandler(
       const hash = await resendPayloadHash(delivery);
       const { data: claim, error: claimError } = await db.rpc(
         "claim_invitation_delivery",
-        { p_id: reservation.id, p_hash: hash },
+        {
+          p_id: reservation.id,
+          p_hash: hash,
+          p_credentials: reservation.credential_hash,
+        },
       );
       if (claimError || !claim) return json({ error: "claim failed" }, 503);
       if (!claim.claimed) {

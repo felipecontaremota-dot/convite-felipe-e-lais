@@ -1,5 +1,10 @@
 \set ON_ERROR_STOP on
 begin;
+-- Test helper passes the current credential fingerprint; stale preparation is tested explicitly below.
+create function pg_temp.claim_delivery(d uuid,h text) returns jsonb language sql security definer set search_path=public,extensions,pg_temp as $$
+ select public.claim_invitation_delivery(d,h,(select encode(extensions.digest(a.sharing_code||':'||a.pin,'sha256'),'hex') from invitation_deliveries x join invitation_access a on a.event_id=x.event_id and a.invitation_id=x.invitation_id where x.id=d));
+$$;
+
 create function pg_temp.assert_delivery(v boolean,label text) returns void language plpgsql as $$begin if v is distinct from true then raise exception 'ASSERTION: %',label;end if;end$$;
 \set event '00000000-0000-4000-8000-000000000001'
 \set admin 'eeeeeeee-0000-4000-8000-000000000001'
@@ -26,7 +31,7 @@ set local role service_role;
 select prepare_invitation_delivery(:'event',:'request',:'gi') as di \gset
 select pg_temp.assert_delivery((:'di'::jsonb)->>'password'='0047' and (:'di'::jsonb)->>'email'='individual@example.test','individual server password and normalized email');
 select pg_temp.assert_delivery((:'di'::jsonb)->>'code'=(select sharing_code from invitation_access where invitation_id=:'ii'),'individual link');
-select claim_invitation_delivery((:'di'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
+select pg_temp.claim_delivery((:'di'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
 select finish_invitation_delivery((:'di'::jsonb->>'id')::uuid,'sent','resend','provider-id',null,(:'claim'::jsonb->>'token')::uuid);
 select pg_temp.assert_delivery((select sent_at is not null and sent_channel='EMAIL' from invitations where id=:'ii'),'accepted provider updates legacy dashboard');
 select pg_temp.assert_delivery((select not consent_email from guest_contacts where guest_id=:'gi'),'initial invitation is sent without recurring-message consent');
@@ -35,14 +40,14 @@ select prepare_invitation_delivery(:'event',:'request',:'gi') as duplicate \gset
 select pg_temp.assert_delivery((:'duplicate'::jsonb)->>'status'='sent' and (:'duplicate'::jsonb)->>'duplicate'='true' and not (:'duplicate'::jsonb ? 'password'),'same request returns earlier result without credentials');
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000002',:'gi') as resend \gset
 select pg_temp.assert_delivery((:'resend'::jsonb)->>'duplicate'='false','explicit resend with new ID');
-select claim_invitation_delivery((:'resend'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
+select pg_temp.claim_delivery((:'resend'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
 select finish_invitation_delivery((:'resend'::jsonb->>'id')::uuid,'failed','resend',null,'Falha sanitizada',(:'claim'::jsonb->>'token')::uuid);
 select pg_temp.assert_delivery((select sent_at is not null from invitations where id=:'ii'),'failed resend does not clear first sent date');
 select prepare_invitation_delivery(:'event',:'request',:'ga') as da \gset
 select pg_temp.assert_delivery((:'da'::jsonb)->>'password'='1234' and (:'da'::jsonb)->>'code'=(select sharing_code from invitation_access where invitation_id=:'fi'),'family shared password/link');
 select prepare_invitation_delivery(:'event',:'request',:'gb') as db \gset
 select pg_temp.assert_delivery((:'db'::jsonb)->>'id'=(:'da'::jsonb)->>'id' and (:'db'::jsonb)->>'duplicate'='true','bulk deduplicates normalized email in same access unit');
-select claim_invitation_delivery((:'da'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
+select pg_temp.claim_delivery((:'da'::jsonb->>'id')::uuid,repeat('a',64)) as claim \gset
 select finish_invitation_delivery((:'da'::jsonb->>'id')::uuid,'failed','resend',null,'Falha sanitizada',(:'claim'::jsonb->>'token')::uuid);
 select pg_temp.assert_delivery((select sent_at is null from invitations where id=:'fi'),'Resend failure never marks sent_at');
 select prepare_invitation_delivery(:'event',:'request',:'go') as different_unit \gset
@@ -65,11 +70,11 @@ set local role service_role;
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000003',:'ga') as uncertain_family \gset
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000003',:'gb');
 select (:'uncertain_family'::jsonb)->>'id' as uncertain_id \gset
-select claim_invitation_delivery(:'uncertain_id',repeat('c',64)) as uncertain_claim \gset
+select pg_temp.claim_delivery(:'uncertain_id',repeat('c',64)) as uncertain_claim \gset
 select finish_invitation_delivery(:'uncertain_id','pending','resend',null,'uncertain',(:'uncertain_claim'::jsonb->>'token')::uuid);
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000004',:'ga') as individual_uncertain \gset
 select (:'individual_uncertain'::jsonb)->>'id' as individual_uncertain_id \gset
-select claim_invitation_delivery(:'individual_uncertain_id',repeat('d',64)) as individual_claim \gset
+select pg_temp.claim_delivery(:'individual_uncertain_id',repeat('d',64)) as individual_claim \gset
 select finish_invitation_delivery(:'individual_uncertain_id','pending','resend',null,'uncertain',(:'individual_claim'::jsonb->>'token')::uuid);
 reset role;
 set local role authenticated;
@@ -94,7 +99,7 @@ select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-00000000000
 select (:'before_move'::jsonb)->>'id' as moved_delivery_id \gset
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000008',:'gi') as uncertain_move \gset
 select (:'uncertain_move'::jsonb)->>'id' as uncertain_move_id \gset
-select claim_invitation_delivery(:'uncertain_move_id',repeat('e',64)) as move_claim \gset
+select pg_temp.claim_delivery(:'uncertain_move_id',repeat('e',64)) as move_claim \gset
 select finish_invitation_delivery(:'uncertain_move_id','pending','resend',null,'uncertain',(:'move_claim'::jsonb->>'token')::uuid);
 reset role;
 set local role authenticated;
@@ -103,8 +108,8 @@ select admin_action(:'event','FAMILY_ADD_MEMBERS',jsonb_build_object('target_id'
 reset role;
 set local role service_role;
 -- Claim the payload prepared BEFORE the transfer, without preparing it again.
-select claim_invitation_delivery(:'moved_delivery_id',repeat('f',64)) as stale_claim \gset
-select claim_invitation_delivery(:'uncertain_move_id',repeat('e',64)) as stale_uncertain_claim \gset
+select pg_temp.claim_delivery(:'moved_delivery_id',repeat('f',64)) as stale_claim \gset
+select pg_temp.claim_delivery(:'uncertain_move_id',repeat('e',64)) as stale_uncertain_claim \gset
 select pg_temp.assert_delivery((:'stale_claim'::jsonb)->>'claimed'='false' and (:'stale_claim'::jsonb)->>'status'='skipped','claim rejects stale prepared membership before first provider POST');
 select pg_temp.assert_delivery((:'stale_uncertain_claim'::jsonb)->>'claimed'='false' and (:'stale_uncertain_claim'::jsonb)->>'status'='pending','claim preserves uncertainty after membership changes');
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000007',:'gi') as after_move \gset
@@ -115,6 +120,26 @@ select pg_temp.assert_delivery((:'after_uncertain_move'::jsonb)->>'id'=:'uncerta
 select pg_temp.assert_delivery((select bool_and(invitation_id=:'ii'::uuid and status in ('pending','skipped') and sent_at is null) from invitation_deliveries where id in (:'moved_delivery_id',:'uncertain_move_id')),'transfer does not mark either delivery sent or rewrite reserved unit');
 select pg_temp.assert_delivery((select sent_at is null from invitations where id=:'fi'),'new family dashboard never marked sent by the old reservation');
 select pg_temp.assert_delivery(pg_temp.reject_unrelated_alias(:'event','eeeeeeee-1000-4000-8000-000000000008','eeeeeeee-1000-4000-8000-000000000009',:'gi'),'even an originally registered member cannot reuse an uncertain operation across units');
+select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000011',:'gb') as before_pin \gset
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select admin_action(:'event','PIN_SAVE',jsonb_build_object('id',:'fi','version',(select version from invitations where id=:'fi'),'pin','5678'));
+reset role;
+set local role service_role;
+select public.claim_invitation_delivery((:'before_pin'::jsonb->>'id')::uuid,repeat('a',64),:'before_pin'::jsonb->>'credential_hash') as stale_pin \gset
+select pg_temp.assert_delivery((:'stale_pin'::jsonb)->>'claimed'='false' and (:'stale_pin'::jsonb)->>'reason'='payload_changed','PIN_SAVE after prepare blocks stale first-attempt payload');
+select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000011',:'gb') as before_code \gset
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select admin_action(:'event','CODE_ROTATE',jsonb_build_object('id',:'fi','version',(select version from invitations where id=:'fi')));
+reset role;
+set local role service_role;
+select public.claim_invitation_delivery((:'before_code'::jsonb->>'id')::uuid,repeat('a',64),:'before_code'::jsonb->>'credential_hash') as stale_code \gset
+select pg_temp.assert_delivery((:'stale_code'::jsonb)->>'claimed'='false' and (:'stale_code'::jsonb)->>'reason'='payload_changed','CODE_ROTATE after prepare blocks revoked link');
+select pg_temp.assert_delivery((select attempts=0 and payload_hash is null and sent_at is null from invitation_deliveries where id=(:'before_code'::jsonb->>'id')::uuid),'stale credentials never acquire lease or bind payload');
+select pg_temp.assert_delivery(pg_temp.claim_delivery((:'before_code'::jsonb->>'id')::uuid,repeat('b',64))->>'claimed'='true','same unattempted reservation can claim freshly prepared credentials');
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000010',:'go') as before_delete \gset
 reset role;
 set local role authenticated;
@@ -122,7 +147,7 @@ set local request.jwt.claim.sub=:'admin';
 select admin_action(:'event','GUEST_DELETE',jsonb_build_object('guests',jsonb_build_array((select jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version) from guests g join invitations i on i.id=g.invitation_id where g.id=:'go'))));
 reset role;
 set local role service_role;
-select claim_invitation_delivery((:'before_delete'::jsonb->>'id')::uuid,repeat('f',64)) as deleted_claim \gset
+select pg_temp.claim_delivery((:'before_delete'::jsonb->>'id')::uuid,repeat('f',64)) as deleted_claim \gset
 select pg_temp.assert_delivery((:'deleted_claim'::jsonb)->>'claimed'='false' and (:'deleted_claim'::jsonb)->>'status'='skipped','claim rejects guest deleted after preparation without sending credentials');
 rollback;
 \echo Invitation delivery regression: individual/family, missing email, dedup, retry, resend, privacy, RLS and sent_at passed.

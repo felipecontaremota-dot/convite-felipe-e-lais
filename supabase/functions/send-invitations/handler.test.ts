@@ -85,6 +85,20 @@ function fixture(
             error: null,
           };
         }
+        if (row.credentialsChanged) {
+          assert(
+            args.p_credentials === "prepared-fingerprint",
+            "claim receives the prepared credential fingerprint",
+          );
+          return {
+            data: {
+              claimed: false,
+              status: "pending",
+              reason: "payload_changed",
+            },
+            error: null,
+          };
+        }
         if (row.expired) {
           return {
             data: { claimed: false, status: "pending", reason: "expired" },
@@ -648,4 +662,24 @@ Deno.test("claim rejects a unit change after preparation without sending the sta
       "prior uncertainty remains pending; unattempted delivery is skipped",
     );
   }
+});
+
+Deno.test("claim rejects rotated credentials from an otherwise available preparation", async () => {
+  const f = fixture();
+  f.stored.set(`${requestId}:${guest}`, {
+    id: `${requestId}:${guest}`,
+    status: "pending",
+    available: true,
+    credential_hash: "prepared-fingerprint",
+    credentialsChanged: true,
+  });
+  const result = await (await f.handler(request())).json();
+  assert(
+    f.sends() === 0 && f.finishes.length === 0,
+    "no POST or finish using stale code/password",
+  );
+  assert(
+    result.pending === 1 && !result.complete,
+    "same operation retained for fresh preparation",
+  );
 });

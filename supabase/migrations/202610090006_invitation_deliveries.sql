@@ -54,9 +54,9 @@ begin
  select * into a from invitation_access where event_id=p_event and invitation_id=d.invitation_id;
  select lower(trim(c.email)) into email from guest_contacts c where c.event_id=p_event and c.guest_id=g.id;
  return jsonb_build_object('id',d.id,'status',d.status,'duplicate',duplicate,'email',d.recipient_email,'name',g.name,'code',a.sharing_code,'password',a.pin,
- 'attempted',d.attempts>0,'available',coalesce(g.invitation_id=d.invitation_id and i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null and (d.attempts=0 or email=d.recipient_email),false));
+ 'credential_hash',encode(digest(a.sharing_code||':'||a.pin,'sha256'),'hex'),'attempted',d.attempts>0,'available',coalesce(g.invitation_id=d.invitation_id and i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null and (d.attempts=0 or email=d.recipient_email),false));
 end $$;
-create function claim_invitation_delivery(p_id uuid,p_hash text) returns jsonb
+create function claim_invitation_delivery(p_id uuid,p_hash text,p_credentials text) returns jsonb
 language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 declare d invitation_deliveries; token uuid;
 begin
@@ -74,6 +74,10 @@ begin
    update invitation_deliveries set status=case when attempts=0 then 'skipped' else 'pending' end,
      error='Convite indisponível; vínculo alterado' where id=p_id returning * into d;
    return jsonb_build_object('claimed',false,'status',d.status,'reason','payload_changed');
+ end if;
+ if p_credentials is null or p_credentials is distinct from (select encode(digest(a.sharing_code||':'||a.pin,'sha256'),'hex') from invitation_access a where a.event_id=d.event_id and a.invitation_id=d.invitation_id) then
+   update invitation_deliveries set error='Dados do convite alterados; resultado não confirmado' where id=p_id;
+   return jsonb_build_object('claimed',false,'status','pending','reason','payload_changed');
  end if;
  -- Use the FIRST attempt as the fixed 24h deadline; retries must not slide the window.
  if d.first_attempt_at<=clock_timestamp()-interval '24 hours' then
@@ -99,8 +103,8 @@ begin
  if p_status='sent' then update invitations set sent_at=coalesce(sent_at,clock_timestamp()),sent_channel='EMAIL' where event_id=d.event_id and id=d.invitation_id;end if;
  return true;
 end $$;
-revoke all on function prepare_invitation_delivery(uuid,uuid,uuid),claim_invitation_delivery(uuid,text),finish_invitation_delivery(uuid,text,text,text,text,uuid) from public,anon,authenticated;
-grant execute on function prepare_invitation_delivery(uuid,uuid,uuid),claim_invitation_delivery(uuid,text),finish_invitation_delivery(uuid,text,text,text,text,uuid) to service_role;
+revoke all on function prepare_invitation_delivery(uuid,uuid,uuid),claim_invitation_delivery(uuid,text,text),finish_invitation_delivery(uuid,text,text,text,text,uuid) from public,anon,authenticated;
+grant execute on function prepare_invitation_delivery(uuid,uuid,uuid),claim_invitation_delivery(uuid,text,text),finish_invitation_delivery(uuid,text,text,text,text,uuid) to service_role;
 
 -- Freeze the bulk membership and reserve every item atomically before the first POST.
 create table invitation_delivery_batches(event_id uuid references events(id) on delete cascade,request_id uuid,guest_ids uuid[] not null,primary key(event_id,request_id));
