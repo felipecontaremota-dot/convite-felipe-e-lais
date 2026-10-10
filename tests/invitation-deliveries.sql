@@ -102,13 +102,27 @@ set local request.jwt.claim.sub=:'admin';
 select admin_action(:'event','FAMILY_ADD_MEMBERS',jsonb_build_object('target_id',:'fi','target_version',(select version from invitations where id=:'fi'),'guests',jsonb_build_array((select jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version) from guests g join invitations i on i.id=g.invitation_id where g.id=:'gi'))));
 reset role;
 set local role service_role;
+-- Claim the payload prepared BEFORE the transfer, without preparing it again.
+select claim_invitation_delivery(:'moved_delivery_id',repeat('f',64)) as stale_claim \gset
+select claim_invitation_delivery(:'uncertain_move_id',repeat('e',64)) as stale_uncertain_claim \gset
+select pg_temp.assert_delivery((:'stale_claim'::jsonb)->>'claimed'='false' and (:'stale_claim'::jsonb)->>'status'='skipped','claim rejects stale prepared membership before first provider POST');
+select pg_temp.assert_delivery((:'stale_uncertain_claim'::jsonb)->>'claimed'='false' and (:'stale_uncertain_claim'::jsonb)->>'status'='pending','claim preserves uncertainty after membership changes');
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000007',:'gi') as after_move \gset
 select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000008',:'gi') as after_uncertain_move \gset
-select pg_temp.assert_delivery((:'after_move'::jsonb)->>'id'=:'moved_delivery_id' and (:'after_move'::jsonb)->>'available'='false' and (:'after_move'::jsonb)->>'attempted'='false','unattempted reservation rejects guest transferred to another unit');
+select pg_temp.assert_delivery((:'after_move'::jsonb)->>'id'=:'moved_delivery_id' and (:'after_move'::jsonb)->>'status'='skipped','unattempted reservation rejects guest transferred to another unit');
 select pg_temp.assert_delivery((:'after_move'::jsonb)->>'code' is null and (:'after_move'::jsonb)->>'password' is distinct from '1234','reserved individual delivery never exposes new family link/password');
 select pg_temp.assert_delivery((:'after_uncertain_move'::jsonb)->>'id'=:'uncertain_move_id' and (:'after_uncertain_move'::jsonb)->>'available'='false' and (:'after_uncertain_move'::jsonb)->>'status'='pending','uncertain transfer keeps original pending reservation');
-select pg_temp.assert_delivery((select bool_and(invitation_id=:'ii'::uuid and status='pending' and sent_at is null) from invitation_deliveries where id in (:'moved_delivery_id',:'uncertain_move_id')),'transfer does not mark either delivery sent or rewrite reserved unit');
+select pg_temp.assert_delivery((select bool_and(invitation_id=:'ii'::uuid and status in ('pending','skipped') and sent_at is null) from invitation_deliveries where id in (:'moved_delivery_id',:'uncertain_move_id')),'transfer does not mark either delivery sent or rewrite reserved unit');
 select pg_temp.assert_delivery((select sent_at is null from invitations where id=:'fi'),'new family dashboard never marked sent by the old reservation');
 select pg_temp.assert_delivery(pg_temp.reject_unrelated_alias(:'event','eeeeeeee-1000-4000-8000-000000000008','eeeeeeee-1000-4000-8000-000000000009',:'gi'),'even an originally registered member cannot reuse an uncertain operation across units');
+select prepare_invitation_delivery(:'event','eeeeeeee-1000-4000-8000-000000000010',:'go') as before_delete \gset
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select admin_action(:'event','GUEST_DELETE',jsonb_build_object('guests',jsonb_build_array((select jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version) from guests g join invitations i on i.id=g.invitation_id where g.id=:'go'))));
+reset role;
+set local role service_role;
+select claim_invitation_delivery((:'before_delete'::jsonb->>'id')::uuid,repeat('f',64)) as deleted_claim \gset
+select pg_temp.assert_delivery((:'deleted_claim'::jsonb)->>'claimed'='false' and (:'deleted_claim'::jsonb)->>'status'='skipped','claim rejects guest deleted after preparation without sending credentials');
 rollback;
 \echo Invitation delivery regression: individual/family, missing email, dedup, retry, resend, privacy, RLS and sent_at passed.

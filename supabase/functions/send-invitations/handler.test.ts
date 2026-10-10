@@ -74,6 +74,17 @@ function fixture(
             error: null,
           };
         }
+        if (row.unitChanged) {
+          row.status = row.attempted ? "pending" : "skipped";
+          return {
+            data: {
+              claimed: false,
+              status: row.status,
+              reason: "payload_changed",
+            },
+            error: null,
+          };
+        }
         if (row.expired) {
           return {
             data: { claimed: false, status: "pending", reason: "expired" },
@@ -613,5 +624,28 @@ Deno.test("definitive retry rejection cannot erase an earlier uncertain acceptan
     }
   } finally {
     globalThis.fetch = previous;
+  }
+});
+
+Deno.test("claim rejects a unit change after preparation without sending the stale payload", async () => {
+  for (const attempted of [false, true]) {
+    const f = fixture();
+    // Preparation returns a previously available payload; claim observes the new unit.
+    f.stored.set(`${requestId}:${guest}`, {
+      id: `${requestId}:${guest}`,
+      status: "pending",
+      available: true,
+      attempted,
+      unitChanged: true,
+    });
+    const result = await (await f.handler(request())).json();
+    assert(f.sends() === 0, "no provider POST with stale credentials");
+    assert(f.finishes.length === 0, "rejected claim cannot finish a delivery");
+    assert(
+      attempted
+        ? result.pending === 1 && !result.complete
+        : result.skipped === 1 && result.complete,
+      "prior uncertainty remains pending; unattempted delivery is skipped",
+    );
   }
 });

@@ -66,6 +66,15 @@ begin
  if d.status<>'pending' then return jsonb_build_object('claimed',false,'status',d.status);end if;
  if d.superseded_by is not null then return jsonb_build_object('claimed',false,'status','pending','reason','superseded');end if;
  if d.locked_at>clock_timestamp()-interval '2 minutes' then return jsonb_build_object('claimed',false,'status','pending','reason','processing');end if;
+ -- Preparation is a separate transaction: revalidate membership under the claim lock.
+ if not exists(select 1 from guests g join invitations i on i.event_id=g.event_id and i.id=g.invitation_id
+   join invitation_access a on a.event_id=i.event_id and a.invitation_id=i.id
+   where g.event_id=d.event_id and g.id=d.guest_id and g.invitation_id=d.invitation_id
+   and i.active and i.archived_at is null and i.code_hash is not null and a.sharing_code is not null and a.pin is not null) then
+   update invitation_deliveries set status=case when attempts=0 then 'skipped' else 'pending' end,
+     error='Convite indisponível; vínculo alterado' where id=p_id returning * into d;
+   return jsonb_build_object('claimed',false,'status',d.status,'reason','payload_changed');
+ end if;
  -- Use the FIRST attempt as the fixed 24h deadline; retries must not slide the window.
  if d.first_attempt_at<=clock_timestamp()-interval '24 hours' then
    update invitation_deliveries set error='Resultado não confirmado; janela segura expirada' where id=p_id;
