@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Platform,
   Pressable,
@@ -26,7 +26,9 @@ import {
 } from "../../components/adminUi";
 import { AdminModal, SelectedChips } from "../../components/AdminModal";
 import { useApp } from "../../lib/AppProvider";
+import { lastInvitationDelivery } from "./invitationDelivery";
 import type { Guest } from "../../types/domain";
+import * as Crypto from "expo-crypto";
 import { copyText } from "../../utils/externalLinks";
 import {
   AccessControls,
@@ -135,8 +137,38 @@ function GuestForm({
   );
 }
 export function GuestsScreen() {
+  const [sendAllOpen, setSendAllOpen] = useState(false);
+  const requests = useRef(new Map<string, string>());
+
   const app = useApp(),
     feedback = useFeedback();
+  const deliver = async (guest?: string) => {
+    const key = guest || "bulk";
+    const request = requests.current.get(key) || Crypto.randomUUID();
+    requests.current.set(key, request);
+    const result = await app.sendInvitations(request, guest);
+    requests.current.delete(key);
+    return result;
+  };
+  const activePeople = (app.data?.guests || []).filter((g) =>
+    app.data?.invitations.some(
+      (i) => i.id === g.invitation_id && i.active && !i.archived_at,
+    ),
+  );
+  const sendable = activePeople.filter((g) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      app.data?.contacts.find((c) => c.guest_id === g.id)?.email.trim() || "",
+    ),
+  );
+  const uniqueRecipients = new Set(
+    sendable.map(
+      (g) =>
+        `${g.invitation_id}:${app.data?.contacts
+          .find((c) => c.guest_id === g.id)
+          ?.email.trim()
+          .toLowerCase()}`,
+    ),
+  ).size;
   const { guest: routeGuest, edit: routeEdit } = useLocalSearchParams<{
     guest?: string;
     edit?: string;
@@ -218,6 +250,43 @@ export function GuestsScreen() {
           closeDetail();
         }}
       />
+      <Button
+        secondary
+        title="Enviar todos os convites"
+        onPress={() => setSendAllOpen(true)}
+      />
+      {sendAllOpen ? (
+        <AdminModal
+          title="Enviar todos os convites"
+          onClose={() => setSendAllOpen(false)}
+        >
+          <Text style={styles.text}>
+            {activePeople.length} convidados ativos · {sendable.length} com
+            e-mail válido · {activePeople.length - sendable.length} sem e-mail
+            válido.
+          </Text>
+          <Text style={styles.text}>
+            {uniqueRecipients} convites serão enviados. E-mails iguais na mesma
+            unidade recebem somente um convite neste envio.
+          </Text>
+          <Button
+            title="Enviar"
+            onPress={() =>
+              feedback.run(async () => {
+                const result = await deliver();
+                setSendAllOpen(false);
+                return result;
+              })
+            }
+          />
+          <Button
+            secondary
+            title="Cancelar"
+            onPress={() => setSendAllOpen(false)}
+          />
+          {feedback.node}
+        </AdminModal>
+      ) : null}
       {notice ? (
         <Text role="status" style={styles.small}>
           {notice}
@@ -354,6 +423,7 @@ export function GuestsScreen() {
           </Text>
           <AccessControls
             key={invitation.id}
+            showUrl={false}
             invitation={invitation}
             phone={
               data?.contacts.find(
@@ -361,6 +431,20 @@ export function GuestsScreen() {
               )?.whatsapp
             }
           />
+          <Text style={styles.small}>
+            {(() => {
+              const last = lastInvitationDelivery(
+                data?.invitation_deliveries,
+                current.id,
+                invitation.id,
+                data?.contacts.find((c) => c.guest_id === current.id)?.email ||
+                  "",
+              );
+              return last?.sent_at
+                ? `Último convite enviado em ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(last.sent_at))}`
+                : "Convite ainda não enviado";
+            })()}
+          </Text>
           <Button
             title="Editar convidado"
             onPress={() => setForm(current.id)}
@@ -442,6 +526,21 @@ export function GuestsScreen() {
                     if (unit)
                       await copyText(await resolveAccessLink(unit, app.scope));
                     return "Link copiado.";
+                  })
+                }
+              />
+              <IconButton
+                icon="send"
+                label={`Enviar convite para ${g.name}`}
+                onPress={() =>
+                  feedback.run(async () => {
+                    if (
+                      !data?.contacts
+                        .find((c) => c.guest_id === g.id)
+                        ?.email.trim()
+                    )
+                      return "Este convidado não possui e-mail cadastrado.";
+                    return deliver(g.id);
                   })
                 }
               />

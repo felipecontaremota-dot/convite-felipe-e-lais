@@ -110,7 +110,9 @@ export function InvitationAccess() {
       .catch((e: unknown) => {
         if (active)
           setError(
-            e instanceof AppError ? e.message : "Código ou senha inválido.",
+            e instanceof AppError
+              ? e.message
+              : "Não foi possível carregar o convite agora. Tente novamente.",
           );
       });
     return () => {

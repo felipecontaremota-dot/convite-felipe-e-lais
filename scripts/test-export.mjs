@@ -166,12 +166,9 @@ try {
     origin + webPath("c/DemoConviteExclusivoFelipeLais2026", basePath),
   );
   await page
-    .getByText(
-      configured
-        ? "Não foi possível iniciar o acesso."
-        : "O convite ainda não está disponível. Tente novamente mais tarde.",
-      { exact: true },
-    )
+    .getByText("Não foi possível carregar o convite agora. Tente novamente.", {
+      exact: true,
+    })
     .waitFor();
   assert.equal(
     signupRequests,

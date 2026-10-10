@@ -31,9 +31,11 @@ export function AccessControls({
   invitation: i,
   phone = "",
   onChanged,
+  showUrl = true,
 }: {
   invitation: Invitation;
   phone?: string;
+  showUrl?: boolean;
   onChanged?: (previous: number, next: number) => void;
 }) {
   const app = useApp(),
@@ -92,11 +94,13 @@ export function AccessControls({
       </Text>
       {i.link_active ? (
         <>
-          <Text selectable style={styles.small}>
-            {process.env.EXPO_PUBLIC_WEB_BASE_URL && i.sharing_code
-              ? accessLink(i)
-              : "Se o código for antigo, o link estará disponível no dispositivo que o gerou."}
-          </Text>
+          {showUrl ? (
+            <Text selectable style={styles.small}>
+              {process.env.EXPO_PUBLIC_WEB_BASE_URL && i.sharing_code
+                ? accessLink(i)
+                : "Se o código for antigo, o link estará disponível no dispositivo que o gerou."}
+            </Text>
+          ) : null}
           <Button
             secondary
             title="Copiar link"

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { Text, View, Pressable } from "react-native";
 import { router } from "expo-router";
 import {
   Button,
@@ -30,6 +30,7 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
   const [editVersion, setEditVersion] = useState(i.version);
   const ownChange = (previous: number, next: number) =>
     setEditVersion((v) => (v === previous ? next : v));
+  const [membersOpen, setMembersOpen] = useState(false);
   const [expanded, setExpanded] = useState(false),
     [name, setName] = useState(i.name),
     [active, setActive] = useState(i.active),
@@ -62,6 +63,7 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
           label={`Editar família ${i.name}`}
           onPress={() => {
             setExpanded(true);
+            setMembersOpen(false);
             setEditVersion(i.version);
             setName(i.name);
             setActive(i.active);
@@ -150,92 +152,109 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
             onChanged={ownChange}
             phone={data.contacts.find((c) => c.guest_id === primary)?.whatsapp}
           />
-          <Text style={styles.heading}>Membros</Text>
-          {members.map((g) => (
-            <View key={g.id} style={styles.row}>
-              <Text style={[styles.text, { flexGrow: 1 }]}>{g.name}</Text>
-              <Button
-                secondary
-                title={`Abrir ficha de ${g.name}`}
-                onPress={() => {
-                  setExpanded(false);
-                  router.push({
-                    pathname: "/convidados",
-                    params: { guest: g.id },
-                  });
-                }}
-              />
-              <IconButton
-                icon="edit"
-                label={`Editar convidado ${g.name}`}
-                onPress={() => {
-                  setExpanded(false);
-                  router.push({
-                    pathname: "/convidados",
-                    params: { guest: g.id, edit: "true" },
-                  });
-                }}
-              />
-              <Button
-                secondary
-                title={`Remover da família: ${g.name}`}
-                onPress={() => prepare(g.id)}
-              />
-            </View>
-          ))}
-          <IconButton
-            icon="add"
-            label="Adicionar membro à família"
-            onPress={() => setAdding((v) => !v)}
-          />
-          {adding ? (
-            <Card>
-              <Text style={styles.text}>Convidados com acesso individual</Text>
-              {!i.pin || !i.link_active ? (
-                <Text style={styles.notice}>
-                  Configure a senha e gere o link da família antes de adicionar
-                  membros.
-                </Text>
-              ) : null}
-              <SelectedChips
-                items={available.filter((g) => selected.includes(g.id))}
-                onRemove={(id) =>
-                  setSelected((ids) => ids.filter((x) => x !== id))
-                }
-                onClear={() => setSelected([])}
-              />
-              {available.map((g) => (
-                <Toggle
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Membros (${members.length})`}
+            accessibilityState={{ expanded: membersOpen }}
+            aria-expanded={membersOpen}
+            onPress={() => setMembersOpen((v) => !v)}
+            style={styles.row}
+          >
+            <Text style={[styles.heading, { flexGrow: 1 }]}>
+              Membros ({members.length})
+            </Text>
+            <Text accessible={false}>{membersOpen ? "⌃" : "⌄"}</Text>
+          </Pressable>
+          {membersOpen ? (
+            <>
+              {members.map((g) => (
+                <View
                   key={g.id}
-                  label={g.name}
-                  value={selected.includes(g.id)}
-                  onChange={(v) =>
-                    setSelected((ids) =>
-                      v ? [...ids, g.id] : ids.filter((id) => id !== g.id),
-                    )
-                  }
-                />
+                  style={[
+                    styles.row,
+                    {
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#E6E0D5",
+                      paddingVertical: 8,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.text, { flexGrow: 1 }]}>{g.name}</Text>
+                  <IconButton
+                    icon="edit"
+                    label={`Editar convidado ${g.name}`}
+                    onPress={() => {
+                      setExpanded(false);
+                      router.push({
+                        pathname: "/convidados",
+                        params: { guest: g.id, edit: "true" },
+                      });
+                    }}
+                  />
+                  <IconButton
+                    icon="remove"
+                    label={`Remover ${g.name} da família`}
+                    onPress={() => prepare(g.id)}
+                  />
+                </View>
               ))}
-              {!available.length ? (
-                <Empty text="Nenhum convidado individual disponível." />
-              ) : null}
-              <Button
-                title="Adicionar membros"
-                disabled={!selected.length || !i.pin || !i.link_active}
-                onPress={() =>
-                  feedback.run(async () => {
-                    await app.admin("FAMILY_ADD_MEMBERS", {
-                      target_id: i.id,
-                      target_version: i.version,
-                      guests: expectedGuests(data, selected),
-                    });
-                    ownChange(i.version, i.version + 1);
-                    setSelected([]);
-                    setAdding(false);
-                  })
-                }
+              <IconButton
+                icon="add"
+                label="Adicionar membro à família"
+                onPress={() => setAdding((v) => !v)}
               />
-            </Card>
+              {adding ? (
+                <Card>
+                  <Text style={styles.text}>
+                    Convidados com acesso individual
+                  </Text>
+                  {!i.pin || !i.link_active ? (
+                    <Text style={styles.notice}>
+                      Configure a senha e gere o link da família antes de
+                      adicionar membros.
+                    </Text>
+                  ) : null}
+                  <SelectedChips
+                    items={available.filter((g) => selected.includes(g.id))}
+                    onRemove={(id) =>
+                      setSelected((ids) => ids.filter((x) => x !== id))
+                    }
+                    onClear={() => setSelected([])}
+                  />
+                  {available.map((g) => (
+                    <Toggle
+                      key={g.id}
+                      label={g.name}
+                      value={selected.includes(g.id)}
+                      onChange={(v) =>
+                        setSelected((ids) =>
+                          v ? [...ids, g.id] : ids.filter((id) => id !== g.id),
+                        )
+                      }
+                    />
+                  ))}
+                  {!available.length ? (
+                    <Empty text="Nenhum convidado individual disponível." />
+                  ) : null}
+                  <Button
+                    title="Adicionar membros"
+                    disabled={!selected.length || !i.pin || !i.link_active}
+                    onPress={() =>
+                      feedback.run(async () => {
+                        await app.admin("FAMILY_ADD_MEMBERS", {
+                          target_id: i.id,
+                          target_version: i.version,
+                          guests: expectedGuests(data, selected),
+                        });
+                        ownChange(i.version, i.version + 1);
+                        setSelected([]);
+                        setAdding(false);
+                      })
+                    }
+                  />
+                </Card>
+              ) : null}
+            </>
           ) : null}
           <Button
             secondary

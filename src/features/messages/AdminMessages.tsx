@@ -139,17 +139,19 @@ export function AdminMessages() {
           }
           onPress={() =>
             feedback.run(async () => {
-              const result = await app.send(
-                target === "GUEST" ? "MESSAGE_SEND_TO_GUESTS" : "MESSAGE_SEND",
-                {
-                  content: content.trim(),
-                  invitation_id: target === "FAMILY" ? family : null,
-                  ...(target === "GUEST"
-                    ? { recipient_guest_ids: guests }
-                    : {}),
-                  channels: selected,
-                },
-              );
+              const result = await app.send("MESSAGE_SEND_TO_GUESTS", {
+                content: content.trim(),
+                recipient_guest_ids:
+                  target === "GUEST"
+                    ? guests
+                    : people
+                        .filter(
+                          (g) =>
+                            target !== "FAMILY" || g.invitation_id === family,
+                        )
+                        .map((g) => g.id),
+                channels: selected,
+              });
               setContent("");
               setGuests([]);
               return result;

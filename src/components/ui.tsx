@@ -13,6 +13,8 @@ import { router, usePathname } from "expo-router";
 import { theme } from "../theme/tokens";
 import { useApp } from "../lib/AppProvider";
 import { canAccess } from "../utils/security";
+import { Confirmation } from "./adminUi";
+import { mutationAction } from "../storage/syncLabels";
 import { friendlyError } from "../lib/errors";
 export const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.colors.paper },
@@ -279,6 +281,8 @@ export function Screen({
   const app = useApp();
   const pathname = usePathname();
   const feedback = useFeedback();
+  const [discardFailed, setDiscardFailed] = useState<string | null>(null);
+  const failed = app.pending.find((p) => p.lastError);
   const [discard, setDiscard] = useState(false);
   const guard = section && !canAccess(app.data?.role || null, section);
   return (
@@ -329,20 +333,40 @@ export function Screen({
       {app.pending.length ? (
         <Card>
           <Text style={styles.text}>
-            {app.pending.length} alteração(ões) aguardando sincronização.
+            {app.pending.length}{" "}
+            {app.pending.length === 1
+              ? "alteração aguardando sincronização"
+              : "alterações aguardando sincronização"}
           </Text>
-          {app.pending.some((p) => p.lastError) ? (
-            <Text style={styles.error}>
-              Há uma alteração que precisa ser reenviada. Nenhum envio foi
-              confirmado.
-            </Text>
+          {failed ? (
+            <>
+              <Text style={styles.error}>{mutationAction(failed.type)}</Text>
+              <Text style={styles.small}>Tentativas: {failed.attempts}</Text>
+              <Text style={styles.error}>{failed.lastError}</Text>
+              <Button
+                secondary
+                title="Descartar alteração com erro"
+                onPress={() => setDiscardFailed(failed.mutationId)}
+              />
+            </>
           ) : null}
           <Button
             title="Sincronizar agora"
             disabled={!app.online}
-            onPress={() => feedback.run(app.sync)}
+            onPress={() => feedback.run(app.syncNow)}
           />
         </Card>
+      ) : null}
+      {discardFailed ? (
+        <Confirmation
+          confirmLabel="Descartar"
+          text="Descartar esta alteração com erro? Ela será removida somente deste dispositivo e não será reenviada. As demais alterações serão preservadas."
+          onCancel={() => setDiscardFailed(null)}
+          onConfirm={async () => {
+            await app.discardFailed(discardFailed);
+            setDiscardFailed(null);
+          }}
+        />
       ) : null}
       {app.loading && section ? (
         <ActivityIndicator accessibilityLabel="Carregando convite" />

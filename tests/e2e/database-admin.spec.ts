@@ -107,9 +107,10 @@ test("real RPC: remove member and delete family preserve guests; direct deletion
       exact: true,
     })
     .click();
+  await page.getByRole("button", { name: "Membros (2)", exact: true }).click();
   await page
     .getByRole("button", {
-      name: "Remover da família: Membro preservado",
+      name: "Remover Membro preservado da família",
       exact: true,
     })
     .click();
@@ -124,7 +125,7 @@ test("real RPC: remove member and delete family preserve guests; direct deletion
   await expect(confirm).toHaveCount(0);
   await expect(
     page.getByRole("button", {
-      name: "Remover da família: Membro preservado",
+      name: "Remover Membro preservado da família",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -379,11 +380,23 @@ test("real RPC: local edit refreshes saved card and official Maps iframe immedia
     "Espaço da celebração, Rua São João, 12",
   );
   await page
+    .context()
+    .route("https://maps.test/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<p>Fixture destination</p>",
+      }),
+    );
+  const popup = page.waitForEvent("popup");
+  await page
     .getByRole("button", { name: "Abrir localização", exact: true })
     .click();
+  const destination = await popup;
+  await expect(destination).toHaveURL("https://maps.test/local-salvo");
+  await destination.close();
   await expect(
     page.getByRole("button", { name: "Abrir link de GPS", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   expect(db.rpc(uid, "app_snapshot", { p_event: event }).event).toMatchObject({
     venue_name: "Espaço da celebração",
     address: "Rua São João, 12",

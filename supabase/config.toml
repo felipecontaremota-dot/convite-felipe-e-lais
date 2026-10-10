@@ -19,3 +19,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.sync-sheets]
 verify_jwt = false
+[functions.send-invitations]
+verify_jwt = false

@@ -4,6 +4,7 @@ export interface Delivery {
   key: string;
   title: string;
   body: string;
+  html?: string;
   email: string;
   whatsapp: string;
   tokens: string[];
@@ -41,6 +42,7 @@ export class ResendProvider implements Provider {
         to: [d.email],
         subject: d.title,
         text: d.body,
+        ...(d.html ? { html: d.html } : {}),
       }),
     });
     return { status: "sent", provider: "resend", providerId: data.id };

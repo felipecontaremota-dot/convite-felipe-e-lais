@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.3";
 export const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-worker-secret",
+    "authorization, apikey, content-type, x-client-info, x-worker-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 export const json = (body: unknown, status = 200) =>
@@ -34,4 +34,16 @@ export async function requestJson(url: string, init: RequestInit = {}) {
   });
   if (!response.ok) throw Error(`Provider HTTP ${response.status}`);
   return response.json();
+}
+
+export async function eventAdmin(request: Request, event: string) {
+  if (typeof event !== "string" || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(event)) throw Error("invalid event");
+  await authenticated(request);
+  const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: request.headers.get("Authorization")! } },
+  });
+  const result = await client.rpc("event_role", { p_event: event });
+  if (result.error) throw Error("role validation failed");
+  if (result.data !== "ADMIN") throw Error("unauthorized");
 }

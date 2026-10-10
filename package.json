@@ -14,10 +14,10 @@
     "build:web": "expo export --platform web && node scripts/web-assets.mjs",
     "test:e2e": "playwright test",
     "test:db": "bash scripts/test-db.sh",
-    "check:functions": "deno check --config supabase/functions/deno.json supabase/functions/redeem-invitation/index.ts supabase/functions/dispatch-notifications/index.ts supabase/functions/sync-sheets/index.ts",
+    "check:functions": "deno check --config supabase/functions/deno.json supabase/functions/redeem-invitation/index.ts supabase/functions/dispatch-notifications/index.ts supabase/functions/sync-sheets/index.ts supabase/functions/send-invitations/index.ts",
     "import:report": "tsx scripts/import-guests.ts",
     "format": "prettier --write app src tests scripts docs *.json *.ts *.js README.md .github/workflows/*.yml",
-    "test:functions": "deno test --config supabase/functions/deno.json --allow-env supabase/functions/_shared/providers.test.ts supabase/functions/redeem-invitation/handler.test.ts",
+    "test:functions": "deno test --config supabase/functions/deno.json --allow-env supabase/functions/_shared/providers.test.ts supabase/functions/redeem-invitation/handler.test.ts supabase/functions/dispatch-notifications/handler.test.ts supabase/functions/send-invitations/handler.test.ts supabase/functions/_shared/cors.test.ts",
     "serve:web": "node scripts/serve-web.mjs",
     "test:export": "node scripts/test-export.mjs"
   },

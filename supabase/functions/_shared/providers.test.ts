@@ -236,3 +236,13 @@ Deno.test("Sheets update finds stable UUID and preserves unmapped cells", async 
     Deno.env.delete("GOOGLE_SHEETS_TAB_GUESTS");
   }
 });
+Deno.test("Resend supports invitation HTML without breaking plain text messages", async () => {
+  const previous=globalThis.fetch;
+  globalThis.fetch=async(_input,init)=>{
+    const body=JSON.parse(String(init?.body));
+    assert(body.text===delivery.body && body.html==="<p>Provisório</p>","text plus HTML");
+    return Response.json({id:"html-provider-id"});
+  };
+  try { await new ResendProvider().send({...delivery,html:"<p>Provisório</p>"}); }
+  finally { globalThis.fetch=previous; }
+});

@@ -16,11 +16,19 @@ export default defineConfig({
   projects: [
     {
       name: "demo",
-      testIgnore: ["staff-and-pin.spec.ts", "database-admin.spec.ts"],
+      testIgnore: [
+        "staff-and-pin.spec.ts",
+        "database-admin.spec.ts",
+        "access-stabilization.spec.ts",
+      ],
     },
     {
       name: "auth",
-      testMatch: ["staff-and-pin.spec.ts", "database-admin.spec.ts"],
+      testMatch: [
+        "staff-and-pin.spec.ts",
+        "database-admin.spec.ts",
+        "access-stabilization.spec.ts",
+      ],
       use: { baseURL: "http://127.0.0.1:8083" },
     },
   ],
