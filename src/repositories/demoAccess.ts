@@ -88,10 +88,6 @@ export async function demoAccess(
       name,
       invitation_id: unit,
       group_label: group,
-      salutation:
-        (p.salutation as Guest["salutation"]) ||
-        existing?.salutation ||
-        "NEUTRAL",
       version: (existing?.version || 0) + 1,
       is_child: !!p.is_child,
       is_adolescent: false,

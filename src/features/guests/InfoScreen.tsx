@@ -20,7 +20,7 @@ export function InfoScreen() {
         <Text style={styles.text}>
           Você pode revogar consentimentos no Perfil e pedir correção ou
           exclusão aos noivos pela área Mensagens. No aparelho, Sair remove a
-          sessão, convites e cache da conta. Uma política completa, responsável
+          sessão, ingressos e cache da conta. Uma política completa, responsável
           e prazo de retenção devem ser definidos antes do lançamento público.
         </Text>
       </Card>

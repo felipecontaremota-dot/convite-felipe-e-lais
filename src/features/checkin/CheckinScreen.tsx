@@ -45,7 +45,10 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
     ...(s?.checkins || []),
     ...local.filter((c) => !s?.checkins.some((x) => x.guest_id === c.guest_id)),
   ];
-  const confirmed = s?.guests || [];
+  const confirmed =
+    s?.guests.filter((g) =>
+      s.rsvps.some((r) => r.guest_id === g.id && r.status === "CONFIRMED"),
+    ) || [];
   const scan = async (value: string) => {
     setCamera(false);
     const parsed = ticketToken(value);
@@ -54,12 +57,12 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
     const validation = validateCredential(hash, s?.credentials || [], checkins);
     if (validation.status === "invalid")
       throw new AppError(
-        "Convite inválido, revogado ou ausente no cache. Sincronize ou busque pelo nome.",
+        "Ingresso inválido, revogado ou ausente no cache. Sincronize ou busque pelo nome.",
       );
     setPreview({ guest: validation.credential.guest_id, hash, method: "QR" });
     return validation.status === "used"
       ? "Convidado já registrado. Confira abaixo."
-      : "Convite localizado. Confira o nome e confirme a entrada.";
+      : "Ingresso localizado. Confira o nome e confirme a entrada.";
   };
   const existing = checkins.find((c) => c.guest_id === preview?.guest);
   const person = s?.guests.find((g) => g.id === preview?.guest);
@@ -81,7 +84,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
             confirmed.filter((g) => !checkins.some((c) => c.guest_id === g.id))
               .length
           }{" "}
-          convidados aguardados
+          confirmados aguardados
         </Text>
         <Button
           title="Preparar / atualizar cache offline"
@@ -89,7 +92,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           onPress={() =>
             feedback.run(async () => {
               await app.refresh();
-              return "Base local atualizada. Este dispositivo pode validar os convites conhecidos sem conexão.";
+              return "Base local atualizada. Este dispositivo pode validar os ingressos conhecidos sem conexão.";
             })
           }
         />
@@ -103,7 +106,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
                   "Permissão de câmera não concedida. Use a busca manual.",
                 );
               setCamera(true);
-              return "Aponte a câmera para o convite.";
+              return "Aponte a câmera para o ingresso.";
             })
           }
         />
@@ -131,7 +134,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
         />
         <Button
           secondary
-          title="Validar convite"
+          title="Validar ingresso"
           disabled={!token.trim()}
           onPress={() => feedback.run(() => scan(token.trim()))}
         />
@@ -210,7 +213,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           </Card>
         ))}
       {!confirmed.length ? (
-        <Empty text="Não há convidados na base local. Atualize o cache antes do evento." />
+        <Empty text="Não há confirmados na base local. Atualize o cache antes do evento." />
       ) : null}
       <Text style={styles.heading}>Últimas entradas</Text>
       {checkins
@@ -240,7 +243,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
         ))}
       <Text style={styles.small}>
         Dois celulares offline não conhecem instantaneamente as entradas um do
-        outro. O servidor detecta duplicidades na sincronização. Convites
+        outro. O servidor detecta duplicidades na sincronização. Ingressos
         revogados depois do último cache exigem conferência online.
       </Text>
     </Screen>

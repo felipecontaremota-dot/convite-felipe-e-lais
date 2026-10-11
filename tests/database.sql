@@ -21,7 +21,6 @@ do $$begin update user_roles set role='ADMIN';raise exception 'role write grante
 do $$begin perform app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000001','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000002","status":"CONFIRMED"}');raise exception 'isolation broken';exception when others then if sqlerrm<>'unauthorized' then raise;end if;end$$;
 select app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000001","status":"CONFIRMED","dietary":"Sem lactose"}');
 select pg_temp.assert_true((app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000001","status":"DECLINED"}')->>'duplicate')::boolean,'mutation idempotency');
-select identify_guest('00000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001');
 select issue_ticket('00000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001') as ticket \gset
 select pg_temp.assert_true(length((:'ticket'::jsonb)->>'token')=64,'opaque token entropy');
 do $$begin perform issue_ticket('00000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001');raise exception 'silent rotation';exception when others then if sqlerrm<>'ticket_exists' then raise;end if;end$$;
@@ -43,7 +42,7 @@ set local role authenticated;
 set local request.jwt.claim.sub='aaaaaaaa-0000-4000-8000-000000000003';
 select app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000006','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000001","status":"DECLINED"}');
 reset role;
-select pg_temp.assert_true((select count(*) from qr_credentials where revoked_at is null)=1,'decline preserves independent check-in credential');
+select pg_temp.assert_true((select count(*) from qr_credentials where revoked_at is null)=0,'decline revokes ticket');
 set local role authenticated;
 set local request.jwt.claim.sub='aaaaaaaa-0000-4000-8000-000000000001';
 select pg_temp.assert_true(jsonb_array_length(app_snapshot('00000000-0000-4000-8000-000000000001')->'guests')=2,'admin dashboard all guests');

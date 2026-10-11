@@ -152,18 +152,6 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
     const s = JSON.parse(JSON.stringify(db.snapshot)) as Snapshot;
     s.role = role;
     if (role === "GUEST") {
-      const identified = s.current_guest_id;
-      s.guest_access_version = 8;
-      s.ticket_guest_ids = s.guests
-        .filter((g) => g.invitation_id === demoFamily)
-        .map((g) => g.id);
-      s.family_ticket_invitation_ids = [demoFamily];
-      s.credentials = s.credentials.filter((c) =>
-        s.ticket_guest_ids?.includes(c.guest_id),
-      );
-      s.family_credentials = (s.family_credentials || []).filter(
-        (c) => c.invitation_id === demoFamily,
-      );
       s.invitations = s.invitations.filter((i) => i.id === demoFamily);
       s.guests = s.guests.filter((g) => g.invitation_id === demoFamily);
       const guestIds = new Set(s.guests.map((g) => g.id));
@@ -182,12 +170,6 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.credentials = s.credentials.filter(
         (c) => guestIds.has(c.guest_id) && !c.revoked_at,
       );
-      s.checkin_notices = (s.checkin_notices || []).filter(
-        (n) =>
-          n.recipient_guest_id === identified &&
-          !s.contacts.find((c) => c.guest_id === identified)
-            ?.notifications_revoked,
-      );
       s.checkins = [];
       s.rules = [];
       s.gifts = s.gifts.filter((g) => g.active);
@@ -196,7 +178,6 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.notification_jobs = [];
       s.sheet_jobs = [];
       s.messages = [];
-      s.checkin_notices = [];
       s.contacts = [];
       s.gifts = [];
       s.gift_selections = [];
@@ -221,10 +202,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
     const s = db.snapshot,
       p = m.payload,
       g = s.guests.find((g) => g.id === p.guest_id);
-    if (
-      !["CHECKIN_CREATE", "CHECKIN_FAMILY"].includes(m.type) &&
-      role === "CEREMONIALIST"
-    )
+    if (m.type !== "CHECKIN_CREATE" && role === "CEREMONIALIST")
       throw Error("Acesso restrito");
     if (g && role === "GUEST" && g.invitation_id !== demoFamily)
       throw Error("Acesso restrito");
@@ -234,24 +212,19 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
         const data = rsvpSchema.parse(p);
         const row = s.rsvps.find((r) => r.guest_id === g.id)!;
         Object.assign(row, data, { responded_at: stamp(), source: "APP" });
+        if (data.status !== "CONFIRMED") {
+          s.credentials.forEach((c) => {
+            if (c.guest_id === g.id) c.revoked_at = stamp();
+          });
+          db.tickets = db.tickets.filter((t) => t.guest_id !== g.id);
+        }
         break;
       }
       case "CONTACT_UPDATE": {
         if (!g) throw Error("Integrante inválido");
         const data = contactSchema.parse(p);
         s.contacts = s.contacts.filter((c) => c.guest_id !== g.id);
-        s.contacts.push({
-          ...data,
-          ...(data.notifications_revoked === undefined
-            ? {}
-            : {
-                consent_in_app: !data.notifications_revoked,
-                consent_push: !data.notifications_revoked,
-                consent_email: !data.notifications_revoked,
-                consent_whatsapp: !data.notifications_revoked,
-              }),
-          guest_id: g.id,
-        });
+        s.contacts.push({ ...data, guest_id: g.id });
         break;
       }
       case "MESSAGE_SEND_TO_GUESTS":
@@ -361,7 +334,12 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
         break;
       }
       case "CHECKIN_CREATE": {
-        if (role === "GUEST" || !g) throw Error("Entrada não autorizada");
+        if (
+          role === "GUEST" ||
+          !g ||
+          !s.rsvps.some((r) => r.guest_id === g.id && r.status === "CONFIRMED")
+        )
+          throw Error("Entrada não autorizada");
         if (
           p.method === "QR" &&
           !s.credentials.some(
@@ -371,8 +349,8 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
               c.token_hash === p.token_hash,
           )
         )
-          throw Error("Convite revogado");
-        if (!s.checkins.some((c) => c.guest_id === g.id)) {
+          throw Error("Ingresso revogado");
+        if (!s.checkins.some((c) => c.guest_id === g.id))
           s.checkins.push({
             id: id(),
             event_id: event,
@@ -382,51 +360,6 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             actor_id: "demo",
             created_at: stamp(),
           });
-          const head = s.invitations.find(
-            (i) => i.id === g.invitation_id && i.kind === "FAMILY",
-          )?.primary_guest_id;
-          if (p.method === "QR" && head && head !== g.id)
-            s.checkin_notices = [
-              ...(s.checkin_notices || []),
-              {
-                id: id(),
-                content: `${g.name} acabou de confirmar presença`,
-                recipient_guest_id: head,
-                created_at: stamp(),
-              },
-            ];
-        }
-        break;
-      }
-      case "CHECKIN_FAMILY": {
-        if (role === "GUEST") throw Error("Acesso restrito");
-        const credential = s.family_credentials?.find(
-          (c) => c.token_hash === p.token_hash && !c.revoked_at,
-        );
-        const ids = Array.from(new Set((p.guest_ids as string[]) || []));
-        if (
-          !credential ||
-          !ids.length ||
-          ids.some(
-            (id) =>
-              !s.guests.some(
-                (g) =>
-                  g.id === id && g.invitation_id === credential.invitation_id,
-              ),
-          )
-        )
-          throw Error("Convite ou membros inválidos");
-        for (const gid of ids)
-          if (!s.checkins.some((c) => c.guest_id === gid))
-            s.checkins.push({
-              id: id(),
-              event_id: event,
-              guest_id: gid,
-              mutation_id: id(),
-              method: "QR",
-              actor_id: "demo",
-              created_at: stamp(),
-            });
         break;
       }
       case "GIFT_SELECT": {
@@ -453,19 +386,19 @@ export async function demoTicket(
   regenerate = false,
 ): Promise<Ticket> {
   return transaction(async (db) => {
-    const unit = db.snapshot.invitations.find(
-      (i) =>
-        i.id ===
-        db.snapshot.guests.find((g) => g.id === guestId)?.invitation_id,
-    );
-    if (!unit || unit.id !== demoFamily) throw Error("Acesso restrito");
+    if (
+      !db.snapshot.rsvps.some(
+        (r) => r.guest_id === guestId && r.status === "CONFIRMED",
+      )
+    )
+      throw Error("Confirme a presença primeiro");
     if (
       !regenerate &&
       db.snapshot.credentials.some(
         (c) => c.guest_id === guestId && !c.revoked_at,
       )
     )
-      throw Error("Convite existente; regeneração explícita necessária");
+      throw Error("Ingresso existente; regeneração explícita necessária");
     db.snapshot.credentials.forEach((c) => {
       if (c.guest_id === guestId) c.revoked_at = stamp();
     });
@@ -745,45 +678,5 @@ export async function demoAdmin(
         throw Error("Operação desconhecida");
     }
     return {};
-  });
-}
-
-export async function demoIdentifyGuest(guest: string) {
-  return transaction((db) => {
-    if (
-      !db.snapshot.guests.some(
-        (g) => g.id === guest && g.invitation_id === demoFamily,
-      )
-    )
-      throw Error("Acesso restrito");
-    db.snapshot.current_guest_id = guest;
-  });
-}
-export async function demoFamilyTicket(invitation: string, regenerate = false) {
-  return transaction(async (db) => {
-    const s = db.snapshot,
-      i = s.invitations.find((i) => i.id === invitation);
-    if (i?.kind !== "FAMILY" || i.id !== demoFamily)
-      throw Error("Acesso restrito");
-    const credentials = s.family_credentials || [];
-    if (
-      !regenerate &&
-      credentials.some((c) => c.invitation_id === invitation && !c.revoked_at)
-    )
-      throw Error("Convite existente; regeneração explícita necessária");
-    credentials.forEach((c) => {
-      if (c.invitation_id === invitation) c.revoked_at = stamp();
-    });
-    const token = randomToken();
-    credentials.push({
-      id: id(),
-      event_id: event,
-      invitation_id: invitation,
-      token_hash: await hashToken(token),
-      issued_at: stamp(),
-      revoked_at: null,
-    });
-    s.family_credentials = credentials;
-    return { invitation_id: invitation, token };
   });
 }
