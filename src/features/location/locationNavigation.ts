@@ -11,17 +11,10 @@ function destination(event: WeddingEvent) {
 
 export function locationChoices(event: WeddingEvent) {
   const links = transportLinks(event);
-  const target = destination(event);
   return [
-    { label: "Abrir link de localização configurado", url: links.gps },
-    { label: "Abrir no Google Maps", url: links.google },
-    { label: "Abrir no Waze", url: links.waze },
-    {
-      label: "Abrir no Apple Maps",
-      url: target
-        ? `https://maps.apple.com/?daddr=${encodeURIComponent(target)}`
-        : null,
-    },
+    { label: "Google Maps", url: links.google },
+    { label: "Waze", url: links.waze },
+    { label: "Uber", url: links.uber },
   ].filter((choice): choice is { label: string; url: string } => !!choice.url);
 }
 

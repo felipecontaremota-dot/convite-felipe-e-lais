@@ -357,8 +357,8 @@ test("Profile real database: offline revocation, reload and reactivation preserv
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
-  await page.getByRole("link", { name: "Ingressos", exact: true }).click();
-  const qr = page.getByLabel("Ingresso individual de Pessoa CORS", {
+  await page.getByRole("link", { name: "Convites", exact: true }).click();
+  const qr = page.getByLabel("Convite individual de Pessoa CORS", {
     exact: true,
   });
   await expect(qr.locator("svg")).toBeVisible();

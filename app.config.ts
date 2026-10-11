@@ -42,7 +42,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Permitir câmera para ler os ingressos do casamento?",
+        cameraPermission: "Permitir câmera para ler os convites do casamento?",
         recordAudioAndroid: false,
         microphonePermission: false,
       },

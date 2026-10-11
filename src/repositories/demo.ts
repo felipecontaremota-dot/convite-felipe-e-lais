@@ -389,7 +389,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
               c.token_hash === p.token_hash,
           )
         )
-          throw Error("Ingresso revogado");
+          throw Error("Convite revogado");
         if (!s.checkins.some((c) => c.guest_id === g.id))
           s.checkins.push({
             id: id(),
@@ -438,7 +438,7 @@ export async function demoTicket(
         (c) => c.guest_id === guestId && !c.revoked_at,
       )
     )
-      throw Error("Ingresso existente; regeneração explícita necessária");
+      throw Error("Convite existente; emissão explícita de novo convite necessária");
     db.snapshot.credentials.forEach((c) => {
       if (c.guest_id === guestId) c.revoked_at = stamp();
     });

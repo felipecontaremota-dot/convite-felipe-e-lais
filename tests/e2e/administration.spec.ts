@@ -76,11 +76,9 @@ test("standalone creation, child/group, contact mask, email validation, detail a
     0,
   );
   await page.getByLabel("Nome", { exact: true }).fill("José Victor");
-  await expect(page.getByLabel("Gênero", { exact: true }).locator("option")).toHaveText([
-    "Selecione",
-    "Masculino",
-    "Feminino",
-  ]);
+  await expect(
+    page.getByLabel("Gênero", { exact: true }).locator("option"),
+  ).toHaveText(["Selecione", "Masculino", "Feminino"]);
   await page.getByLabel("Gênero", { exact: true }).selectOption("MASCULINE");
   await page
     .getByRole("checkbox", { name: "Criança (até 10 anos)", exact: true })
@@ -159,13 +157,14 @@ test("standalone creation, child/group, contact mask, email validation, detail a
     .getByRole("button", { name: "Editar convidado", exact: true })
     .click();
   await page.getByLabel("Nome", { exact: true }).fill("José Editado");
-  await expect(page.getByLabel("Gênero", { exact: true })).toHaveValue("MASCULINE");
+  await expect(page.getByLabel("Gênero", { exact: true })).toHaveValue(
+    "MASCULINE",
+  );
   await page.getByLabel("Gênero", { exact: true }).selectOption("FEMININE");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   expect(
-    (await database(page)).guests.find(
-      (g: { id: string }) => g.id === guest.id,
-    ).greeting_form,
+    (await database(page)).guests.find((g: { id: string }) => g.id === guest.id)
+      .greeting_form,
   ).toBe("FEMININE");
   await expect(
     page.getByRole("button", {
@@ -451,53 +450,27 @@ test("location saves separate GPS URL, rejects HTTP and opens direct external de
   await page
     .getByRole("button", { name: "Demo convidado", exact: true })
     .click();
-  await nav(page, "Como chegar");
+  await nav(page, "Local");
   await expect(
     page
       .getByRole("heading", { name: "Villarejo Eventos", exact: true })
       .filter({ visible: true }),
   ).toBeVisible();
-  await page.context().route("https://maps.test/**", (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: "<p>Fixture destination</p>",
-    }),
-  );
   await page
     .getByRole("button", { name: "Abrir localização", exact: true })
     .click();
-  await expect(
-    page.getByRole("button", { name: "Abrir no Waze", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Abrir no Apple Maps", exact: true }),
-  ).toBeVisible();
-  const popup = page.waitForEvent("popup");
-  await page
-    .getByRole("button", {
-      name: "Abrir link de localização configurado",
-      exact: true,
-    })
-    .click();
-  const location = await popup;
-  await expect.poll(() => location.url()).toContain("maps.test/evento");
-  await location.close();
-  await expect(
-    page.getByRole("button", { name: "Abrir no Google Maps", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Copiar endereço", exact: true }),
-  ).toBeVisible();
+  for (const name of ["Google Maps", "Waze", "Uber", "99", "Copiar endereço"])
+    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
   for (const name of [
-    "Waze",
-    "Uber",
-    "Abrir link de GPS",
-    "Compartilhar com 99 / outros aplicativos",
-  ]) {
+    "Abrir no Apple Maps",
+    "Abrir link de localização configurado",
+  ])
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
       0,
     );
-  }
+  await expect(
+    page.getByText("Rua do Evento, 12", { exact: true }),
+  ).toHaveCount(1);
 });
 
 test("individual deletion is confirmed separately and a member pencil opens its edit form", async ({

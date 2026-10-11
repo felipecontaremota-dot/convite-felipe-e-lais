@@ -13,7 +13,7 @@ export function LocationScreen({
 }) {
   const app = useApp();
   return (
-    <Screen section={section} title="Como chegar">
+    <Screen section={section} title="Local">
       <LocationCard
         event={app.data?.event}
         guestNavigation={section === "guest"}
@@ -53,7 +53,7 @@ export function LocationCard({
         {event?.address ||
           "O endereço será informado aqui quando estiver confirmado."}
       </Text>
-      <LocationPreview event={event} />
+      {!guestNavigation ? <LocationPreview event={event} /> : null}
       {guestNavigation ? (
         <GuestLocationActions event={event} />
       ) : (

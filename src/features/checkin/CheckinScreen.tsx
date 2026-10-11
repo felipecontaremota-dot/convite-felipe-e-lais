@@ -57,12 +57,12 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
     const validation = validateCredential(hash, s?.credentials || [], checkins);
     if (validation.status === "invalid")
       throw new AppError(
-        "Ingresso inválido, revogado ou ausente no cache. Sincronize ou busque pelo nome.",
+        "Convite inválido, revogado ou ausente no cache. Sincronize ou busque pelo nome.",
       );
     setPreview({ guest: validation.credential.guest_id, hash, method: "QR" });
     return validation.status === "used"
       ? "Convidado já registrado. Confira abaixo."
-      : "Ingresso localizado. Confira o nome e confirme a entrada.";
+      : "Convite localizado. Confira o nome e confirme a entrada.";
   };
   const existing = checkins.find((c) => c.guest_id === preview?.guest);
   const person = s?.guests.find((g) => g.id === preview?.guest);
@@ -92,7 +92,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           onPress={() =>
             feedback.run(async () => {
               await app.refresh();
-              return "Base local atualizada. Este dispositivo pode validar os ingressos conhecidos sem conexão.";
+              return "Base local atualizada. Este dispositivo pode validar os convites conhecidos sem conexão.";
             })
           }
         />
@@ -106,7 +106,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
                   "Permissão de câmera não concedida. Use a busca manual.",
                 );
               setCamera(true);
-              return "Aponte a câmera para o ingresso.";
+              return "Aponte a câmera para o convite.";
             })
           }
         />
@@ -134,7 +134,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
         />
         <Button
           secondary
-          title="Validar ingresso"
+          title="Validar convite"
           disabled={!token.trim()}
           onPress={() => feedback.run(() => scan(token.trim()))}
         />
@@ -243,7 +243,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
         ))}
       <Text style={styles.small}>
         Dois celulares offline não conhecem instantaneamente as entradas um do
-        outro. O servidor detecta duplicidades na sincronização. Ingressos
+        outro. O servidor detecta duplicidades na sincronização. Convites
         revogados depois do último cache exigem conferência online.
       </Text>
     </Screen>
