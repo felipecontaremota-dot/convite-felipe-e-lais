@@ -41,7 +41,9 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await page
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
-  await expect(page.getByText("Bem-vindos, Família Demo")).toBeVisible();
+  await expect(
+    page.getByText("Bem-vindos, Convidado Um e família"),
+  ).toBeVisible();
   await noOverflow(page);
   await navigation(page, "Presença");
   await page

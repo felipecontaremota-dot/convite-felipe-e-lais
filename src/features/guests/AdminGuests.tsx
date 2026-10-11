@@ -60,6 +60,7 @@ function GuestForm({
   const contact = app.data?.contacts.find((c) => c.guest_id === guest?.id);
   const [expectedVersion] = useState(guest?.version);
   const [name, setName] = useState(guest?.name || ""),
+    [greetingForm, setGreetingForm] = useState(guest?.greeting_form || ""),
     [child, setChild] = useState(!!guest?.is_child),
     [group, setGroup] = useState(guest?.group_label || ""),
     [phone, setPhone] = useState(formatPhone(contact?.whatsapp || "")),
@@ -71,6 +72,16 @@ function GuestForm({
       onClose={onClose}
     >
       <Field label="Nome" value={name} onChangeText={setName} maxLength={200} />
+      <Select
+        label="Gênero"
+        value={greetingForm}
+        onChange={setGreetingForm}
+        options={[
+          { value: "", label: "Selecione" },
+          { value: "MASCULINE", label: "Masculino" },
+          { value: "FEMININE", label: "Feminino" },
+        ]}
+      />
       <Toggle label="Criança (até 10 anos)" value={child} onChange={setChild} />
       <Select
         label="Grupo / vínculo"
@@ -123,6 +134,7 @@ function GuestForm({
               id: guest?.id || null,
               version: expectedVersion,
               name: name.trim(),
+              greeting_form: greetingForm || null,
               is_child: child,
               group_label: group,
               whatsapp: brazilPhone(phone),

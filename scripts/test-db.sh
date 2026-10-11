@@ -32,4 +32,18 @@ for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql
  fi
 done
 
-source scripts/rebuild-pr21/test-rebuild.sh
+# Separate historical baseline DB from the full current-migrations database.
+if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+ rebuild_database="${database}_baseline"
+ sudo -u postgres createdb "$rebuild_database"
+ original_database="$database"
+ cleanup() { sudo -u postgres dropdb --if-exists "$original_database"; sudo -u postgres dropdb --if-exists "$rebuild_database"; }
+ database="$rebuild_database"
+ source scripts/rebuild-pr21/test-rebuild.sh
+ database="$original_database"
+else
+ docker exec "$container" createdb -U postgres rebuild_baseline
+ run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -d rebuild_baseline -v ON_ERROR_STOP=1; }
+ source scripts/rebuild-pr21/test-rebuild.sh
+ run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
+fi

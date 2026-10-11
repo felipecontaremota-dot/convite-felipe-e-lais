@@ -1,5 +1,8 @@
 # Sourced by scripts/test-db.sh; uses its disposable DB and run_sql adapter.
-# Existing baseline SQL tests roll back their fixtures.
+# This adapter points to a separate empty database, preserving migration discovery in CI.
+sed '/^create role /d' tests/db-bootstrap.sql | run_sql
+for migration in supabase/migrations/20261009000*.sql; do run_sql < "$migration"; done
+run_sql < supabase/seed.sql
 run_sql <<'SQL'
 insert into auth.users(id) values('11111111-1111-4111-8111-111111111111');
 \set admin_user_id 11111111-1111-4111-8111-111111111111
@@ -38,7 +41,11 @@ run_sql < <(cat <<'SQL'
 begin;
 select set_config('wedding.rebuild_confirmation','DISCARD_TEST_DATA_REBUILD_PR21',true);
 SQL
-cat scripts/rebuild-pr21/cleanup-reviewed.sql supabase/migrations/*.sql supabase/seed.sql scripts/rebuild-pr21/bootstrap-reviewed.sql
+cat scripts/rebuild-pr21/cleanup-reviewed.sql supabase/migrations/20261009000*.sql supabase/seed.sql scripts/rebuild-pr21/bootstrap-reviewed.sql
 printf '\ncommit;\n'
 printf "select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);\n"
 cat tests/rebuild-verify.sql)
+
+run_sql < tests/home-greeting-prepare.sql
+run_sql < supabase/migrations/202610110007_home_greeting.sql
+run_sql < tests/home-greeting.sql

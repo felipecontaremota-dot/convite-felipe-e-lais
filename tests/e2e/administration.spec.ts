@@ -76,6 +76,12 @@ test("standalone creation, child/group, contact mask, email validation, detail a
     0,
   );
   await page.getByLabel("Nome", { exact: true }).fill("José Victor");
+  await expect(page.getByLabel("Gênero", { exact: true }).locator("option")).toHaveText([
+    "Selecione",
+    "Masculino",
+    "Feminino",
+  ]);
+  await page.getByLabel("Gênero", { exact: true }).selectOption("MASCULINE");
   await page
     .getByRole("checkbox", { name: "Criança (até 10 anos)", exact: true })
     .click();
@@ -126,6 +132,7 @@ test("standalone creation, child/group, contact mask, email validation, detail a
       (i: { id: string }) => i.id === guest.invitation_id,
     );
   expect(unit.kind).toBe("INDIVIDUAL");
+  expect(guest.greeting_form).toBe("MASCULINE");
   expect(unit.pin).toBe("0047");
   expect(unit.sharing_code).toMatch(/^[a-f0-9]{48}$/);
   expect(
@@ -152,7 +159,14 @@ test("standalone creation, child/group, contact mask, email validation, detail a
     .getByRole("button", { name: "Editar convidado", exact: true })
     .click();
   await page.getByLabel("Nome", { exact: true }).fill("José Editado");
+  await expect(page.getByLabel("Gênero", { exact: true })).toHaveValue("MASCULINE");
+  await page.getByLabel("Gênero", { exact: true }).selectOption("FEMININE");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  expect(
+    (await database(page)).guests.find(
+      (g: { id: string }) => g.id === guest.id,
+    ).greeting_form,
+  ).toBe("FEMININE");
   await expect(
     page.getByRole("button", {
       name: "Abrir ficha de José Editado",

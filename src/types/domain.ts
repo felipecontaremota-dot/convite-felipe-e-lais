@@ -32,6 +32,7 @@ export interface Invitation {
   version: number;
 }
 export interface Guest {
+  greeting_form?: "MASCULINE" | "FEMININE" | null;
   is_child?: boolean;
   is_adolescent?: boolean;
   admin_notes?: string;
