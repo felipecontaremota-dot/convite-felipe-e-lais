@@ -162,11 +162,38 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.messages = s.messages.filter(
         (m) =>
           (m.recipient_guest_ids
-            ? m.recipient_guest_ids.some((id) => guestIds.has(id))
+            ? m.recipient_guest_ids.some(
+                (id) =>
+                  guestIds.has(id) &&
+                  !s.contacts.find((c) => c.guest_id === id)
+                    ?.communications_revoked &&
+                  (s.contacts.find((c) => c.guest_id === id)?.consent_in_app ??
+                    true),
+              )
             : (!m.invitation_id || m.invitation_id === demoFamily) &&
               (!m.recipient_guest_id || guestIds.has(m.recipient_guest_id))) &&
-          (!m.channels || m.channels.includes("IN_APP")),
+          (!m.channels || m.channels.includes("IN_APP")) &&
+          (!m.from_admin ||
+            m.recipient_guest_ids ||
+            s.guests.some(
+              (g) =>
+                (!m.recipient_guest_id || m.recipient_guest_id === g.id) &&
+                !s.contacts.find((c) => c.guest_id === g.id)
+                  ?.communications_revoked &&
+                (s.contacts.find((c) => c.guest_id === g.id)?.consent_in_app ??
+                  true),
+            )),
       );
+      if (
+        !s.guests.some(
+          (g) =>
+            !s.contacts.find((c) => c.guest_id === g.id)
+              ?.communications_revoked &&
+            (s.contacts.find((c) => c.guest_id === g.id)?.consent_in_app ??
+              true),
+        )
+      )
+        s.announcements = [];
       s.credentials = s.credentials.filter(
         (c) => guestIds.has(c.guest_id) && !c.revoked_at,
       );
@@ -223,6 +250,19 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
       case "CONTACT_UPDATE": {
         if (!g) throw Error("Integrante inválido");
         const data = contactSchema.parse(p);
+        const previous = s.contacts.find((c) => c.guest_id === g.id);
+        if (
+          p.communications_revoked !== undefined ||
+          previous?.communications_revoked
+        ) {
+          data.consent_in_app = previous?.consent_in_app ?? true;
+          data.consent_push = previous?.consent_push ?? false;
+          data.consent_email = previous?.consent_email ?? false;
+          data.consent_whatsapp = previous?.consent_whatsapp ?? false;
+        }
+        if (p.communications_revoked === undefined)
+          data.communications_revoked =
+            previous?.communications_revoked ?? false;
         s.contacts = s.contacts.filter((c) => c.guest_id !== g.id);
         s.contacts.push({ ...data, guest_id: g.id });
         break;

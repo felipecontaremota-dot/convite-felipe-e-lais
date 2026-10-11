@@ -11,6 +11,8 @@ function fixture(
   admin = true,
   worker = false,
   missing = false,
+  channel = "EMAIL",
+  revoked = false,
 ) {
   const calls: { name: string; args?: Record<string, unknown> }[] = [];
   let sent = 0;
@@ -19,7 +21,7 @@ function fixture(
     event_id: event,
     guest_id: "guest",
     message_id: "11111111-1111-4111-8111-111111111111",
-    channel: "EMAIL",
+    channel,
     idempotency_key: "stable",
     rule_id: null,
   };
@@ -30,7 +32,12 @@ function fixture(
     },
     from: (table: string) => {
       const row = table === "guest_contacts"
-        ? { consent_email: consent, email: "guest@example.test" }
+        ? {
+          communications_revoked: revoked,
+          consent_email: consent, consent_whatsapp: consent,
+          consent_push: consent, consent_in_app: consent,
+          email: "guest@example.test",
+        }
         : table === "messages"
         ? (missing
           ? null
@@ -166,4 +173,27 @@ Deno.test("ADMIN requires a valid message belonging to its event before claiming
     absent.calls.length === 0 && absent.sent() === 0,
     "lookup rejection does not claim jobs",
   );
+});
+
+Deno.test("revocation prevents all four channels from invoking providers", async () => {
+  for (const channel of ["IN_APP", "EMAIL", "WHATSAPP", "PUSH"]) {
+    const f = fixture(true, "sent", true, true, false, channel, true);
+    const result = await (await f.handler(new Request("https://fixture.test", {
+      method: "POST", body: "{}",
+    }))).json();
+    assert(
+      f.sent() === 0 && result.skipped === 1,
+      `revoked ${channel} never delivered`,
+    );
+  }
+});
+Deno.test("reactivated channel consent permits normal delivery again", async () => {
+  for (const channel of ["IN_APP", "EMAIL", "WHATSAPP", "PUSH"]) {
+    const f = fixture(true, "sent", true, true, false, channel);
+    const result = await (await f.handler(new Request("https://fixture.test", {
+      method: "POST", body: "{}",
+    }))).json();
+    assert(result.sent === 1, `reactivated ${channel} delivered`);
+    assert(f.sent() === (channel === "IN_APP" ? 0 : 1), "expected provider calls");
+  }
 });
