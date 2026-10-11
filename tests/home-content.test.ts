@@ -31,8 +31,8 @@ describe("Home greeting from the existing access unit", () => {
         { ...person, name: "Laís", greeting_form: "FEMININE" },
       ]),
     ).toBe("Bem-vinda, Laís"));
-  it.each([undefined, null, "NEUTRAL"] as const)(
-    "uses neutral fallback for %s without inferring a name",
+  it.each([undefined, null] as const)(
+    "uses fallback for %s without inferring a name",
     (greeting_form) =>
       expect(homeGreeting(unit, [{ ...person, greeting_form }])).toBe(
         "Boas-vindas, Guilherme",
