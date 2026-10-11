@@ -102,3 +102,6 @@ begin
 end$$;
 revoke all on function app_mutate(uuid,uuid,text,jsonb) from public,anon;
 grant execute on function app_mutate(uuid,uuid,text,jsonb) to authenticated,service_role;
+
+-- Publish the new RPC/table contracts to PostgREST after the migration commits.
+notify pgrst,'reload schema';

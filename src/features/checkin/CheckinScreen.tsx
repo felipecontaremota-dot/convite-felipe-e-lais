@@ -61,6 +61,8 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
     ) || [];
   const scan = async (value: string) => {
     setCamera(false);
+    setPreview(null);
+    setSelected([]);
     const familyToken = familyTicketToken(value);
     if (familyToken) {
       const hash = await hashToken(familyToken);

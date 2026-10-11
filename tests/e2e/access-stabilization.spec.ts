@@ -681,6 +681,26 @@ test("Real family QR: modal isolation, partial offline arrival, individual notif
     };
     await scan(`wedding://family-ticket/${familyToken}`);
     await expect(staff.getByRole("checkbox")).toHaveCount(4);
+    await scan(`wedding://family-ticket/${"f".repeat(64)}`);
+    await expect(
+      staff.getByText(
+        "Convite familiar inválido, revogado ou ausente no cache.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(staff.getByRole("checkbox")).toHaveCount(0);
+    await expect(
+      staff.getByRole("button", { name: "Confirmar", exact: true }),
+    ).toHaveCount(0);
+    expect(
+      Number(
+        db.sql(
+          `select count(*) from checkins where guest_id in(select id from guests where invitation_id='${family.id}');`,
+        ),
+      ),
+    ).toBe(0);
+    await scan(`wedding://family-ticket/${familyToken}`);
+    await expect(staff.getByRole("checkbox")).toHaveCount(4);
     await staff.screenshot({
       path: "/tmp/conferencia-familiar-mobile.png",
       fullPage: true,

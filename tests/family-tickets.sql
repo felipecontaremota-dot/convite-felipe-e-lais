@@ -44,6 +44,8 @@ set local role authenticated;
 select set_config('test.family',:'fid',true),set_config('test.event',:'event',true),set_config('test.other',:'go',true);
 select set_config('test.primary',:'ga',true),set_config('test.old_individual',encode(pg_temp.digest((:'qa'::jsonb)->>'token','sha256'),'hex'),true);
 do $$begin
+ begin perform issue_family_ticket(current_setting('test.event')::uuid,current_setting('test.family')::uuid);raise exception 'silent family rotation';exception when others then if sqlerrm<>'ticket_exists' then raise;end if;end;
+ begin perform issue_family_ticket(current_setting('test.event')::uuid,current_setting('test.family')::uuid,null);raise exception 'implicit null rotation';exception when others then if sqlerrm<>'ticket_exists' then raise;end if;end;
  begin perform app_mutate(current_setting('test.event')::uuid,gen_random_uuid(),'CHECKIN_FAMILY_CREATE','{}');raise exception 'guest checkin allowed';exception when others then if sqlerrm<>'unauthorized' then raise;end if;end;
  begin perform issue_family_ticket(current_setting('test.event')::uuid,gen_random_uuid());raise exception 'cross-unit issuance allowed';exception when others then if sqlerrm<>'unauthorized' then raise;end if;end;
 end$$;
