@@ -28,6 +28,10 @@ begin
  select version into v from guests where id=g;
  perform admin_action(e,'GUEST_UPDATE',jsonb_build_object('id',g,'version',v,'name','Greeting fixture','greeting_form','FEMININE'));
  if (select greeting_form from guests where id=g) is distinct from 'FEMININE' then raise exception 'Edit did not persist feminine';end if;
+ -- A client still on the previous form must not silently erase the new field.
+ select version into v from guests where id=g;
+ perform admin_action(e,'GUEST_UPDATE',jsonb_build_object('id',g,'version',v,'name','Greeting fixture'));
+ if (select greeting_form from guests where id=g) is distinct from 'FEMININE' then raise exception 'Legacy edit cleared greeting form';end if;
  select version into v from guests where id=g;
  perform admin_action(e,'GUEST_UPDATE',jsonb_build_object('id',g,'version',v,'name','Greeting fixture','greeting_form',null));
  if (select greeting_form from guests where id=g) is not null then raise exception 'Select fallback did not persist NULL';end if;
