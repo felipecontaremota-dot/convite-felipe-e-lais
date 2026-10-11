@@ -105,6 +105,7 @@ export class TestPostgres {
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
       event_role: `event_role(${event})`,
+      issue_family_ticket: `issue_family_ticket(${event},${literal(args.p_invitation)}::uuid,${args.p_regenerate === true})`,
       issue_ticket: `issue_ticket(${event},${literal(args.p_guest)}::uuid,${args.p_regenerate === true})`,
       app_snapshot: `app_snapshot(${event})`,
       admin_action: `admin_action(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,

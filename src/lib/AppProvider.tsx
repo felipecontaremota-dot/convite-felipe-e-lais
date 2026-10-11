@@ -46,6 +46,7 @@ interface ContextValue {
     action: string,
     payload: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
+  familyTicket: (invitation: string, regenerate?: boolean) => Promise<Ticket>;
   ticket: (guest: string, regenerate?: boolean) => Promise<Ticket>;
   sync: () => Promise<SyncResult>;
   syncNow: () => Promise<string>;
@@ -219,6 +220,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [scope, credentialState, online, demoRole, refetch],
   );
+  const familyCredentialState = JSON.stringify(
+    (query.data || cached)?.family_credentials || [],
+  );
+  const familyTicket = useCallback(
+    async (invitation: string, regenerate = false): Promise<Ticket> => {
+      const result = await getDeviceTicket(
+        scope,
+        `family:${invitation}`,
+        JSON.parse(familyCredentialState).map(
+          (c: NonNullable<Snapshot["family_credentials"]>[number]) => ({
+            ...c,
+            guest_id: `family:${c.invitation_id}`,
+          }),
+        ),
+        online,
+        regenerate,
+        async (rotate) =>
+          demoRole
+            ? demo.demoFamilyTicket(invitation, rotate)
+            : api.issueFamilyTicket(invitation, rotate),
+      );
+      if (online) await refetch();
+      return result;
+    },
+    [scope, familyCredentialState, online, demoRole, refetch],
+  );
   const base = user || demoRole ? query.data || cached : null;
   const projected = base
     ? (JSON.parse(JSON.stringify(base)) as Snapshot)
@@ -381,6 +408,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return result;
     },
     ticket,
+    familyTicket,
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

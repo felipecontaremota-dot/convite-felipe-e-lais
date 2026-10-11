@@ -61,6 +61,11 @@ export function ticketToken(value: string) {
   return /^[a-f0-9]{64}$/.test(token) ? token : null;
 }
 
+export function familyTicketToken(value: string) {
+  const match = value.match(/^wedding:\/\/family-ticket\/([a-f0-9]{64})$/);
+  return match?.[1] || null;
+}
+
 export const invitationPin = z
   .string()
   .regex(/^[0-9]{4}$/, "A senha deve ter 4 dígitos.");

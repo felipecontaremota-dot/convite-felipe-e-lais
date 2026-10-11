@@ -27,9 +27,14 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
         : error.message.includes("family access required")
           ? "Configure a senha e gere o link da família antes de adicionar membros."
           : error.message.includes("ticket_exists")
-            ? "Já existe um ingresso. Escolha regenerar para substituir a versão anterior."
-            : administrativeError(error.message) ||
-              "Não foi possível concluir a operação.",
+            ? "Já existe um convite neste dispositivo ou em outro aparelho. Escolha gerar um novo convite para substituir a versão anterior."
+            : error.message.includes("invalid or unconfirmed members")
+              ? "A família ou a confirmação de presença mudou. Confira os integrantes antes de sincronizar esta entrada."
+              : error.message.includes("invalid family QR") ||
+                  error.message.includes("invalid QR")
+                ? "Este convite foi revogado ou não é válido. Confira a entrada antes de sincronizar."
+                : administrativeError(error.message) ||
+                  "Não foi possível concluir a operação.",
       error.code,
     );
   }
@@ -56,6 +61,20 @@ export const issueTicket = (guest: string, regenerate = false) =>
     p_guest: guest,
     p_regenerate: regenerate,
   });
+export async function issueFamilyTicket(
+  invitation: string,
+  regenerate = false,
+): Promise<Ticket> {
+  const result = await rpc<{ invitation_id: string; token: string }>(
+    "issue_family_ticket",
+    {
+      p_event: eventId,
+      p_invitation: invitation,
+      p_regenerate: regenerate,
+    },
+  );
+  return { guest_id: `family:${result.invitation_id}`, token: result.token };
+}
 export const accessMessages = {
   link: "Este link de convite é inválido ou não está mais ativo.",
   unavailable: "Este convite não está mais disponível.",

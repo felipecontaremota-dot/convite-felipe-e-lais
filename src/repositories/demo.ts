@@ -197,6 +197,9 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.credentials = s.credentials.filter(
         (c) => guestIds.has(c.guest_id) && !c.revoked_at,
       );
+      s.family_credentials = (s.family_credentials || []).filter((c) =>
+        s.invitations.some((i) => i.id === c.invitation_id),
+      );
       s.checkins = [];
       s.rules = [];
       s.gifts = s.gifts.filter((g) => g.active);
@@ -229,7 +232,10 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
     const s = db.snapshot,
       p = m.payload,
       g = s.guests.find((g) => g.id === p.guest_id);
-    if (m.type !== "CHECKIN_CREATE" && role === "CEREMONIALIST")
+    if (
+      !["CHECKIN_CREATE", "CHECKIN_FAMILY_CREATE"].includes(m.type) &&
+      role === "CEREMONIALIST"
+    )
       throw Error("Acesso restrito");
     if (g && role === "GUEST" && g.invitation_id !== demoFamily)
       throw Error("Acesso restrito");
@@ -373,6 +379,53 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
           });
         break;
       }
+      case "CHECKIN_FAMILY_CREATE": {
+        const unit = s.invitations.find(
+          (i) =>
+            i.id === p.invitation_id &&
+            i.kind === "FAMILY" &&
+            i.active &&
+            !i.archived_at,
+        );
+        const ids = Array.isArray(p.guest_ids)
+          ? [...new Set(p.guest_ids.map(String))]
+          : [];
+        if (
+          role === "GUEST" ||
+          !unit ||
+          !ids.length ||
+          !(s.family_credentials || []).some(
+            (c) =>
+              c.invitation_id === unit.id &&
+              c.token_hash === p.token_hash &&
+              !c.revoked_at,
+          ) ||
+          ids.some(
+            (gid) =>
+              !s.guests.some(
+                (g) => g.id === gid && g.invitation_id === unit.id,
+              ) ||
+              !s.rsvps.some(
+                (r) => r.guest_id === gid && r.status === "CONFIRMED",
+              ),
+          )
+        )
+          throw Error(
+            "Convite familiar inválido ou integrantes não confirmados",
+          );
+        for (const gid of ids)
+          if (!s.checkins.some((c) => c.guest_id === gid))
+            s.checkins.push({
+              id: id(),
+              event_id: event,
+              guest_id: gid,
+              mutation_id: id(),
+              method: "QR",
+              actor_id: "demo",
+              created_at: stamp(),
+            });
+        break;
+      }
       case "CHECKIN_CREATE": {
         if (
           role === "GUEST" ||
@@ -389,8 +442,8 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
               c.token_hash === p.token_hash,
           )
         )
-          throw Error("Ingresso revogado");
-        if (!s.checkins.some((c) => c.guest_id === g.id))
+          throw Error("Convite revogado");
+        if (!s.checkins.some((c) => c.guest_id === g.id)) {
           s.checkins.push({
             id: id(),
             event_id: event,
@@ -400,6 +453,30 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             actor_id: "demo",
             created_at: stamp(),
           });
+          const unit = s.invitations.find((i) => i.id === g.invitation_id);
+          const primary = unit?.primary_guest_id;
+          const contact = s.contacts.find((c) => c.guest_id === primary);
+          if (
+            unit?.kind === "FAMILY" &&
+            primary &&
+            primary !== g.id &&
+            (contact?.consent_in_app ?? true) &&
+            !contact?.communications_revoked
+          )
+            s.messages.push({
+              id: id(),
+              event_id: event,
+              invitation_id: unit.id,
+              recipient_guest_id: primary,
+              sender_guest_id: null,
+              sender_user_id: "demo",
+              from_admin: true,
+              channels: ["IN_APP"],
+              content: `${g.name} acabou de confirmar presença`,
+              created_at: stamp(),
+              read_at: null,
+            });
+        }
         break;
       }
       case "GIFT_SELECT": {
@@ -421,6 +498,53 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
     db.applied.push(m.mutationId);
   });
 }
+export async function demoFamilyTicket(
+  invitationId: string,
+  regenerate = false,
+): Promise<Ticket> {
+  return transaction(async (db) => {
+    const s = db.snapshot;
+    if (
+      !s.invitations.some(
+        (i) =>
+          i.id === invitationId &&
+          i.kind === "FAMILY" &&
+          i.active &&
+          !i.archived_at,
+      ) ||
+      !s.guests.some(
+        (g) =>
+          g.invitation_id === invitationId &&
+          s.rsvps.some((r) => r.guest_id === g.id && r.status === "CONFIRMED"),
+      )
+    )
+      throw Error("Família sem integrantes confirmados");
+    s.family_credentials ||= [];
+    if (
+      !regenerate &&
+      s.family_credentials.some(
+        (c) => c.invitation_id === invitationId && !c.revoked_at,
+      )
+    )
+      throw Error("Já existe um convite familiar");
+    s.family_credentials.forEach((c) => {
+      if (c.invitation_id === invitationId && !c.revoked_at)
+        c.revoked_at = stamp();
+    });
+    const ticket = { guest_id: `family:${invitationId}`, token: randomToken() };
+    s.family_credentials.push({
+      id: id(),
+      event_id: event,
+      invitation_id: invitationId,
+      token_hash: await hashToken(ticket.token),
+      issued_at: stamp(),
+      revoked_at: null,
+    });
+    db.tickets = db.tickets.filter((t) => t.guest_id !== ticket.guest_id);
+    db.tickets.push(ticket);
+    return ticket;
+  });
+}
 export async function demoTicket(
   guestId: string,
   regenerate = false,
@@ -438,7 +562,7 @@ export async function demoTicket(
         (c) => c.guest_id === guestId && !c.revoked_at,
       )
     )
-      throw Error("Ingresso existente; regeneração explícita necessária");
+      throw Error("Convite existente; regeneração explícita necessária");
     db.snapshot.credentials.forEach((c) => {
       if (c.guest_id === guestId) c.revoked_at = stamp();
     });

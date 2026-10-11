@@ -115,6 +115,14 @@ export interface Credential {
   issued_at: string;
   revoked_at: string | null;
 }
+export interface FamilyCredential {
+  id: string;
+  event_id: string;
+  invitation_id: string;
+  token_hash: string;
+  issued_at: string;
+  revoked_at: string | null;
+}
 export interface Ticket {
   guest_id: string;
   token: string;
@@ -157,6 +165,7 @@ export interface Snapshot {
   announcements: Announcement[];
   rules: Rule[];
   credentials: Credential[];
+  family_credentials?: FamilyCredential[];
   checkins: Checkin[];
   notification_jobs: DeliveryJob[];
   sheet_jobs: SheetJob[];
@@ -180,6 +189,7 @@ export type MutationType =
   | "RSVP_UPDATE"
   | "CONTACT_UPDATE"
   | "CHECKIN_CREATE"
+  | "CHECKIN_FAMILY_CREATE"
   | "MESSAGE_SEND"
   | "MESSAGE_SEND_TO_GUESTS"
   | "GIFT_SELECT"

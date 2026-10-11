@@ -357,8 +357,8 @@ test("Profile real database: offline revocation, reload and reactivation preserv
     .getByRole("button", { name: "Abrir nosso convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
-  await page.getByRole("link", { name: "Ingressos", exact: true }).click();
-  const qr = page.getByLabel("Ingresso individual de Pessoa CORS", {
+  await page.getByRole("link", { name: "Convites", exact: true }).click();
+  const qr = page.getByLabel("Convite individual de Pessoa CORS", {
     exact: true,
   });
   await expect(qr.locator("svg")).toBeVisible();
@@ -462,4 +462,314 @@ test("Profile real database: offline revocation, reload and reactivation preserv
   await page.reload();
   await expect(checkbox).not.toBeChecked();
   expect(receipts()).toBe(before + 2);
+});
+
+test("Real family QR: modal isolation, partial offline arrival, individual notification and unchanged access/RSVP", async ({
+  page,
+  context,
+  browser,
+}) => {
+  test.setTimeout(120000);
+  const action = (p_action: string, p_payload: object) =>
+    db.rpc(admin, "admin_action", { p_event: event, p_action, p_payload });
+  const family = action("INVITATION_SAVE", {
+    name: "Família Portaria",
+    primary_name: "Guilherme Portaria",
+    pin: "0047",
+  });
+  action("CODE_ROTATE", { id: family.id, version: 1 });
+  const members = ["Maria Portaria", "Pedro Portaria", "João Portaria"].map(
+    (name, index) =>
+      action("GUEST_SAVE", {
+        name,
+        invitation_id: family.id,
+        is_child: index === 1,
+      }).id as string,
+  );
+  const primary = db
+    .sql(`select primary_guest_id from invitations where id='${family.id}';`)
+    .trim();
+  for (const guest of [primary, ...members])
+    db.rpc(admin, "app_mutate", {
+      p_event: event,
+      p_mutation: crypto.randomUUID(),
+      p_type: "RSVP_UPDATE",
+      p_payload: { guest_id: guest, status: "CONFIRMED" },
+    });
+  const access = db
+    .sql(
+      `select to_jsonb(a) from invitation_access a where invitation_id='${family.id}';`,
+    )
+    .trim();
+  const familyLink = JSON.parse(access).sharing_code;
+  const rsvp = db
+    .sql(
+      `select jsonb_agg(to_jsonb(r) order by guest_id) from rsvps r where guest_id in(select id from guests where invitation_id='${family.id}');`,
+    )
+    .trim();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/c/${familyLink}`);
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
+  await page
+    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await page.getByRole("link", { name: "Convites", exact: true }).click();
+  await expect(
+    page
+      .getByLabel("Convite familiar de Família Portaria", { exact: true })
+      .locator("svg"),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByLabel("Convite individual de Pedro Portaria", { exact: true })
+      .locator("svg"),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Este é o seu convite individual, use ele para acessar o local no Grande Dia",
+      { exact: true },
+    ),
+  ).toHaveCount(4);
+  await expect(
+    page.getByLabel(/^Convite individual de /).locator("svg"),
+  ).toHaveCount(4);
+  const credentials = () =>
+    db
+      .sql(
+        `select jsonb_agg(to_jsonb(c) order by id) from family_qr_credentials c where invitation_id='${family.id}';`,
+      )
+      .trim();
+  const original = credentials();
+  let regenerationRequests = 0;
+  page.on("request", (request) => {
+    if (
+      request.url().endsWith("/rpc/issue_family_ticket") &&
+      request.postDataJSON()?.p_regenerate === true
+    )
+      regenerationRequests++;
+  });
+  const cachedTokens = () =>
+    page.evaluate(() =>
+      Object.entries(localStorage).filter(([key]) =>
+        key.startsWith("tickets:"),
+      ),
+    );
+  const originalCache = await cachedTokens();
+  await page
+    .getByRole("button", { name: "Gerar novo convite", exact: true })
+    .first()
+    .click();
+  const modal = page.getByRole("dialog", { name: "Confirmação", exact: true });
+  await expect(
+    modal.getByText(
+      "Tem certeza que deseja gerar um novo convite? O antigo será invalidado",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await modal.getByRole("button", { name: "Cancelar", exact: true }).click();
+  expect(credentials()).toBe(original);
+  expect(regenerationRequests).toBe(0);
+  expect(await cachedTokens()).toEqual(originalCache);
+  await context.setOffline(true);
+  await page
+    .getByRole("button", { name: "Gerar novo convite", exact: true })
+    .first()
+    .click();
+  await modal.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await expect(
+    modal.getByText("Conecte-se para gerar um novo convite.", { exact: true }),
+  ).toBeVisible();
+  expect(credentials()).toBe(original);
+  await modal.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(
+    page
+      .getByLabel("Convite familiar de Família Portaria", { exact: true })
+      .locator("svg"),
+  ).toBeVisible();
+  await context.setOffline(false);
+  await page
+    .getByRole("button", { name: "Gerar novo convite", exact: true })
+    .first()
+    .click();
+  await modal.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await expect(modal).toHaveCount(0);
+  expect(credentials()).not.toBe(original);
+  expect(regenerationRequests).toBe(1);
+  const familyAfterRegeneration = credentials();
+  const otherIndividualHashes = db
+    .sql(
+      `select jsonb_agg(token_hash order by guest_id) from qr_credentials where guest_id in ('${primary}','${members[0]}','${members[2]}') and revoked_at is null;`,
+    )
+    .trim();
+  let childRegenerations = 0;
+  await page.route("**/rpc/issue_ticket", async (route) => {
+    if (route.request().postDataJSON()?.p_regenerate === true) {
+      childRegenerations++;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    await route.continue();
+  });
+  await page
+    .getByLabel("Convite individual de Pedro Portaria", { exact: true })
+    .locator("..")
+    .getByRole("button", { name: "Gerar novo convite", exact: true })
+    .click();
+  await modal
+    .getByRole("button", { name: "Confirmar", exact: true })
+    .dblclick();
+  await expect(modal).toHaveCount(0);
+  expect(childRegenerations).toBe(1);
+  expect(credentials()).toBe(familyAfterRegeneration);
+  expect(
+    db
+      .sql(
+        `select jsonb_agg(token_hash order by guest_id) from qr_credentials where guest_id in ('${primary}','${members[0]}','${members[2]}') and revoked_at is null;`,
+      )
+      .trim(),
+  ).toBe(otherIndividualHashes);
+  const tokens = await page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("tickets:"))
+      .flatMap(
+        (k) =>
+          JSON.parse(localStorage.getItem(k)!) as {
+            guest_id: string;
+            token: string;
+          }[],
+      ),
+  );
+  const familyToken = tokens.find(
+    (t) => t.guest_id === `family:${family.id}`,
+  )!.token;
+  const childToken = tokens.find((t) => t.guest_id === members[1])!.token;
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({ path: "/tmp/convites-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: "/tmp/convites-desktop.png", fullPage: true });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  const staffContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const staff = await staffContext.newPage();
+  try {
+    await staff.goto("/login");
+    await staff
+      .getByLabel("E-mail", { exact: true })
+      .fill("admin@example.test");
+    await staff.getByLabel("Senha", { exact: true }).fill("fixture-password");
+    await staff.getByRole("button", { name: "Entrar", exact: true }).click();
+    await expect(staff).toHaveURL(/\/painel$/);
+    await staff
+      .getByRole("link", { name: "Dia do evento", exact: true })
+      .click();
+    const scan = async (token: string) => {
+      await staff
+        .getByLabel("Token ou conteúdo do QR (entrada acessível)")
+        .fill(token);
+      await staff
+        .getByRole("button", { name: "Validar convite", exact: true })
+        .click();
+    };
+    await scan(`wedding://family-ticket/${familyToken}`);
+    await expect(staff.getByRole("checkbox")).toHaveCount(4);
+    await staff.screenshot({
+      path: "/tmp/conferencia-familiar-mobile.png",
+      fullPage: true,
+    });
+    await expect(
+      staff.getByRole("checkbox", { name: "Pedro Portaria", exact: true }),
+    ).toBeChecked();
+    await staff
+      .getByRole("checkbox", { name: "Pedro Portaria", exact: true })
+      .click();
+    await staff
+      .getByRole("checkbox", { name: "João Portaria", exact: true })
+      .click();
+    await staffContext.setOffline(true);
+    await staff.getByRole("button", { name: "Confirmar", exact: true }).click();
+    await expect(
+      staff.getByText(
+        "Salvo neste dispositivo. Será sincronizado quando houver conexão.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    expect(
+      Number(
+        db.sql(
+          `select count(*) from checkins where guest_id in(select id from guests where invitation_id='${family.id}');`,
+        ),
+      ),
+    ).toBe(0);
+    await staffContext.setOffline(false);
+    await expect
+      .poll(() =>
+        Number(
+          db.sql(
+            `select count(*) from checkins where guest_id in(select id from guests where invitation_id='${family.id}');`,
+          ),
+        ),
+      )
+      .toBe(2);
+    await scan(`wedding://ticket/${childToken}`);
+    await expect(
+      staff.getByText("Convite individual — Pedro Portaria", { exact: true }),
+    ).toBeVisible();
+    await staff
+      .getByRole("button", { name: "Confirmar entrada", exact: true })
+      .click();
+    await expect
+      .poll(() =>
+        Number(
+          db.sql(
+            `select count(*) from messages where recipient_guest_id='${primary}' and content='Pedro Portaria acabou de confirmar presença';`,
+          ),
+        ),
+      )
+      .toBe(1);
+    await scan(`wedding://family-ticket/${familyToken}`);
+    await expect(staff.getByRole("checkbox")).toHaveCount(1);
+    await expect(
+      staff.getByRole("checkbox", { name: "João Portaria", exact: true }),
+    ).toBeChecked();
+    await staff.getByRole("button", { name: "Confirmar", exact: true }).click();
+    await expect
+      .poll(() =>
+        Number(
+          db.sql(
+            `select count(*) from checkins where guest_id in(select id from guests where invitation_id='${family.id}');`,
+          ),
+        ),
+      )
+      .toBe(4);
+    expect(
+      db
+        .sql(
+          `select jsonb_agg(to_jsonb(r) order by guest_id) from rsvps r where guest_id in(select id from guests where invitation_id='${family.id}');`,
+        )
+        .trim(),
+    ).toBe(rsvp);
+    expect(
+      db
+        .sql(
+          `select to_jsonb(a) from invitation_access a where invitation_id='${family.id}';`,
+        )
+        .trim(),
+    ).toBe(access);
+    expect(
+      await staff.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  } finally {
+    await staffContext.close();
+  }
 });
