@@ -70,3 +70,17 @@ export function expectedGuests(data: Snapshot, ids: string[]) {
     };
   });
 }
+
+// Match the list search: ignore case, but preserve accents in personal names.
+export function hasDuplicateGuestName(
+  guests: Guest[],
+  name: string,
+  ownId?: string,
+) {
+  const normalize = (value: string) =>
+    value.trim().replace(/\s+/g, " ").toLocaleLowerCase("pt-BR");
+  const normalized = normalize(name);
+  return guests.some(
+    (guest) => guest.id !== ownId && normalize(guest.name) === normalized,
+  );
+}

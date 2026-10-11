@@ -910,3 +910,135 @@ test("surviving family alias confirms individual resend directly without retryin
   ).toHaveCount(0);
   expect(calls).toHaveLength(1);
 });
+
+test("guest form: shared save shortcut, validation, full-list duplicates and self editing with real RPC", async ({
+  page,
+}) => {
+  const calls = await backend(page);
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page).toHaveURL(/\/painel$/);
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  const name = page.getByLabel("Nome", { exact: true });
+  const save = page.getByRole("button", { name: "Salvar", exact: true });
+  const creations = () => calls.filter((c) => c.action === "GUEST_CREATE");
+  const updates = () => calls.filter((c) => c.action === "GUEST_UPDATE");
+  const open = () =>
+    page
+      .getByRole("button", { name: "Adicionar convidado", exact: true })
+      .click();
+  await open();
+  await name.focus();
+  await page.keyboard.press("Control+Enter");
+  await expect(save).toBeDisabled();
+  expect(creations()).toHaveLength(0);
+  await name.fill("José da Silva Santos");
+  await page.getByLabel("E-mail", { exact: true }).fill("invalid");
+  await name.press("Control+Enter");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Confira os campos informados e tente novamente.",
+  );
+  expect(creations()).toHaveLength(0);
+  await page.getByLabel("E-mail", { exact: true }).fill("");
+  await name.press("Enter");
+  expect(creations()).toHaveLength(0);
+
+  // Hold the real backend request to exercise two shortcuts during submission.
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const hold = async (route: import("@playwright/test").Route) => {
+    if (route.request().postDataJSON()?.p_action === "GUEST_CREATE") await gate;
+    await route.fallback();
+  };
+  await page.route("**/rpc/admin_action", hold);
+  await name.press("Control+Enter");
+  await expect(save).toBeDisabled();
+  await name.press("Control+Enter");
+  release();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.unroute("**/rpc/admin_action", hold);
+  expect(creations()).toHaveLength(1);
+  const joseId = String(
+    db.sql("select id from guests where name='José da Silva Santos'"),
+  ).trim();
+  expect(joseId).toMatch(/^[a-f0-9-]{36}$/);
+
+  // Hide the original with BOTH search and an unrelated group filter.
+  await page
+    .getByLabel("Buscar pessoa ou família", { exact: true })
+    .fill("inexistente");
+  await page
+    .getByLabel("Filtrar convidados", { exact: true })
+    .selectOption("Familiar da noiva");
+  for (const duplicate of [
+    "José da Silva Santos",
+    "josé da silva santos",
+    " JOSÉ DA SILVA SANTOS ",
+    "José   da   Silva   Santos",
+  ]) {
+    await open();
+    await name.fill(duplicate);
+    await save.click();
+    await expect(page.getByRole("alert")).toHaveText("Convidado já adicionado");
+    expect(creations()).toHaveLength(1);
+    await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  }
+  expect(
+    db
+      .sql(
+        "select count(*) from guests where lower(regexp_replace(trim(name),'\\s+',' ','g'))='josé da silva santos'",
+      )
+      .trim(),
+  ).toBe("1");
+  await page.getByLabel("Buscar pessoa ou família", { exact: true }).fill("");
+  await page
+    .getByLabel("Filtrar convidados", { exact: true })
+    .selectOption("ALL");
+  await open();
+  await name.fill("Pessoa Botão Novo");
+  await save.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await open();
+  await name.fill("Pessoa Cmd Novo");
+  await name.press("Meta+Enter");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(creations()).toHaveLength(3);
+  await page
+    .getByRole("button", {
+      name: "Abrir ficha de José da Silva Santos",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Editar convidado", exact: true })
+    .click();
+  await page.getByLabel("WhatsApp", { exact: true }).fill("62999991234");
+  await save.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(updates()).toHaveLength(1);
+  expect(
+    db
+      .sql(`select whatsapp from guest_contacts where guest_id='${joseId}'`)
+      .trim(),
+  ).toBe("62999991234");
+  await page
+    .getByRole("button", {
+      name: "Abrir ficha de José da Silva Santos",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Editar convidado", exact: true })
+    .click();
+  await name.fill(" pessoa   botão novo ");
+  await name.press("Control+Enter");
+  await expect(page.getByRole("alert")).toHaveText("Convidado já adicionado");
+  expect(updates()).toHaveLength(1);
+  expect(db.sql(`select name from guests where id='${joseId}'`).trim()).toBe(
+    "José da Silva Santos",
+  );
+});
