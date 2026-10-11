@@ -457,17 +457,27 @@ test("location saves separate GPS URL, rejects HTTP and opens direct external de
       .getByRole("heading", { name: "Villarejo Eventos", exact: true })
       .filter({ visible: true }),
   ).toBeVisible();
-  await page
-    .context()
-    .route("https://maps.test/**", (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: "<p>Fixture destination</p>",
-      }),
-    );
-  const popup = page.waitForEvent("popup");
+  await page.context().route("https://maps.test/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<p>Fixture destination</p>",
+    }),
+  );
   await page
     .getByRole("button", { name: "Abrir localização", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Abrir no Waze", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Abrir no Apple Maps", exact: true }),
+  ).toBeVisible();
+  const popup = page.waitForEvent("popup");
+  await page
+    .getByRole("button", {
+      name: "Abrir link de localização configurado",
+      exact: true,
+    })
     .click();
   const location = await popup;
   await expect.poll(() => location.url()).toContain("maps.test/evento");
