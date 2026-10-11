@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Text } from "react-native";
+import { Pressable, Text } from "react-native";
 import { Button, Card, Empty, Screen, styles } from "../../components/ui";
 import { WeddingCountdown } from "../../components/WeddingCountdown";
 import { homeGreeting, homePresence } from "./homeContent";
@@ -16,11 +16,22 @@ export function GuestHome() {
       <Card>
         {s ? <WeddingCountdown startsAt={s.event.starts_at} quoteSim /> : null}
         <Text style={styles.text}>
-          15 de dezembro de 2026, às 16h, no Villarejo
+          Save the date: 15 de dezembro de 2026, às 16h
         </Text>
-        <Text style={styles.text}>
-          {s?.event.venue_name || "O local será informado pelos noivos."}
-        </Text>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="no Villarejo"
+          onPress={() => router.push("/como-chegar")}
+          style={{
+            minHeight: 48,
+            justifyContent: "center",
+            alignSelf: "flex-start",
+          }}
+        >
+          <Text style={[styles.text, { textDecorationLine: "underline" }]}>
+            no Villarejo
+          </Text>
+        </Pressable>
         <Text style={styles.badge}>
           {homePresence(
             s?.invitations[0],
