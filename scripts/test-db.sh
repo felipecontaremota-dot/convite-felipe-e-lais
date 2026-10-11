@@ -16,7 +16,7 @@ else
  for attempt in {1..30}; do if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
-for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql; do
+for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql tests/profile-consent.sql; do
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
   run_sql < tests/access-upgrade-prepare.sql
  fi
@@ -31,6 +31,30 @@ for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql
   run_sql < tests/access-upgrade-verify.sql
  fi
 done
+
+# Dedicated production-shaped 007 -> 008 upgrade, separate from clean install.
+if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+ profile_database="${database}_profile"
+ original_database="$database"
+ cleanup() { sudo -u postgres dropdb --if-exists "$original_database"; sudo -u postgres dropdb --if-exists "$profile_database"; }
+ sudo -u postgres createdb "$profile_database"
+ database="$profile_database"
+else
+ docker exec "$container" createdb -U postgres profile_upgrade
+ run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -d profile_upgrade -v ON_ERROR_STOP=1; }
+fi
+sed '/^create role /d' tests/db-bootstrap.sql | run_sql
+for migration in supabase/migrations/20261009000*.sql supabase/migrations/202610110007_home_greeting.sql; do run_sql < "$migration"; done
+run_sql < tests/profile-upgrade-prepare.sql
+run_sql < supabase/migrations/202610110008_profile_consent.sql
+run_sql < tests/profile-upgrade-verify.sql
+if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+ database="$original_database"
+ sudo -u postgres dropdb "$profile_database"
+else
+ docker exec "$container" dropdb -U postgres profile_upgrade
+ run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
+fi
 
 # Separate historical baseline DB from the full current-migrations database.
 if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then

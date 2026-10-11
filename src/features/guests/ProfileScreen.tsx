@@ -14,10 +14,19 @@ import {
 } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
+import { theme } from "../../theme/tokens";
 import type { Contact, Guest } from "../../types/domain";
+import {
+  formatProfilePhone,
+  profilePhone,
+  profileSaveFeedback,
+  revocation,
+  withRevocation,
+} from "./profileContact";
 import { contactSchema } from "../../utils/security";
 
 const initialContact: Omit<Contact, "guest_id"> = {
+  communications_revoked: false,
   email: "",
   whatsapp: "",
   consent_in_app: true,
@@ -26,17 +35,60 @@ const initialContact: Omit<Contact, "guest_id"> = {
   consent_whatsapp: false,
 };
 
+function RevocationCheckbox({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const label = "Revogar permissão de receber mensagens e notificações";
+  // A native HTML checkbox supplies Space, focus and label activation on Web.
+  // Keep native accessibility through the existing Toggle on Android/iOS.
+  if (Platform.OS !== "web")
+    return <Toggle label={label} value={value} onChange={onChange} />;
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: 12,
+        minHeight: 48,
+        boxSizing: "border-box",
+        border: `1px solid ${theme.colors.line}`,
+        borderRadius: 10,
+        cursor: "pointer",
+      }}
+    >
+      <input
+        type="checkbox"
+        aria-label={label}
+        checked={value}
+        onChange={(event) => onChange(event.target.checked)}
+        style={{
+          flexShrink: 0,
+          width: 18,
+          height: 18,
+          accentColor: theme.colors.ink,
+        }}
+      />
+      <Text style={[styles.text, { flexShrink: 1 }]}>{label}</Text>
+    </label>
+  );
+}
+
 function ContactForm({ guest }: { guest: Guest }) {
   const app = useApp(),
     feedback = useFeedback();
-  const [form, setForm] = useState(
+  const [draft, setDraft] = useState<Contact | null>(null);
+  const form = draft ||
     app.data?.contacts.find((c) => c.guest_id === guest.id) || {
       guest_id: guest.id,
       ...initialContact,
-    },
-  );
+    };
   const change = (key: string, value: unknown) =>
-    setForm((f) => ({ ...f, [key]: value }));
+    setDraft((current) => ({ ...(current || form), [key]: value }));
   return (
     <Card>
       <Text style={styles.heading}>{guest.name}</Text>
@@ -49,34 +101,43 @@ function ContactForm({ guest }: { guest: Guest }) {
       />
       <Field
         label={`WhatsApp de ${guest.name}`}
-        value={form.whatsapp}
-        onChangeText={(v) => change("whatsapp", v)}
+        value={formatProfilePhone(form.whatsapp)}
+        onChangeText={(v) => change("whatsapp", profilePhone(v))}
         keyboardType="phone-pad"
       />
-      {(["in_app", "push", "email", "whatsapp"] as const).map((c) => (
-        <Toggle
-          key={c}
-          label={`Aceito receber mensagens por ${c.replace("_", " ")}`}
-          value={form[`consent_${c}`]}
-          onChange={(v) => change(`consent_${c}`, v)}
-        />
-      ))}
+      <RevocationCheckbox
+        value={revocation(form)}
+        onChange={(value) => {
+          setDraft((current) => withRevocation(current || form, value));
+        }}
+      />
       <Button
         title={`Salvar contato de ${guest.name}`}
         onPress={() =>
-          feedback.run(() =>
-            app.send("CONTACT_UPDATE", {
+          feedback.run(async () => {
+            const result = await app.send("CONTACT_UPDATE", {
               guest_id: guest.id,
-              ...contactSchema.parse(form),
-            }),
-          )
+              ...contactSchema.parse({
+                ...form,
+                communications_revoked: revocation(form),
+                whatsapp: form.whatsapp.replace(/[^0-9]/g, ""),
+              }),
+            });
+            if (result === "Sincronizado com sucesso.") setDraft(null);
+            return profileSaveFeedback(result);
+          })
         }
       />
       <Button
         secondary
         title={`Ativar push para ${guest.name}`}
         disabled={
+          revocation(form) ||
+          app.data?.contacts.find((c) => c.guest_id === guest.id)
+            ?.communications_revoked ||
           !form.consent_push ||
+          !app.data?.contacts.find((c) => c.guest_id === guest.id)
+            ?.consent_push ||
           Platform.OS === "web" ||
           app.isDemo ||
           !app.online
@@ -109,8 +170,8 @@ function ContactForm({ guest }: { guest: Guest }) {
       />
       {Platform.OS === "web" ? (
         <Text style={styles.small}>
-          Push será habilitado no aplicativo nativo. Os avisos continuam
-          disponíveis aqui.
+          Push será habilitado no aplicativo nativo, com sua autorização e a
+          permissão do aparelho.
         </Text>
       ) : null}
       {feedback.node}
@@ -152,7 +213,10 @@ export function ProfileScreen() {
       </Card>
       <Text style={styles.text}>
         Contatos são opcionais. E-mail e WhatsApp só recebem mensagens com sua
-        autorização. Desmarque uma opção para revogar o consentimento.
+        autorização. Marque a opção para revogar mensagens e notificações. Ao
+        desmarcá-la, somente os canais anteriormente autorizados serão
+        restaurados. A ativação de push depende também da permissão do seu
+        aparelho.
       </Text>
       {app.data?.guests.map((g) => (
         <ContactForm key={g.id} guest={g} />

@@ -311,3 +311,155 @@ test("browser reproduces original missing x-client-info CORS: OPTIONS arrives bu
     });
   }
 });
+
+test("Profile real database: offline revocation, reload and reactivation preserve prior channels without duplicate operations", async ({
+  page,
+  context,
+  browser,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  db.rpc(admin, "app_mutate", {
+    p_event: event,
+    p_mutation: "bcbcbcbc-8000-4000-8000-000000000001",
+    p_type: "CONTACT_UPDATE",
+    p_payload: {
+      guest_id: individualId,
+      email: "profile@example.test",
+      whatsapp: "62999990047",
+      consent_in_app: true,
+      consent_email: true,
+      consent_whatsapp: true,
+      consent_push: false,
+    },
+  });
+  db.rpc(admin, "app_mutate", {
+    p_event: event,
+    p_mutation: "bcbcbcbc-8000-4000-8000-000000000002",
+    p_type: "RSVP_UPDATE",
+    p_payload: { guest_id: individualId, status: "CONFIRMED" },
+  });
+  const contact = () =>
+    JSON.parse(
+      db.sql(
+        `select jsonb_build_object('revoked',communications_revoked,'phone',whatsapp,'channels',jsonb_build_array(consent_in_app,consent_email,consent_whatsapp,consent_push)) from guest_contacts where guest_id='${individualId}';`,
+      ),
+    );
+  const receipts = () =>
+    Number(
+      db.sql(
+        `select count(*) from mutation_receipts where event_id='${event}' and user_id in(select user_id from invitation_sessions where invitation_id=(select invitation_id from guests where id='${individualId}'));`,
+      ),
+    );
+  await page.goto(`/c/${code}`);
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
+  await page
+    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await page.getByRole("link", { name: "Ingressos", exact: true }).click();
+  const qr = page.getByLabel("Ingresso individual de Pessoa CORS", {
+    exact: true,
+  });
+  await expect(qr.locator("svg")).toBeVisible();
+  const originalQr = db
+    .sql(
+      `select token_hash from qr_credentials where guest_id='${individualId}' and revoked_at is null;`,
+    )
+    .trim();
+  await page.reload();
+  await expect(qr.locator("svg")).toBeVisible();
+  expect(
+    db
+      .sql(
+        `select token_hash from qr_credentials where guest_id='${individualId}' and revoked_at is null;`,
+      )
+      .trim(),
+  ).toBe(originalQr);
+  expect(
+    db
+      .sql(
+        `select sharing_code from invitation_access where invitation_id=(select invitation_id from guests where id='${individualId}');`,
+      )
+      .trim(),
+  ).toBe(code);
+  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  const checkbox = page.getByRole("checkbox", {
+    name: "Revogar permissão de receber mensagens e notificações",
+    exact: true,
+  });
+  const save = page.getByRole("button", {
+    name: "Salvar contato de Pessoa CORS",
+    exact: true,
+  });
+  await expect(checkbox).not.toBeChecked();
+  const before = receipts();
+  await context.setOffline(true);
+  await expect(
+    page.getByText(/Sem conexão/).filter({ visible: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("WhatsApp de Pessoa CORS", { exact: true })
+    .fill("62912345678");
+  await checkbox.check();
+  await save.click();
+  await expect(
+    page.getByText(
+      "Salvo neste dispositivo. Será sincronizado quando houver conexão.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(contact()).toEqual({
+    revoked: false,
+    phone: "62999990047",
+    channels: [true, true, true, false],
+  });
+  await context.setOffline(false);
+  await expect
+    .poll(() => contact())
+    .toEqual({
+      revoked: true,
+      phone: "62912345678",
+      channels: [true, true, true, false],
+    });
+  await expect.poll(receipts).toBe(before + 1);
+  const fresh = await browser.newContext({ baseURL: "http://127.0.0.1:8083" });
+  try {
+    const guest = await fresh.newPage();
+    await guest.goto(`/c/${code}`);
+    await guest.getByLabel("Senha de acesso", { exact: true }).fill("0047");
+    await guest
+      .getByRole("button", { name: "Abrir nosso convite", exact: true })
+      .click();
+    await expect(guest).toHaveURL(/\/inicio$/);
+    await guest.getByRole("link", { name: "Perfil", exact: true }).click();
+    await expect(
+      guest.getByRole("checkbox", {
+        name: "Revogar permissão de receber mensagens e notificações",
+        exact: true,
+      }),
+    ).toBeChecked();
+    await expect(
+      guest.getByLabel("WhatsApp de Pessoa CORS", { exact: true }),
+    ).toHaveValue("(62) 9 1234-5678");
+  } finally {
+    await fresh.close();
+  }
+  await page.reload();
+  await expect(checkbox).toBeChecked();
+  await checkbox.uncheck();
+  await save.click();
+  await expect(
+    page.getByText("Salvo com sucesso.", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() => contact())
+    .toEqual({
+      revoked: false,
+      phone: "62912345678",
+      channels: [true, true, true, false],
+    });
+  await page.reload();
+  await expect(checkbox).not.toBeChecked();
+  expect(receipts()).toBe(before + 2);
+});

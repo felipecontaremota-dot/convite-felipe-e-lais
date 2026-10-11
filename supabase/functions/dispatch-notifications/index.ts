@@ -85,7 +85,7 @@ export function dispatchHandler(
         const consent = job.channel === "IN_APP"
           ? (contact?.consent_in_app ?? true)
           : contact?.[`consent_${job.channel.toLowerCase()}`] === true;
-        if (!consent || rule && !rule.active) {
+        if (contact?.communications_revoked || !consent || rule && !rule.active) {
           result = {
             status: "skipped",
             provider: job.channel,

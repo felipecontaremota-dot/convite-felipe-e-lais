@@ -54,6 +54,7 @@ export interface RsvpRecord {
   source: string;
 }
 export interface Contact {
+  communications_revoked?: boolean;
   guest_id: string;
   email: string;
   whatsapp: string;

@@ -98,7 +98,7 @@ for (const width of [390, 1280]) {
       .locator("..");
     await expect(
       contact.getByRole("checkbox", {
-        name: "Aceito receber mensagens por email",
+        name: "Revogar permissão de receber mensagens e notificações",
         exact: true,
       }),
     ).toBeVisible();
