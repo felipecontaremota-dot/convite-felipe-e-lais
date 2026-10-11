@@ -11,9 +11,9 @@ Base: main após a reconstrução controlada (merge #24). Escopo: conteúdo da I
 
 ## Saudação
 
-Individual: MASCULINE → Bem-vindo; FEMININE → Bem-vinda; NULL/ausente/NEUTRAL → Boas-vindas. Não se infere gênero pelo nome. FAMILY usa nome do responsável + "e família"; sem responsável, usa o nome da família.
+Individual: MASCULINE → Bem-vindo; FEMININE → Bem-vinda; NULL/ausente → Boas-vindas. Não se infere gênero pelo nome. FAMILY usa nome do responsável + "e família"; sem responsável, usa o nome da família.
 
-Não existia campo confiável no baseline. A nova `202610110007_home_greeting.sql` adiciona somente `guests.greeting_form`, opcional e com valores estruturados. Não muda RPCs, enum RSVP ou registros anteriores. O snapshot existente já serializa convidados e transporta o campo. Não há seletor administrativo novo: a estrutura está preparada para futura edição explícita; até lá, os registros permanecem neutros salvo preenchimento autorizado do campo no banco. Não reaplicar as antigas fixtures 007/008. Migrations 001–006 continuam intactas. Esta migration não foi executada em produção.
+Não existia campo confiável no baseline. A migration `202610110007_home_greeting.sql` adiciona `guests.greeting_form`, opcional, restrito a MASCULINE/FEMININE. O formulário **Adicionar/Editar convidado** mostra logo abaixo de Nome a lista **Gênero → Selecione, Masculino, Feminino**, sem opção Neutro. Selecione grava NULL e mantém o fallback de Boas-vindas. O campo é persistido atomicamente pelo fluxo administrativo: a migration preserva a implementação integral de `admin_action` como função privada e cria um wrapper com a mesma assinatura que valida/persiste somente `greeting_form` para GUEST_CREATE/GUEST_UPDATE; as demais ações são delegadas sem alteração. O snapshot existente já serializa convidados e transporta o campo. Nenhuma alteração em enum RSVP, credenciais, sessões ou registros anteriores. Não reaplicar as antigas fixtures 007/008. Migrations 001–006 continuam intactas. Esta migration não foi executada em produção.
 
 ## Presença — regra aprovada
 
@@ -25,6 +25,6 @@ Família: mensagem familiar somente por unanimidade de situação, incluindo a d
 
 Informar contatos mantém /perfil; Ver meus convites mantém /ingressos. Layout, cores, componentes e demais cards foram preservados.
 
-Unitários cobrem saudação e quatro situações derivadas de RSVP, unanimidade/divergência/isolamento. E2E cobre contador dinâmico, aspas, conteúdo, navegação e viewport mobile. SQL valida NULL/registros antigos, constraint, leitura pelo snapshot e ausência de alteração em credenciais/RPCs.
+Unitários cobrem saudação e quatro situações derivadas de RSVP, unanimidade/divergência/isolamento. E2E cobre contador dinâmico, aspas, conteúdo, navegação e viewport mobile. SQL valida NULL/registros antigos, constraint, criação/edição por RPC, leitura pelo snapshot, isolamento de credenciais e preservação das RPCs não relacionadas. E2E verifica lista sem Neutro e persistência no cadastro/edição.
 
 O harness normal continua descobrindo todas as migrations. A reconstrução histórica usa um banco isolado separado com 001–006; o upgrade da nova migration é testado depois nesse banco separado. O runner operacional de reconstrução continua restrito ao baseline e não deve ser usado para implantar esta melhoria.
