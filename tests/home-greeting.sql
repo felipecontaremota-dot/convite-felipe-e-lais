@@ -23,7 +23,7 @@ end $$;
 
 do $$
 declare e uuid:='00000000-0000-4000-8000-000000000001';g uuid;v integer;
- before jsonb;after jsonb;rejected boolean;
+ before jsonb;after jsonb;rejected boolean;updates_before bigint;
 begin
  perform set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
  select (admin_action(e,'GUEST_CREATE','{"name":"Greeting fixture","greeting_form":"MASCULINE"}'::jsonb)->>'id')::uuid into g;
@@ -31,8 +31,11 @@ begin
  if not exists(select 1 from jsonb_array_elements(app_snapshot(e)->'guests') x where x->>'id'=g::text and x->>'greeting_form'='MASCULINE') then raise exception 'Snapshot does not expose explicit form';end if;
  select to_jsonb(x)-'greeting_form'-'updated_at' into before from guests x where id=g;
  select version into v from guests where id=g;
+ select count(*) into updates_before from audit_logs where entity='guests' and entity_id=g and action='UPDATE';
  perform admin_action(e,'GUEST_UPDATE',jsonb_build_object('id',g,'version',v,'name','Greeting fixture','greeting_form','FEMININE'));
  if (select greeting_form from guests where id=g) is distinct from 'FEMININE' then raise exception 'Edit did not persist feminine';end if;
+ if (select count(*) from audit_logs where entity='guests' and entity_id=g and action='UPDATE') <> updates_before+1
+ then raise exception 'Duplicate guest UPDATE/audit trigger';end if;
  -- A client still on the previous form must not silently erase the new field.
  select version into v from guests where id=g;
  perform admin_action(e,'GUEST_UPDATE',jsonb_build_object('id',g,'version',v,'name','Greeting fixture'));
