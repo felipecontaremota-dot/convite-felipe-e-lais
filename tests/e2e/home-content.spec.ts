@@ -15,6 +15,11 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
   await expect(
     page.getByText('Faltam 66 dias até o "Sim"', { exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByText("15 de dezembro de 2026, às 16h, no Villarejo", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await page.clock.fastForward(86400000);
   await expect(
     page.getByText('Faltam 65 dias até o "Sim"', { exact: true }),
@@ -149,13 +154,16 @@ test("Home recognizes an explicit deciding response saved offline without changi
     .getByRole("button", { name: "Demo convidado", exact: true })
     .click();
   await page.getByRole("link", { name: "Presença", exact: true }).click();
-  const save = page.getByRole("button", {
-    name: "Salvar presença de Convidada Dois",
+  const card = page
+    .getByText("Convidada Dois", { exact: true })
+    .filter({ visible: true })
+    .locator("..");
+  const save = card.getByRole("button", {
+    name: "Deixa eu fazer um suspense... 🕓",
     exact: true,
   });
-  const card = save.locator("..");
   await card
-    .getByRole("radio", { name: "Ainda vou decidir", exact: true })
+    .getByRole("radio", { name: "Vou ver e te aviso...", exact: true })
     .click();
   await context.setOffline(true);
   await save.click();

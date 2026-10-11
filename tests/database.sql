@@ -20,6 +20,16 @@ do $$begin perform admin_action('00000000-0000-4000-8000-000000000001','INVITATI
 do $$begin update user_roles set role='ADMIN';raise exception 'role write granted';exception when insufficient_privilege then null;end$$;
 do $$begin perform app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000001','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000002","status":"CONFIRMED"}');raise exception 'isolation broken';exception when others then if sqlerrm<>'unauthorized' then raise;end if;end$$;
 select app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000001","status":"CONFIRMED","dietary":"Sem lactose"}');
+-- Presence editing retains one individual RSVP and actual server response evidence.
+do $$
+declare original_id uuid; next_status text;
+begin
+ select id into original_id from rsvps where guest_id='20000000-0000-4000-8000-000000000001';
+ foreach next_status in array array['DECLINED','PENDING','CONFIRMED','PENDING','DECLINED','CONFIRMED'] loop
+  perform app_mutate('00000000-0000-4000-8000-000000000001',gen_random_uuid(),'RSVP_UPDATE',jsonb_build_object('guest_id','20000000-0000-4000-8000-000000000001','status',next_status,'dietary','Sem lactose','note','Resposta editada'));
+  perform pg_temp.assert_true((select count(*)=1 and bool_and(id=original_id and status::text=next_status and responded_at is not null and source='APP' and dietary='Sem lactose' and note='Resposta editada') from rsvps where guest_id='20000000-0000-4000-8000-000000000001'),'RSVP transition preserves row and response evidence: '||next_status);
+ end loop;
+end$$;
 select pg_temp.assert_true((app_mutate('00000000-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002','RSVP_UPDATE','{"guest_id":"20000000-0000-4000-8000-000000000001","status":"DECLINED"}')->>'duplicate')::boolean,'mutation idempotency');
 select issue_ticket('00000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001') as ticket \gset
 select pg_temp.assert_true(length((:'ticket'::jsonb)->>'token')=64,'opaque token entropy');

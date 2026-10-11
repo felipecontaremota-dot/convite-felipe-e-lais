@@ -16,7 +16,7 @@ export function GuestHome() {
       <Card>
         {s ? <WeddingCountdown startsAt={s.event.starts_at} quoteSim /> : null}
         <Text style={styles.text}>
-          15 de dezembro de 2026 · 16h · Horário de Brasília
+          15 de dezembro de 2026, às 16h, no Villarejo
         </Text>
         <Text style={styles.text}>
           {s?.event.venue_name || "O local será informado pelos noivos."}
