@@ -4,6 +4,7 @@ import {
   formatPhone,
   guestContact,
   listGuests,
+  hasDuplicateGuestName,
   GROUPS,
 } from "../src/features/guests/adminDomain";
 import type { Snapshot, WeddingEvent } from "../src/types/domain";
@@ -162,4 +163,24 @@ it("demo transactions reject the entire batch before changing a valid member", a
     ),
   ).rejects.toThrow("conflict");
   expect(s.guests[0]?.invitation_id).toBe("i");
+});
+
+it("duplicate guest names ignore case and whitespace, preserve accents and exclude only self", () => {
+  const guests = [
+    { id: "a", name: "José da Silva Santos" },
+    { id: "b", name: "Maria Santos" },
+  ] as Snapshot["guests"];
+  for (const name of [
+    "José da Silva Santos",
+    "josé da silva santos",
+    " JOSÉ DA SILVA SANTOS ",
+    "José   da   Silva   Santos",
+  ])
+    expect(hasDuplicateGuestName(guests, name)).toBe(true);
+  expect(hasDuplicateGuestName(guests, "José da Silva Santos", "a")).toBe(
+    false,
+  );
+  expect(hasDuplicateGuestName(guests, "Maria Santos", "a")).toBe(true);
+  expect(hasDuplicateGuestName(guests, "Jose da Silva Santos")).toBe(false);
+  expect(hasDuplicateGuestName(guests, "Outra pessoa")).toBe(false);
 });

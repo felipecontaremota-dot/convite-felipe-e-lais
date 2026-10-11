@@ -25,6 +25,7 @@ import {
   Tag,
 } from "../../components/adminUi";
 import { AdminModal, SelectedChips } from "../../components/AdminModal";
+import { AppError } from "../../lib/errors";
 import { useApp } from "../../lib/AppProvider";
 import {
   lastInvitationDelivery,
@@ -45,6 +46,7 @@ import {
   formatPhone,
   guestContact,
   listGuests,
+  hasDuplicateGuestName,
 } from "./adminDomain";
 function GuestForm({
   guest,
@@ -66,10 +68,63 @@ function GuestForm({
     [phone, setPhone] = useState(formatPhone(contact?.whatsapp || "")),
     [email, setEmail] = useState(contact?.email || ""),
     [notes, setNotes] = useState(guest?.admin_notes || "");
+  const submitting = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (submitting.current || !name.trim()) return;
+    submitting.current = true;
+    setSaving(true);
+    try {
+      await feedback.run(async () => {
+        if (hasDuplicateGuestName(app.data?.guests || [], name, guest?.id))
+          throw new AppError("Convidado já adicionado");
+        guestContact.parse({
+          email: email.trim(),
+          whatsapp: brazilPhone(phone),
+        });
+        await app.admin(guest ? "GUEST_UPDATE" : "GUEST_CREATE", {
+          id: guest?.id || null,
+          version: expectedVersion,
+          name: name.trim(),
+          greeting_form: greetingForm || null,
+          is_child: child,
+          group_label: group,
+          whatsapp: brazilPhone(phone),
+          email: email.trim(),
+          admin_notes: notes,
+        });
+        onSaved();
+        onClose();
+      });
+    } finally {
+      submitting.current = false;
+      setSaving(false);
+    }
+  };
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handle = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Enter" ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.isComposing ||
+        !(event.target instanceof Element) ||
+        event.target.closest('[role="dialog"]')?.getAttribute("aria-label") !==
+          (guest ? "Editar convidado" : "Adicionar convidado")
+      )
+        return;
+      event.preventDefault();
+      if (!event.repeat) void save();
+    };
+    // TextInput stops bubbling key events on Web; capture only this dialog shortcut.
+    document.addEventListener("keydown", handle, true);
+    return () => document.removeEventListener("keydown", handle, true);
+  });
   return (
     <AdminModal
       title={guest ? "Editar convidado" : "Adicionar convidado"}
       onClose={onClose}
+      dismissible={!saving}
     >
       <Field label="Nome" value={name} onChangeText={setName} maxLength={200} />
       <Select
@@ -121,32 +176,8 @@ function GuestForm({
         multiline
         maxLength={2000}
       />
-      <Button
-        title="Salvar"
-        disabled={!name.trim()}
-        onPress={() =>
-          feedback.run(async () => {
-            guestContact.parse({
-              email: email.trim(),
-              whatsapp: brazilPhone(phone),
-            });
-            await app.admin(guest ? "GUEST_UPDATE" : "GUEST_CREATE", {
-              id: guest?.id || null,
-              version: expectedVersion,
-              name: name.trim(),
-              greeting_form: greetingForm || null,
-              is_child: child,
-              group_label: group,
-              whatsapp: brazilPhone(phone),
-              email: email.trim(),
-              admin_notes: notes,
-            });
-            onSaved();
-            onClose();
-          })
-        }
-      />
-      <Button secondary title="Cancelar" onPress={onClose} />
+      <Button title="Salvar" disabled={!name.trim() || saving} onPress={save} />
+      <Button secondary title="Cancelar" disabled={saving} onPress={onClose} />
       {feedback.node}
     </AdminModal>
   );
