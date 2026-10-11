@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 const footer =
   "Com carinho, Felipe & Laís · Seus dados são usados para organizar o casamento.";
 for (const width of [390, 1280]) {
-  test(`Location offers configured destination and explicit maps without changing event at ${width}px`, async ({
+  test(`Location offers one destination and maps/transport without changing event at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 844 });
@@ -31,7 +31,7 @@ for (const width of [390, 1280]) {
     ).toBeVisible();
     await expect(
       page.getByText("Rua São João, 12", { exact: true }),
-    ).toHaveCount(2);
+    ).toHaveCount(1);
     await page.evaluate(() => {
       (window as unknown as { opened: string[] }).opened = [];
       window.open = (url) => {
@@ -46,18 +46,17 @@ for (const width of [390, 1280]) {
     await open.focus();
     await page.keyboard.press("Enter");
     for (const [label, expected] of [
-      ["Abrir link de localização configurado", "https://maps.test/local"],
       [
-        "Abrir no Google Maps",
+        "Google Maps",
         "https://www.google.com/maps/dir/?api=1&destination=Rua%20S%C3%A3o%20Jo%C3%A3o%2C%2012",
       ],
       [
-        "Abrir no Waze",
+        "Waze",
         "https://waze.com/ul?q=Rua%20S%C3%A3o%20Jo%C3%A3o%2C%2012&navigate=yes",
       ],
       [
-        "Abrir no Apple Maps",
-        "https://maps.apple.com/?daddr=Rua%20S%C3%A3o%20Jo%C3%A3o%2C%2012",
+        "Uber",
+        "https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=Rua%20S%C3%A3o%20Jo%C3%A3o%2C%2012",
       ],
     ]) {
       await page.getByRole("button", { name: label, exact: true }).click();
@@ -105,7 +104,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("Location without GPS still offers Waze, Apple Maps and Google web fallback", async ({
+test("Location without GPS still offers Waze, Uber and Google web fallback", async ({
   page,
 }) => {
   await page.goto("/");
@@ -129,11 +128,7 @@ test("Location without GPS still offers Waze, Apple Maps and Google web fallback
       exact: true,
     }),
   ).toHaveCount(0);
-  for (const name of [
-    "Abrir no Waze",
-    "Abrir no Apple Maps",
-    "Abrir no Google Maps",
-  ])
+  for (const name of ["Waze", "Uber", "99", "Google Maps"])
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
 });
 

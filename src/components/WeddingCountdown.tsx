@@ -15,11 +15,17 @@ export function WeddingCountdown({
     return () => clearInterval(t);
   }, []);
   return (
-    <Text accessibilityLiveRegion="polite" style={styles.title}>
+    <Text
+      accessibilityLiveRegion="polite"
+      style={[
+        styles.title,
+        quoteSim && { textAlign: "center", paddingVertical: 12 },
+      ]}
+    >
       {quoteSim
         ? weddingCountdown(startsAt, now).text.replace(
             /até o Sim$/,
-            'até o "Sim"',
+            'até o\n"Sim"',
           )
         : weddingCountdown(startsAt, now).text}
     </Text>

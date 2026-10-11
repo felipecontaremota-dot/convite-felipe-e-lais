@@ -69,7 +69,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await second
     .getByRole("button", { name: "Pode reservar meu lugar! 🎉", exact: true })
     .click();
-  await navigation(page, "Ingressos");
+  await navigation(page, "Convites");
   await expect(
     page.getByText("Convidado Um", { exact: true }).filter({ visible: true }),
   ).toBeVisible();
@@ -112,7 +112,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await expect(
     page.getByText("Que alegria participar!", { exact: true }),
   ).toBeVisible();
-  await navigation(page, "Como chegar");
+  await navigation(page, "Local");
   await expect(
     page.getByRole("button", { name: "Abrir localização", exact: true }),
   ).toBeDisabled();
@@ -180,9 +180,9 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
   page,
 }) => {
   await start(page);
-  await navigation(page, "Ingressos");
+  await navigation(page, "Convites");
   await expect(
-    page.getByRole("button", { name: "Regenerar ingresso", exact: true }),
+    page.getByRole("button", { name: "Emitir novo convite", exact: true }),
   ).toBeVisible();
   const token = await page.evaluate(
     () =>
@@ -194,7 +194,7 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     .getByLabel("Token ou conteúdo do QR (entrada acessível)")
     .fill(`wedding://ticket/${token}`);
   await page
-    .getByRole("button", { name: "Validar ingresso", exact: true })
+    .getByRole("button", { name: "Validar convite", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Confirmar entrada", exact: true }),
@@ -209,7 +209,7 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     page.getByText("1 / 1 presentes", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Validar ingresso", exact: true })
+    .getByRole("button", { name: "Validar convite", exact: true })
     .click();
   await expect(
     page.getByText("CONVIDADO JÁ REGISTRADO", { exact: true }),

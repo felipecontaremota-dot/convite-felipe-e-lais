@@ -27,7 +27,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
         : error.message.includes("family access required")
           ? "Configure a senha e gere o link da família antes de adicionar membros."
           : error.message.includes("ticket_exists")
-            ? "Já existe um ingresso. Escolha regenerar para substituir a versão anterior."
+            ? "Já existe um convite. Escolha Emitir novo convite para substituir a versão anterior."
             : administrativeError(error.message) ||
               "Não foi possível concluir a operação.",
       error.code,

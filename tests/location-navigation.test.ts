@@ -20,20 +20,18 @@ describe("guest location navigation", () => {
     const before = JSON.stringify(event);
     const choices = locationChoices(event);
     expect(choices.map((c) => c.label)).toEqual([
-      "Abrir link de localização configurado",
-      "Abrir no Google Maps",
-      "Abrir no Waze",
-      "Abrir no Apple Maps",
+      "Google Maps",
+      "Waze",
+      "Uber",
     ]);
-    expect(choices[0]!.url).toBe(event.gps_url);
-    for (const choice of choices.slice(1))
+    for (const choice of choices)
       expect(decodeURIComponent(choice.url)).toContain(event.address);
     expect(choices.every((c) => c.url.startsWith("https://"))).toBe(true);
     expect(JSON.stringify(event)).toBe(before);
   });
   it("retains coordinates as fallback when no address is configured", () => {
     const choices = locationChoices({ ...event, address: null });
-    for (const choice of choices.slice(1))
+    for (const choice of choices.filter((c) => c.label !== "Uber"))
       expect(decodeURIComponent(choice.url)).toContain("-23,-46");
   });
   it.each([
@@ -74,9 +72,7 @@ describe("guest location navigation", () => {
       latitude: null,
       longitude: null,
     };
-    expect(locationChoices(gpsOnly)).toEqual([
-      { label: "Abrir link de localização configurado", url: event.gps_url },
-    ]);
+    expect(locationChoices(gpsOnly)).toEqual([]);
     const open = vi.fn();
     expect(await openDeviceLocation(gpsOnly, "android", open)).toBe("choose");
     expect(open).not.toHaveBeenCalled();

@@ -12,7 +12,7 @@ for (const width of [390, 1280]) {
     await page
       .getByRole("button", { name: "Demo convidado", exact: true })
       .click();
-    await page.getByRole("link", { name: "Como chegar", exact: true }).click();
+    await page.getByRole("link", { name: "Local", exact: true }).click();
     const source = page.getByRole("img", {
       name: "Villarejo Eventos",
       exact: true,

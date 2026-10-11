@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { router } from "expo-router";
-import { Pressable, Text } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { Button, Card, Empty, Screen, styles } from "../../components/ui";
+import Svg, { Path } from "react-native-svg";
 import { WeddingCountdown } from "../../components/WeddingCountdown";
 import { homeGreeting, homePresence } from "./homeContent";
 import { useApp } from "../../lib/AppProvider";
 
 export function GuestHome() {
+  const [highlight, setHighlight] = useState(false);
   const app = useApp(),
     s = app.data;
   return (
@@ -15,22 +18,46 @@ export function GuestHome() {
     >
       <Card>
         {s ? <WeddingCountdown startsAt={s.event.starts_at} quoteSim /> : null}
-        <Text style={styles.text}>
-          Save the date: 15 de dezembro de 2026, às 16h
-        </Text>
+        <Image
+          source={require("../../../assets/branding/icon.png")}
+          accessibilityLabel="Monograma Felipe & Laís"
+          accessible
+          resizeMode="contain"
+          style={{
+            width: 210,
+            height: 210,
+            maxWidth: "100%",
+            alignSelf: "center",
+            marginVertical: 16,
+          }}
+        />
+        <WeddingDetail
+          icon="M7 3v4m10-4v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2"
+          text="15 de dezembro de 2026"
+        />
+        <WeddingDetail
+          icon="M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"
+          text="às 16h"
+        />
         <Pressable
           accessibilityRole="link"
-          accessibilityLabel="no Villarejo"
+          accessibilityLabel="Villarejo"
           onPress={() => router.push("/como-chegar")}
-          style={{
+          onHoverIn={() => setHighlight(true)}
+          onHoverOut={() => setHighlight(false)}
+          onFocus={() => setHighlight(true)}
+          onBlur={() => setHighlight(false)}
+          style={({ pressed }) => ({
             minHeight: 48,
             justifyContent: "center",
-            alignSelf: "flex-start",
-          }}
+            borderRadius: 8,
+            backgroundColor: highlight || pressed ? "#C6A85A22" : "transparent",
+          })}
         >
-          <Text style={[styles.text, { textDecorationLine: "underline" }]}>
-            no Villarejo
-          </Text>
+          <WeddingDetail
+            icon="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0"
+            text="Villarejo"
+          />
         </Pressable>
         <Text style={styles.badge}>
           {homePresence(
@@ -39,9 +66,6 @@ export function GuestHome() {
             s?.rsvps ?? [],
             app.pending,
           )}
-        </Text>
-        <Text style={styles.text}>
-          {s?.guests.map((g) => g.name).join(" · ")}
         </Text>
         <Button
           secondary
@@ -70,5 +94,26 @@ export function GuestHome() {
         <Empty text="Os próximos avisos aparecerão aqui." />
       )}
     </Screen>
+  );
+}
+
+function WeddingDetail({ icon, text }: { icon: string; text: string }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 10,
+        minHeight: 44,
+      }}
+    >
+      <Svg width={20} height={20} viewBox="0 0 24 24" aria-hidden={true}>
+        <Path d={icon} stroke="#9A7835" strokeWidth={1.5} fill="none" />
+      </Svg>
+      <Text style={[styles.text, { textAlign: "center", flexShrink: 1 }]}>
+        · {text}
+      </Text>
+    </View>
   );
 }

@@ -16,14 +16,14 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
     page.getByText('Faltam 66 dias até o "Sim"', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("Save the date: 15 de dezembro de 2026, às 16h", {
+    page.getByText("· 15 de dezembro de 2026", {
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "no Villarejo", exact: true }),
+    page.getByRole("link", { name: "Villarejo", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Villarejo", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("· Villarejo", { exact: true })).toHaveCount(1);
   await page.clock.fastForward(86400000);
   await expect(
     page.getByText('Faltam 65 dias até o "Sim"', { exact: true }),
@@ -138,10 +138,10 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("link", { name: "no Villarejo", exact: true }).click();
+  await page.getByRole("link", { name: "Villarejo", exact: true }).click();
   await expect(page).toHaveURL(/\/como-chegar$/);
   await expect(
-    page.getByRole("heading", { name: "Como chegar", exact: true }),
+    page.getByRole("heading", { name: "Local", exact: true }),
   ).toBeVisible();
   await page.goto("/inicio");
   await page

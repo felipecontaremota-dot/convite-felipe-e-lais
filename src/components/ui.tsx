@@ -246,9 +246,9 @@ const nav = {
   guest: [
     ["Início", "/inicio"],
     ["Presença", "/presenca"],
-    ["Ingressos", "/ingressos"],
+    ["Convites", "/ingressos"],
     ["Presentes", "/presentes"],
-    ["Como chegar", "/como-chegar"],
+    ["Local", "/como-chegar"],
     ["Mensagens", "/mensagens"],
     ["Informações", "/informacoes"],
     ["Perfil", "/perfil"],

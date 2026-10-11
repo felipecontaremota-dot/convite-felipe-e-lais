@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, Text, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import {
   Button,
@@ -9,6 +9,7 @@ import {
   styles,
   useFeedback,
 } from "../../components/ui";
+import { Confirmation } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
 import type { Guest, Ticket } from "../../types/domain";
 
@@ -16,6 +17,12 @@ function TicketCard({ guest }: { guest: Guest }) {
   const app = useApp(),
     feedback = useFeedback();
   const issueTicket = app.ticket;
+  const opener = useRef<HTMLElement | null>(null);
+  const closeConfirmation = () => {
+    setConfirm(false);
+    if (Platform.OS === "web") setTimeout(() => opener.current?.focus(), 0);
+  };
+  const [confirm, setConfirm] = useState(false);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   useEffect(() => {
     let active = true;
@@ -36,30 +43,46 @@ function TicketCard({ guest }: { guest: Guest }) {
       {ticket ? (
         <View
           style={{ alignItems: "center", padding: 12 }}
-          accessibilityLabel={`Ingresso individual de ${guest.name}`}
+          accessibilityLabel={`Convite individual de ${guest.name}`}
         >
           <QRCode value={`wedding://ticket/${ticket.token}`} size={190} />
         </View>
-      ) : (
-        <Text style={styles.text}>
-          Emita o ingresso conectado para salvá-lo neste aparelho.
-        </Text>
-      )}
+      ) : null}
       <Text style={styles.small}>
-        O QR contém apenas uma credencial aleatória. Um ingresso regenerado
-        invalida o anterior.
+        O convite é individual. Gerar um novo invalida o anterior.
       </Text>
       <Button
-        title={
-          ticket ? "Regenerar ingresso" : "Emitir / regenerar neste dispositivo"
-        }
-        onPress={() =>
-          feedback.run(async () => {
-            setTicket(await app.ticket(guest.id, true));
-            return "Ingresso salvo neste dispositivo.";
-          })
-        }
+        title={ticket ? "Emitir novo convite" : "Emitir neste dispositivo"}
+        onPress={() => {
+          if (Platform.OS === "web")
+            opener.current = document.activeElement as HTMLElement;
+          if (
+            ticket ||
+            app.data?.credentials.some(
+              (c) => c.guest_id === guest.id && !c.revoked_at,
+            )
+          )
+            setConfirm(true);
+          else
+            feedback.run(async () => {
+              setTicket(await issueTicket(guest.id));
+              return "Convite salvo";
+            });
+        }}
       />
+      {confirm ? (
+        <Confirmation
+          text="Tem certeza que deseja emitir um novo ingresso? Essa ação irá invalidar o anterior"
+          confirmLabel="Confirmar"
+          destructive={false}
+          onCancel={closeConfirmation}
+          onConfirm={async () => {
+            setTicket(await issueTicket(guest.id, true));
+            closeConfirmation();
+            feedback.run(async () => "Convite salvo");
+          }}
+        />
+      ) : null}
       {feedback.node}
     </Card>
   );
@@ -74,16 +97,16 @@ export function TicketsScreen() {
       ),
     ) || [];
   return (
-    <Screen section="guest" title="Meus ingressos">
+    <Screen section="guest" title="Meus convites">
       <Text style={styles.text}>
-        Um QR individual por pessoa confirmada, inclusive crianças. Abra os
-        ingressos antes do evento para guardar uma cópia offline.
+        Um convite individual por pessoa confirmada, inclusive crianças. Abra os
+        convites antes do Grande Dia.
       </Text>
       {guests.map((g) => (
         <TicketCard key={g.id} guest={g} />
       ))}
       {!guests.length ? (
-        <Empty text="Confirme a presença para disponibilizar os ingressos." />
+        <Empty text="Confirme a presença para disponibilizar os convites." />
       ) : null}
     </Screen>
   );
