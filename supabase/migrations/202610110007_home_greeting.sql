@@ -29,7 +29,7 @@ begin
 
  result=admin_action_home_base(p_event,p_action,p_payload);
 
- if p_action in ('GUEST_CREATE','GUEST_UPDATE') then
+ if p_action='GUEST_CREATE' or (p_action='GUEST_UPDATE' and p_payload ? 'greeting_form') then
   guest_id=(result->>'id')::uuid;
   update guests
    set greeting_form=form
