@@ -164,6 +164,54 @@ describe("Home reads the existing per-person RSVP", () => {
       "1 ainda não confirmada · 1 ainda decidindo",
     );
   });
+  it("recognizes offline PENDING without fabricating responded_at", () => {
+    const rsvps = records("PENDING");
+    const pending = [
+      {
+        mutationId: "saved",
+        type: "RSVP_UPDATE" as const,
+        payload: { guest_id: "person", status: "PENDING" },
+        createdAt: "2026-10-11T00:00:00Z",
+        attempts: 0,
+        lastError: null,
+      },
+    ];
+    expect(homePresence(unit, [person], rsvps, pending)).toBe(
+      "Ainda dá tempo de você confirmar sua presença.",
+    );
+    expect(rsvps[0]!.responded_at).toBeNull();
+    expect(
+      homePresence({ ...unit, kind: "FAMILY" }, [person], rsvps, pending),
+    ).toBe("Ainda dá tempo de você confirmar a sua presença e de sua família.");
+  });
+  it("uses the latest queued reply and ignores another guest's queue", () => {
+    const pending = [
+      {
+        mutationId: "old",
+        type: "RSVP_UPDATE" as const,
+        payload: { guest_id: "person", status: "PENDING" },
+        createdAt: "2026-10-11T00:00:00Z",
+        attempts: 0,
+        lastError: null,
+      },
+      {
+        mutationId: "new",
+        type: "RSVP_UPDATE" as const,
+        payload: { guest_id: "person", status: "DECLINED" },
+        createdAt: "2026-10-11T00:01:00Z",
+        attempts: 0,
+        lastError: null,
+      },
+    ];
+    expect(homePresence(unit, [person], records("PENDING"), pending)).toBe(
+      "Sua ausência foi confirmada, sentiremos sua falta.",
+    );
+    expect(
+      homePresence(unit, [person], records("PENDING"), [
+        { ...pending[0]!, payload: { guest_id: "other", status: "PENDING" } },
+      ]),
+    ).toBe("Sua presença ainda não foi confirmada.");
+  });
   it("missing records are unanswered", () =>
     expect(homePresence(unit, [person], [])).toBe(
       "Sua presença ainda não foi confirmada.",

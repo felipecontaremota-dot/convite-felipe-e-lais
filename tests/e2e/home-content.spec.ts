@@ -139,3 +139,74 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
     .click();
   await expect(page).toHaveURL(/\/ingressos$/);
 });
+
+test("Home recognizes an explicit deciding response saved offline without changing server timestamps", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Demo convidado", exact: true })
+    .click();
+  await page.getByRole("link", { name: "Presença", exact: true }).click();
+  const save = page.getByRole("button", {
+    name: "Salvar presença de Convidada Dois",
+    exact: true,
+  });
+  const card = save.locator("..");
+  await card
+    .getByRole("radio", { name: "Ainda vou decidir", exact: true })
+    .click();
+  await context.setOffline(true);
+  await save.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith("queue:"))
+          .some((k) =>
+            JSON.parse(localStorage.getItem(k)!).some(
+              (m: { type: string; payload: { status: string } }) =>
+                m.type === "RSVP_UPDATE" && m.payload.status === "PENDING",
+            ),
+          ),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("link", { name: "Início", exact: true }).click();
+  await expect(
+    page
+      .getByText(
+        "1 presença confirmada · 1 ainda não confirmada · 1 ainda decidindo",
+        { exact: true },
+      )
+      .filter({ visible: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("demo-db")!).snapshot.rsvps.find(
+          (r: { guest_id: string }) => r.guest_id.endsWith("2"),
+        ).responded_at,
+    ),
+  ).toBeNull();
+  await context.setOffline(false);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("demo-db")!).snapshot.rsvps.find(
+            (r: { guest_id: string }) => r.guest_id.endsWith("2"),
+          ).responded_at,
+      ),
+    )
+    .not.toBeNull();
+  await expect(
+    page
+      .getByText(
+        "1 presença confirmada · 1 ainda não confirmada · 1 ainda decidindo",
+        { exact: true },
+      )
+      .filter({ visible: true }),
+  ).toBeVisible();
+});

@@ -1,4 +1,4 @@
-import type { Guest, Invitation } from "../../types/domain";
+import type { Guest, Invitation, OfflineMutation } from "../../types/domain";
 
 export function homeGreeting(
   invitation: Invitation | undefined,
@@ -30,11 +30,21 @@ type Presence = "CONFIRMED" | "DECLINED" | "UNANSWERED" | "DECIDING";
 function presenceFor(
   guest: Guest,
   records: import("../../types/domain").RsvpRecord[],
+  pending: OfflineMutation[],
 ): Presence {
   const record = records.find((r) => r.guest_id === guest.id);
-  if (record?.status === "CONFIRMED" || record?.status === "DECLINED")
-    return record.status;
-  return record?.responded_at ? "DECIDING" : "UNANSWERED";
+  const queued = [...pending]
+    .reverse()
+    .find(
+      (item) =>
+        item.type === "RSVP_UPDATE" && item.payload.guest_id === guest.id,
+    );
+  const status = queued?.payload.status ?? record?.status;
+  if (status === "CONFIRMED" || status === "DECLINED") return status;
+  // The existing queue is evidence of an explicit local response, not a server timestamp.
+  return queued?.payload.status === "PENDING" || record?.responded_at
+    ? "DECIDING"
+    : "UNANSWERED";
 }
 const individualMessages: Record<Presence, string> = {
   CONFIRMED: "Sua presença está confirmada.",
@@ -53,16 +63,17 @@ export function homePresence(
   invitation: Invitation | undefined,
   guests: Guest[],
   records: import("../../types/domain").RsvpRecord[],
+  pending: OfflineMutation[] = [],
 ) {
   const members = guests.filter((g) => g.invitation_id === invitation?.id);
   if (invitation?.kind === "INDIVIDUAL") {
     const person =
       members.find((g) => g.id === invitation.primary_guest_id) ?? members[0];
     return individualMessages[
-      person ? presenceFor(person, records) : "UNANSWERED"
+      person ? presenceFor(person, records, pending) : "UNANSWERED"
     ];
   }
-  const states = members.map((g) => presenceFor(g, records));
+  const states = members.map((g) => presenceFor(g, records, pending));
   if (!states.length) return familyMessages.UNANSWERED;
   if (states.every((state) => state === states[0]))
     return familyMessages[states[0]!];

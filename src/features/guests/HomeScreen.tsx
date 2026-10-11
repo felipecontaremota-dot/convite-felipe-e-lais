@@ -22,7 +22,12 @@ export function GuestHome() {
           {s?.event.venue_name || "O local será informado pelos noivos."}
         </Text>
         <Text style={styles.badge}>
-          {homePresence(s?.invitations[0], s?.guests ?? [], s?.rsvps ?? [])}
+          {homePresence(
+            s?.invitations[0],
+            s?.guests ?? [],
+            s?.rsvps ?? [],
+            app.pending,
+          )}
         </Text>
         <Text style={styles.text}>
           {s?.guests.map((g) => g.name).join(" · ")}
