@@ -80,12 +80,12 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
     page.getByText("Criança Demo", { exact: true }).filter({ visible: true }),
   ).toHaveCount(0);
   await navigation(page, "Presentes");
-  await page
-    .getByRole("checkbox", { name: "Tenho interesse em Um novo capítulo" })
-    .click();
   await expect(
-    page.getByText("Sincronizado com sucesso.").filter({ visible: true }),
+    page.getByText("A lista será preparada pelos noivos em breve."),
   ).toBeVisible();
+  await expect(
+    page.getByRole("checkbox", { name: /Tenho interesse/ }),
+  ).toHaveCount(0);
   await navigation(page, "Perfil");
   await page
     .getByRole("radio", { name: "Convidada Dois", exact: true })
@@ -160,15 +160,18 @@ test("admin cria família, convidado, presente e regra; desktop e tablet", async
   ).toBeVisible();
   await navigation(page, "Presentes");
   await page
-    .getByLabel("Título do presente", { exact: true })
-    .first()
-    .fill("Nova sugestão demo");
-  await page
-    .getByRole("button", { name: "Criar presente", exact: true })
+    .getByRole("button", { name: "Adicionar lista", exact: true })
     .click();
+  await page
+    .getByLabel("Título da lista", { exact: true })
+    .fill("Nova lista demo");
+  await page
+    .getByLabel("Link da lista", { exact: true })
+    .fill("https://example.test/lista");
+  await page.getByRole("button", { name: "Salvar lista", exact: true }).click();
   await expect(
-    page.getByLabel("Título do presente", { exact: true }).last(),
-  ).toHaveValue("Nova sugestão demo");
+    page.getByText("Nova lista demo", { exact: true }),
+  ).toBeVisible();
   await navigation(page, "Notificações");
   await expect(
     page.getByRole("button", { name: "Salvar lembrete", exact: true }),

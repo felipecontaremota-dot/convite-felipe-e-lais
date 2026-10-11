@@ -1042,3 +1042,128 @@ test("guest form: shared save shortcut, validation, full-list duplicates and sel
     "José da Silva Santos",
   );
 });
+
+test("external gift lists persist, edit and delete through the real existing gift RPC", async ({
+  page,
+}) => {
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GIFT_SAVE",
+    p_payload: {
+      title: "Produto legado preservado",
+      description: "Descrição antiga",
+      external_url: "https://example.test/produto",
+      image_url: null,
+      price_label: "Valor antigo",
+      active: true,
+      sort_order: 1,
+      reservation_enabled: true,
+    },
+  });
+  const calls = await backend(page);
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page).toHaveURL(/\/painel$/);
+  await page.getByRole("link", { name: "Presentes", exact: true }).click();
+  const add = page.getByRole("button", {
+    name: "Adicionar lista",
+    exact: true,
+  });
+  const save = page.getByRole("button", { name: "Salvar lista", exact: true });
+  await add.click();
+  await page.getByLabel("Título da lista").fill("Lista real Havan");
+  await page.getByLabel("Link da lista").fill("abc");
+  await save.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Informe um título e um link HTTPS válido.",
+  );
+  expect(calls.filter((c) => c.action === "GIFT_SAVE")).toHaveLength(0);
+  await page
+    .getByLabel("Link da lista")
+    .fill(
+      "https://lista.havan.com.br/Convidado/ItensListaPresente/966559?aba=presentes",
+    );
+  await save.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await add.click();
+  await page.getByLabel("Título da lista").fill("Segunda lista real");
+  await page.getByLabel("Link da lista").fill("https://example.test/segunda");
+  await save.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    db
+      .sql(
+        "select count(*) from gifts where description='external-gift-list:v1'",
+      )
+      .trim(),
+  ).toBe("2");
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: { name: "Convidado de teste das listas" },
+  });
+  const guestUid = "dededede-0000-4000-8000-000000000099";
+  db.sql(`insert into auth.users(id) values('${guestUid}');
+    insert into invitation_sessions(event_id,user_id,invitation_id,pin_verified_at)
+    select '${event}', '${guestUid}', i.id, now() from invitations i
+    where i.event_id='${event}' and i.active and i.archived_at is null
+      and exists(select 1 from guests g where g.invitation_id=i.id)
+    limit 1;`);
+  const guestSnapshot = db.rpc(guestUid, "app_snapshot", { p_event: event });
+  expect(guestSnapshot.role).toBe("GUEST");
+  expect(
+    guestSnapshot.gifts.filter(
+      (g: { description: string }) => g.description === "external-gift-list:v1",
+    ),
+  ).toHaveLength(2);
+  await page.reload();
+  await expect(
+    page.getByText("Lista real Havan", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Segunda lista real", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Editar lista Segunda lista real",
+      exact: true,
+    })
+    .click();
+  await page.getByLabel("Título da lista").fill("Segunda lista real editada");
+  await page.getByLabel("Link da lista").fill("https://example.test/editada");
+  await save.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    db
+      .sql(
+        "select external_url from gifts where title='Segunda lista real editada'",
+      )
+      .trim(),
+  ).toBe("https://example.test/editada");
+  await page
+    .getByRole("button", {
+      name: "Excluir lista Segunda lista real editada",
+      exact: true,
+    })
+    .click();
+  await page.getByRole("button", { name: "Excluir", exact: true }).click();
+  await expect(
+    page.getByText("Segunda lista real editada", { exact: true }),
+  ).toHaveCount(0);
+  expect(
+    db
+      .sql(
+        "select count(*) from gifts where description='external-gift-list:v1'",
+      )
+      .trim(),
+  ).toBe("1");
+  expect(
+    db
+      .sql(
+        "select count(*) from gifts where title='Produto legado preservado' and description='Descrição antiga' and price_label='Valor antigo' and reservation_enabled",
+      )
+      .trim(),
+  ).toBe("1");
+});
