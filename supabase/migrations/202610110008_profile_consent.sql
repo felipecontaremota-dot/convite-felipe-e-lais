@@ -62,8 +62,23 @@ language sql stable security definer set search_path=public,extensions,pg_temp a
  ));
 $$;
 
+-- Share the guest access rule between direct Data API reads and snapshots.
+-- SECURITY DEFINER avoids evaluating this through unrelated table RLS.
+create function can_receive_announcements(p_event uuid) returns boolean
+language sql stable security definer set search_path=public,extensions,pg_temp as $$
+ select event_role(p_event)='GUEST' and exists(
+   select 1 from guests g left join guest_contacts c on c.event_id=g.event_id and c.guest_id=g.id
+   where g.event_id=p_event and owns_guest(p_event,g.id)
+     and coalesce(c.consent_in_app,true) and not coalesce(c.communications_revoked,false)
+ );
+$$;
+revoke all on function can_receive_announcements(uuid) from public,anon;
+grant execute on function can_receive_announcements(uuid) to authenticated;
+alter policy announcement_read on announcements using(can_receive_announcements(event_id));
+-- The separate admin_read policy remains unchanged.
+
 -- General IN_APP notices remain visible to authorized members of a shared
--- access unit. With no authorized member, do not deliver them in the snapshot.
+-- access unit. With no authorized member, direct reads and snapshots agree.
 alter function app_snapshot(uuid) rename to app_snapshot_v7;
 revoke all on function app_snapshot_v7(uuid) from public,anon,authenticated,service_role;
 create function app_snapshot(p_event uuid) returns jsonb
@@ -71,10 +86,7 @@ language plpgsql security definer set search_path=public,extensions,pg_temp as $
 declare result jsonb;
 begin
  result=app_snapshot_v7(p_event);
- if event_role(p_event)='GUEST' and not exists(
-   select 1 from guests g left join guest_contacts c on c.event_id=g.event_id and c.guest_id=g.id
-   where g.event_id=p_event and owns_guest(p_event,g.id) and coalesce(c.consent_in_app,true) and not coalesce(c.communications_revoked,false)
- ) then
+ if event_role(p_event)='GUEST' and not can_receive_announcements(p_event) then
    result=result||jsonb_build_object('announcements','[]'::jsonb);
  end if;
  return result;
