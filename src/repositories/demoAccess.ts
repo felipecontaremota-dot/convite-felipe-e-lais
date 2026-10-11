@@ -78,9 +78,11 @@ export async function demoAccess(
     if (group && !GROUPS.includes(group) && group !== existing?.group_label)
       throw Error("invalid group");
     const greetingForm =
-      p.greeting_form === "MASCULINE" || p.greeting_form === "FEMININE"
-        ? p.greeting_form
-        : null;
+      p.greeting_form === undefined && existing
+        ? existing.greeting_form ?? null
+        : p.greeting_form === "MASCULINE" || p.greeting_form === "FEMININE"
+          ? p.greeting_form
+          : null;
     if (p.greeting_form && !greetingForm) throw Error("invalid greeting form");
     const gid = existing?.id || gen.id(),
       name = String(p.name).trim();
