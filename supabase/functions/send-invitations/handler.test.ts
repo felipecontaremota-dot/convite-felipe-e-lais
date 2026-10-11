@@ -9,6 +9,7 @@ import {
   type Delivery,
   DisabledProvider,
   ResendProvider,
+  resendPayloadHash,
 } from "../_shared/providers.ts";
 const event = "00000000-0000-4000-8000-000000000001",
   guest = "dddddddd-0000-4000-8000-000000000001",
@@ -220,7 +221,7 @@ Deno.test("non ADMIN is rejected before reservation or provider access", async (
     "fail closed",
   );
 });
-Deno.test("provisional template escapes all dynamic HTML and keeps textual fallback", () => {
+Deno.test("invitation template escapes all dynamic HTML and keeps textual fallback", () => {
   const result = invitationTemplate(
     "<script>",
     'https://example.test/c/code?x="',
@@ -312,7 +313,8 @@ Deno.test("real Resend abstraction mocked at HTTP boundary records accepted invi
         );
         const body = JSON.parse(String(init?.body));
         assert(
-          body.html.includes("ABRIR NOSSO CONVITE") &&
+          body.html.includes("https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email.jpeg") &&
+            body.html.includes('href="https://example.test/convite-felipe-e-lais/c/CodeSeguroNaoEnumeravelCom32Chars"') &&
             body.text.includes("Senha de acesso: 0047"),
           "centralized template sent",
         );
@@ -683,3 +685,129 @@ Deno.test("claim rejects rotated credentials from an otherwise available prepara
     "same operation retained for fresh preparation",
   );
 });
+
+Deno.test(
+  "official artwork is responsive, fully linked, and independent from readable credentials",
+  () => {
+    const url = "https://example.test/c/individual-sharing-code";
+    const result = invitationTemplate("Ana & João", url, "0047");
+    assert(
+      result.title === "Felipe & Laís têm um convite especial para você 💍",
+      "unchanged subject",
+    );
+    assert(
+      result.text ===
+        `Felipe & Laís\nOlá, Ana & João,\nTemos um convite especial para você.\n15 de dezembro de 2026 · 16h\nABRIR NOSSO CONVITE: ${url}\nSenha de acesso: 0047`,
+      "unchanged plain text fallback",
+    );
+    const fragments = [
+      "Olá, Ana &amp; João,",
+      "Temos um convite especial para você!",
+      `<a href="${url}" style="display:block;text-decoration:none;"><img src="https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email.jpeg"`,
+      "A sua senha de acesso é: <strong>0047</strong>",
+      "Você também pode acessar o seu convite através desse link:",
+      `>${url}</a>`,
+    ];
+    let previous = -1;
+    for (const fragment of fragments) {
+      const position = result.html.indexOf(fragment);
+      assert(position > previous, "approved content and order: " + fragment);
+      previous = position;
+    }
+    assert(
+      (result.html.match(/<img /g) || []).length === 1 &&
+        (result.html.match(/<a /g) || []).length === 2,
+      "one artwork and two individual links",
+    );
+    assert(
+      result.html.includes("max-width:600px;height:auto;") &&
+        result.html.includes('width="600"') &&
+        result.html.includes('role="presentation"'),
+      "proportional image and email tables",
+    );
+    assert(
+      !result.html.includes("ABRIR NOSSO CONVITE") &&
+        !result.html.includes("object-fit") &&
+        !result.html.includes("<style"),
+      "old button removed; inline styles and no cropping",
+    );
+    assert(
+      result.html.includes('alt="Convite de casamento') &&
+        result.html.includes("<!--[if mso]>"),
+      "image fallback and Outlook width fallback",
+    );
+  },
+);
+
+Deno.test(
+  "template escapes hostile name, password and both individual link attributes",
+  () => {
+    const result = invitationTemplate(
+      '<img src=x onerror="bad">',
+      'https://example.test/c/code?a=1&b="bad"',
+      '<0047&"',
+    );
+    assert(
+      !result.html.includes("<img src=x") &&
+        result.html.includes("&lt;img src=x onerror=&quot;bad&quot;&gt;"),
+      "guest name is text",
+    );
+    assert(
+      result.html.includes("<strong>&lt;0047&amp;&quot;</strong>"),
+      "password is escaped text",
+    );
+    assert(
+      (
+        result.html.match(
+          /href="https:\/\/example.test\/c\/code\?a=1&amp;b=&quot;bad&quot;"/g,
+        ) || []
+      ).length === 2,
+      "both hrefs are escaped",
+    );
+  },
+);
+
+Deno.test(
+  "pending delivery from an older HTML template is blocked without new reservation or provider call",
+  async () => {
+    const f = fixture();
+    const key = `${requestId}:${guest}`;
+    const template = invitationTemplate(
+      "<Convidado>",
+      "https://example.test/convite-felipe-e-lais/c/CodeSeguroNaoEnumeravelCom32Chars",
+      "0047",
+    );
+    const oldHash = await resendPayloadHash({
+      id: key,
+      key,
+      title: template.title,
+      body: template.text,
+      html: "<div>HTML da versão anterior</div>",
+      email: "guest@example.test",
+      whatsapp: "",
+      tokens: [],
+    });
+    f.stored.set(key, {
+      id: key,
+      status: "pending",
+      attempted: true,
+      hash: oldHash,
+    });
+    const retry = await (await f.handler(request())).json();
+    assert(
+      retry.pending === 1 &&
+        retry.complete === false &&
+        retry.results[0].reason === "payload_changed",
+      "template change preserves uncertainty",
+    );
+    assert(
+      f.sends() === 0 && f.finishes.length === 0 && f.stored.size === 1,
+      "no POST, finalization or replacement operation",
+    );
+    assert(
+      f.stored.get(key)?.hash === oldHash &&
+        f.stored.get(key)?.status === "pending",
+      "original reservation and hash retained",
+    );
+  },
+);
