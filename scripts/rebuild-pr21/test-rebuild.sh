@@ -38,7 +38,7 @@ run_sql < <(cat <<'SQL'
 begin;
 select set_config('wedding.rebuild_confirmation','DISCARD_TEST_DATA_REBUILD_PR21',true);
 SQL
-cat scripts/rebuild-pr21/cleanup-reviewed.sql supabase/migrations/*.sql supabase/seed.sql scripts/rebuild-pr21/bootstrap-reviewed.sql
+cat scripts/rebuild-pr21/cleanup-reviewed.sql supabase/migrations/20261009000*.sql supabase/seed.sql scripts/rebuild-pr21/bootstrap-reviewed.sql
 printf '\ncommit;\n'
 printf "select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);\n"
 cat tests/rebuild-verify.sql)

@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { Text } from "react-native";
 import { Button, Card, Empty, Screen, styles } from "../../components/ui";
 import { WeddingCountdown } from "../../components/WeddingCountdown";
+import { homeGreeting, homePresence } from "./homeContent";
 import { useApp } from "../../lib/AppProvider";
 
 export function GuestHome() {
@@ -10,10 +11,10 @@ export function GuestHome() {
   return (
     <Screen
       section="guest"
-      title={`Bem-vindos, ${s?.invitations[0]?.name || "à nossa celebração"}`}
+      title={homeGreeting(s?.invitations[0], s?.guests ?? [])}
     >
       <Card>
-        {s ? <WeddingCountdown startsAt={s.event.starts_at} /> : null}
+        {s ? <WeddingCountdown startsAt={s.event.starts_at} quoteSim /> : null}
         <Text style={styles.text}>
           15 de dezembro de 2026 · 16h · Horário de Brasília
         </Text>
@@ -21,15 +22,14 @@ export function GuestHome() {
           {s?.event.venue_name || "O local será informado pelos noivos."}
         </Text>
         <Text style={styles.badge}>
-          {s?.rsvps.filter((r) => r.status === "CONFIRMED").length || 0}{" "}
-          presença(s) confirmada(s)
+          {homePresence(s?.invitations[0], s?.guests ?? [], s?.rsvps ?? [])}
         </Text>
         <Text style={styles.text}>
           {s?.guests.map((g) => g.name).join(" · ")}
         </Text>
         <Button
           secondary
-          title="Identificar este aparelho e informar contatos"
+          title="Informar contatos"
           onPress={() => router.push("/perfil")}
         />
         <Button
@@ -38,7 +38,7 @@ export function GuestHome() {
         />
         <Button
           secondary
-          title="Ver meus ingressos"
+          title="Ver meus convites"
           onPress={() => router.push("/ingressos")}
         />
       </Card>

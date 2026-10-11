@@ -16,7 +16,7 @@ else
  for attempt in {1..30}; do if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
-for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql; do
+for source in tests/db-bootstrap.sql supabase/migrations/20261009000*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql; do
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
   run_sql < tests/access-upgrade-prepare.sql
  fi
@@ -33,3 +33,7 @@ for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql
 done
 
 source scripts/rebuild-pr21/test-rebuild.sh
+
+run_sql < tests/home-greeting-prepare.sql
+run_sql < supabase/migrations/202610110007_home_greeting.sql
+run_sql < tests/home-greeting.sql
