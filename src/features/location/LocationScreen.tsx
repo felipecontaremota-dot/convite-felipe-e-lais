@@ -1,5 +1,5 @@
 import React from "react";
-import { Platform, Text } from "react-native";
+import { Image, Platform, Text } from "react-native";
 import { Button, Card, Screen, styles, useFeedback } from "../../components/ui";
 import type { WeddingEvent } from "../../types/domain";
 import { useApp } from "../../lib/AppProvider";
@@ -32,6 +32,20 @@ export function LocationCard({
   const links = event ? transportLinks(event) : null;
   return (
     <Card>
+      {guestNavigation ? (
+        <Image
+          source={require("../../../assets/villarejo-eventos.jpg")}
+          accessible
+          accessibilityLabel="Villarejo Eventos"
+          resizeMode="cover"
+          style={{
+            width: 112,
+            height: 112,
+            borderRadius: 56,
+            alignSelf: "center",
+          }}
+        />
+      ) : null}
       <Text accessibilityRole="header" style={styles.heading}>
         {event?.venue_name || "Local a definir"}
       </Text>
