@@ -12,8 +12,13 @@ do $$begin
   where n.nspname='public' and p.prokind='f' and p.proname not in ('admin_action','admin_action_home_base')
  ) then raise exception 'Unrelated RPC changed';end if;
  if not has_function_privilege('authenticated','public.admin_action(uuid,text,jsonb)','EXECUTE')
-  or has_function_privilege('authenticated','public.admin_action_home_base(uuid,text,jsonb)','EXECUTE')
- then raise exception 'Admin wrapper grants are incorrect';end if;
+  or has_function_privilege('anon','public.admin_action(uuid,text,jsonb)','EXECUTE')
+ then raise exception 'Admin RPC grants are incorrect';end if;
+ if to_regprocedure('public.admin_action_home_base(uuid,text,jsonb)') is not null
+ then raise exception 'Unexpected duplicate admin RPC';end if;
+ if (select pg_get_userbyid(proowner) from pg_proc where oid='public.admin_action(uuid,text,jsonb)'::regprocedure)
+   is distinct from (select owner from rebuild_test.home_functions where proname='admin_action')
+ then raise exception 'Admin RPC owner changed';end if;
 end $$;
 
 do $$
