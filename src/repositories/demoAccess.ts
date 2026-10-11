@@ -77,6 +77,11 @@ export async function demoAccess(
     const group = String(p.group_label || "");
     if (group && !GROUPS.includes(group) && group !== existing?.group_label)
       throw Error("invalid group");
+    const greetingForm =
+      p.greeting_form === "MASCULINE" || p.greeting_form === "FEMININE"
+        ? p.greeting_form
+        : null;
+    if (p.greeting_form && !greetingForm) throw Error("invalid greeting form");
     const gid = existing?.id || gen.id(),
       name = String(p.name).trim();
     if (!name) throw Error("invalid name");
@@ -88,6 +93,7 @@ export async function demoAccess(
       name,
       invitation_id: unit,
       group_label: group,
+      greeting_form: greetingForm,
       version: (existing?.version || 0) + 1,
       is_child: !!p.is_child,
       is_adolescent: false,
