@@ -708,9 +708,13 @@ test("Real family QR: modal isolation, partial offline arrival, individual notif
     await expect(
       staff.getByRole("checkbox", { name: "Pedro Portaria", exact: true }),
     ).toBeChecked();
-    await staff
-      .getByRole("checkbox", { name: "Pedro Portaria", exact: true })
-      .click();
+    const childCheckbox = staff.getByRole("checkbox", {
+      name: "Pedro Portaria",
+      exact: true,
+    });
+    await childCheckbox.focus();
+    await childCheckbox.press("Space");
+    await expect(childCheckbox).not.toBeChecked();
     await staff
       .getByRole("checkbox", { name: "João Portaria", exact: true })
       .click();

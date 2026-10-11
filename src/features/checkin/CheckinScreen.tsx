@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import {
   Button,
   Card,
@@ -15,7 +15,64 @@ import { AppError } from "../../lib/errors";
 import { hashToken } from "../../repositories/demo";
 import type { Checkin } from "../../types/domain";
 import { familyTicketToken, ticketToken } from "../../utils/security";
+import { theme } from "../../theme/tokens";
 import { validateCredential } from "./domain";
+function MemberCheckbox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  if (Platform.OS === "web")
+    return (
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: 12,
+          minHeight: 48,
+          boxSizing: "border-box",
+          border: `1px solid ${checked ? theme.colors.gold : theme.colors.line}`,
+          borderRadius: 10,
+          cursor: "pointer",
+          backgroundColor: checked ? theme.colors.wash : "white",
+        }}
+      >
+        <input
+          type="checkbox"
+          aria-label={label}
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          style={{
+            flexShrink: 0,
+            width: 18,
+            height: 18,
+            accentColor: theme.colors.ink,
+          }}
+        />
+        <Text style={[styles.text, { flexShrink: 1 }]}>{label}</Text>
+      </label>
+    );
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      accessibilityState={{ checked }}
+      aria-checked={checked}
+      style={[styles.nav, checked && styles.selected]}
+      onPress={() => onChange(!checked)}
+    >
+      <Text style={styles.text}>
+        {checked ? "☑" : "☐"} {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function CheckinScreen({ admin = false }: { admin?: boolean }) {
   const app = useApp(),
     feedback = useFeedback();
@@ -206,27 +263,17 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
               return (
                 <View key={g.id}>
                   {eligible && !registered ? (
-                    <Pressable
-                      accessibilityRole="checkbox"
-                      accessibilityLabel={label}
-                      accessibilityState={{ checked: selected.includes(g.id) }}
-                      aria-checked={selected.includes(g.id)}
-                      style={[
-                        styles.nav,
-                        selected.includes(g.id) && styles.selected,
-                      ]}
-                      onPress={() =>
+                    <MemberCheckbox
+                      label={label}
+                      checked={selected.includes(g.id)}
+                      onChange={(value) =>
                         setSelected((ids) =>
-                          ids.includes(g.id)
-                            ? ids.filter((id) => id !== g.id)
-                            : [...ids, g.id],
+                          value
+                            ? [...new Set([...ids, g.id])]
+                            : ids.filter((id) => id !== g.id),
                         )
                       }
-                    >
-                      <Text style={styles.text}>
-                        {selected.includes(g.id) ? "☑" : "☐"} {label}
-                      </Text>
-                    </Pressable>
+                    />
                   ) : (
                     <Text style={styles.text}>
                       {label} ·{" "}

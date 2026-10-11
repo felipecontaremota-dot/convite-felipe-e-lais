@@ -13,7 +13,7 @@ A migration `202610110009_family_tickets.sql` acrescenta credenciais familiares 
 
 ## Conferência e transação
 
-Escanear nunca escreve RSVP ou check-in. A conferência familiar marca somente integrantes CONFIRMED ainda aguardados; presentes e não confirmados ficam identificados. O funcionário desmarca ausentes e confirma a lista exata. O servidor valida toda a seleção, credencial ativa e composição da família antes de inserir qualquer entrada.
+Escanear nunca escreve RSVP ou check-in. A conferência familiar marca somente integrantes CONFIRMED ainda aguardados; presentes e não confirmados ficam identificados. Na Web, os checkboxes HTML aceitam Tab/Espaço e ativação pelo rótulo; no Android/iOS, o controle mantém os estados e rótulos de acessibilidade nativos. O funcionário desmarca ausentes e confirma a lista exata. O servidor valida toda a seleção, credencial ativa e composição da família antes de inserir qualquer entrada.
 
 `CHECKIN_FAMILY_CREATE` usa a fila existente, uma receipt por operação e resultado persistido. A transação compartilha a trava usada pela administração de membros, bloqueia os convidados em ordem e preserva a unicidade por evento/pessoa. Retry retorna o resultado original antes de revalidar dados mutáveis; duas conexões concorrentes não duplicam entradas. Pessoas já registradas são preservadas; ausentes podem entrar posteriormente individualmente ou por nova conferência familiar.
 
