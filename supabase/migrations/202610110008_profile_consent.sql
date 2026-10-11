@@ -44,7 +44,7 @@ begin
  return jsonb_build_object('ok',true,'id',null);
 end $$;
 revoke all on function app_mutate(uuid,uuid,text,jsonb) from public,anon;
-grant execute on function app_mutate(uuid,uuid,text,jsonb) to authenticated;
+grant execute on function app_mutate(uuid,uuid,text,jsonb) to authenticated,service_role;
 
 create or replace function can_read_message(p_event uuid,p_message uuid) returns boolean
 language sql stable security definer set search_path=public,extensions,pg_temp as $$
@@ -92,4 +92,4 @@ begin
  return result;
 end $$;
 revoke all on function app_snapshot(uuid) from public,anon;
-grant execute on function app_snapshot(uuid) to authenticated;
+grant execute on function app_snapshot(uuid) to authenticated,service_role;
