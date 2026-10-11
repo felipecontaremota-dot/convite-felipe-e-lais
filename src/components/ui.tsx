@@ -420,7 +420,7 @@ export function Screen({
       ) : null}
       <Text style={styles.small}>
         Com carinho, Felipe & Laís · Seus dados são usados para organizar o
-        casamento. Consentimentos podem ser revogados no Perfil.
+        casamento.
       </Text>
     </ScrollView>
   );

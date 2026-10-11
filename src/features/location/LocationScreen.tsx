@@ -5,6 +5,7 @@ import type { WeddingEvent } from "../../types/domain";
 import { useApp } from "../../lib/AppProvider";
 import { copyText, openExternal } from "../../utils/externalLinks";
 import { mapsEmbedUrl, transportLinks } from "./transportLinks";
+import { GuestLocationActions } from "./GuestLocationActions";
 export function LocationScreen({
   section = "guest",
 }: {
@@ -13,11 +14,20 @@ export function LocationScreen({
   const app = useApp();
   return (
     <Screen section={section} title="Como chegar">
-      <LocationCard event={app.data?.event} />
+      <LocationCard
+        event={app.data?.event}
+        guestNavigation={section === "guest"}
+      />
     </Screen>
   );
 }
-export function LocationCard({ event }: { event?: WeddingEvent }) {
+export function LocationCard({
+  event,
+  guestNavigation = false,
+}: {
+  event?: WeddingEvent;
+  guestNavigation?: boolean;
+}) {
   const feedback = useFeedback();
   const links = event ? transportLinks(event) : null;
   return (
@@ -30,19 +40,29 @@ export function LocationCard({ event }: { event?: WeddingEvent }) {
           "O endereço será informado aqui quando estiver confirmado."}
       </Text>
       <LocationPreview event={event} />
-      <Button
-        title="Abrir localização"
-        disabled={!links?.gps && !links?.google}
-        onPress={() =>
-          feedback.run(() => openExternal(links?.gps || links?.google || null))
-        }
-      />
-      <Button
-        secondary
-        title="Abrir no Google Maps"
-        disabled={!links?.google}
-        onPress={() => feedback.run(() => openExternal(links?.google || null))}
-      />
+      {guestNavigation ? (
+        <GuestLocationActions event={event} />
+      ) : (
+        <>
+          <Button
+            title="Abrir localização"
+            disabled={!links?.gps && !links?.google}
+            onPress={() =>
+              feedback.run(() =>
+                openExternal(links?.gps || links?.google || null),
+              )
+            }
+          />
+          <Button
+            secondary
+            title="Abrir no Google Maps"
+            disabled={!links?.google}
+            onPress={() =>
+              feedback.run(() => openExternal(links?.google || null))
+            }
+          />
+        </>
+      )}
       <Button
         secondary
         title="Copiar endereço"
