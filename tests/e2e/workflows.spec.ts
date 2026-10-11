@@ -46,9 +46,13 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   ).toBeVisible();
   await noOverflow(page);
   await navigation(page, "Presença");
-  await page
+  const second = page
+    .getByText("Convidada Dois", { exact: true })
+    .filter({ visible: true })
+    .locator("..");
+  await second
     .getByRole("button", {
-      name: "Salvar presença de Convidada Dois",
+      name: "Deixa eu fazer um suspense... 🕓",
       exact: true,
     })
     .click();
@@ -56,15 +60,14 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
     page.getByText("Sincronizado com sucesso.").filter({ visible: true }),
   ).toBeVisible();
   // Each card owns its choice. Only the second person is updated.
-  const second = page
-    .getByRole("button", {
-      name: "Salvar presença de Convidada Dois",
-      exact: true,
-    })
-    .locator("..");
-  await second.getByRole("radio", { name: "Vou participar" }).click();
   await second
-    .getByRole("button", { name: "Salvar presença de Convidada Dois" })
+    .getByRole("button", { name: "Editar minha confirmação", exact: true })
+    .click();
+  await second
+    .getByRole("radio", { name: "Já tô com a roupa de ir!!!", exact: true })
+    .click();
+  await second
+    .getByRole("button", { name: "Pode reservar meu lugar! 🎉", exact: true })
     .click();
   await navigation(page, "Ingressos");
   await expect(
