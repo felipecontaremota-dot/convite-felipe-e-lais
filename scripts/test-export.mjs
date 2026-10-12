@@ -182,7 +182,7 @@ try {
   const home = await page.goto(origin + shell);
   assert.equal(home.status(), 200);
   await page
-    .getByRole("button", { name: "Abrir meu convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .waitFor();
   assert.equal(await page.getByRole("button", { name: /^Demo / }).count(), 0);
   await page.waitForFunction(
@@ -329,7 +329,7 @@ try {
   await context.setOffline(true);
   await page.reload();
   await page
-    .getByRole("button", { name: "Abrir meu convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .waitFor();
   assert.equal(await page.getByRole("button", { name: /^Demo / }).count(), 0);
   // Offline navigation to an invitation also uses shell, without storing its URL.
