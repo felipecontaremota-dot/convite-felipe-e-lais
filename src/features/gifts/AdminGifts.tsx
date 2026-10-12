@@ -125,7 +125,7 @@ function ListCard({
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              flex: 1,
+              flexShrink: 1,
               minWidth: 0,
               overflowWrap: "anywhere",
               fontSize: 16,
@@ -141,16 +141,18 @@ function ListCard({
             accessibilityRole="link"
             accessibilityLabel={list.external_url!}
             onPress={() => feedback.run(() => openExternal(url))}
-            style={{ flex: 1, minWidth: 0 }}
+            style={{ flexShrink: 1, minWidth: 0 }}
           >
             <Text style={[styles.text, { textDecorationLine: "underline" }]}>
               {list.external_url}
             </Text>
           </Pressable>
         ) : (
-          <Text style={[styles.text, { flex: 1 }]}>{list.external_url}</Text>
+          <Text style={[styles.text, { flexShrink: 1 }]}>
+            {list.external_url}
+          </Text>
         )}
-        <View style={{ minWidth: 44 }}>
+        <View style={{ minWidth: 44, flexShrink: 0 }}>
           <IconButton
             icon="copy"
             label={`Copiar link de ${list.title}`}
