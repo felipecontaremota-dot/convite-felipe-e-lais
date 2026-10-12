@@ -1,8 +1,7 @@
 import { useRef, useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import {
   Button,
-  Card,
   Empty,
   Field,
   Screen,
@@ -14,6 +13,8 @@ import { AdminModal } from "../../components/AdminModal";
 import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import type { Gift } from "../../types/domain";
+import { copyText, openExternal } from "../../utils/externalLinks";
+import { safeHttps } from "../../utils/security";
 import { FIRST_LIST, giftLists, giftListPayload } from "./giftLists";
 
 function ListEditor({
@@ -80,6 +81,95 @@ function ListEditor({
     </AdminModal>
   );
 }
+function ListCard({
+  list,
+  onEdit,
+  onDelete,
+}: {
+  list: Gift;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const feedback = useFeedback();
+  const url = safeHttps(list.external_url);
+  return (
+    <View
+      testID="gift-list-card"
+      style={[styles.card, { padding: 16, gap: 8 }]}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Text style={[styles.heading, { flex: 1, minWidth: 0 }]}>
+          {list.title}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          <View style={{ minWidth: 44 }}>
+            <IconButton
+              icon="edit"
+              label={`Editar lista ${list.title}`}
+              onPress={onEdit}
+            />
+          </View>
+          <View style={{ minWidth: 44 }}>
+            <IconButton
+              icon="delete"
+              label={`Excluir lista ${list.title}`}
+              onPress={onDelete}
+            />
+          </View>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {url && Platform.OS === "web" ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflowWrap: "anywhere",
+              fontSize: 16,
+              lineHeight: "25px",
+              color: "#183F35",
+              textDecoration: "underline",
+            }}
+          >
+            {list.external_url}
+          </a>
+        ) : url ? (
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={list.external_url!}
+            onPress={() => feedback.run(() => openExternal(url))}
+            style={{ flex: 1, minWidth: 0 }}
+          >
+            <Text style={[styles.text, { textDecorationLine: "underline" }]}>
+              {list.external_url}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={[styles.text, { flex: 1 }]}>{list.external_url}</Text>
+        )}
+        <View style={{ minWidth: 44 }}>
+          <IconButton
+            icon="copy"
+            label={`Copiar link de ${list.title}`}
+            onPress={() =>
+              feedback.run(async () => {
+                if (!list.external_url)
+                  throw new AppError("Link indisponível.");
+                await copyText(list.external_url);
+                return "Link copiado";
+              })
+            }
+          />
+        </View>
+      </View>
+      {feedback.node}
+    </View>
+  );
+}
+
 export function AdminGifts() {
   const app = useApp();
   const lists = giftLists(app.data?.gifts);
@@ -91,28 +181,22 @@ export function AdminGifts() {
         accessibilityRole="button"
         accessibilityLabel="Adicionar lista"
         onPress={() => setEditing("new")}
-        style={styles.button}
+        style={[styles.button, { alignSelf: "flex-start" }]}
       >
-        <Text style={{ color: "white", fontSize: 24 }}>+</Text>
+        <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>
+          + Adicionar lista
+        </Text>
       </Pressable>
       {!lists.length ? (
         <Empty text="Cadastre sua primeira lista de presentes pelo botão +." />
       ) : null}
       {lists.map((list) => (
-        <Card key={list.id}>
-          <Text style={styles.heading}>{list.title}</Text>
-          <Text style={styles.text}>{list.external_url}</Text>
-          <IconButton
-            icon="edit"
-            label={`Editar lista ${list.title}`}
-            onPress={() => setEditing(list)}
-          />
-          <IconButton
-            icon="delete"
-            label={`Excluir lista ${list.title}`}
-            onPress={() => setDeleting(list)}
-          />
-        </Card>
+        <ListCard
+          key={list.id}
+          list={list}
+          onEdit={() => setEditing(list)}
+          onDelete={() => setDeleting(list)}
+        />
       ))}
       {editing ? (
         <ListEditor
