@@ -84,7 +84,7 @@ Os testes de banco executam as migrations reais, RLS e RPCs sobre PostgreSQL. O 
 
 ## Publicação Web
 
-GitHub Pages publica a aplicação em **https://felipecontaremota-dot.github.io/convite-felipe-e-lais/**. O workflow [Deploy GitHub Pages](.github/workflows/deploy-pages.yml) executa a cada push/merge na `main` e também por `workflow_dispatch`. Após o merge deste PR, use **Actions → Deploy GitHub Pages → Run workflow → main** para disparar manualmente. Em **Settings → Pages → Build and deployment**, a fonte deve ser **GitHub Actions** (já configurada no repositório).
+O build de produção está preparado para **https://felipeelais2026.com.br/**, hospedado pelo GitHub Pages. A ativação depende das configurações externas de [domínio e DNS](docs/custom-domain.md); este ajuste não as executa. O workflow [Deploy GitHub Pages](.github/workflows/deploy-pages.yml) executa a cada push/merge na `main` e também por `workflow_dispatch`. Após o merge deste PR, use **Actions → Deploy GitHub Pages → Run workflow → main** para disparar manualmente. Em **Settings → Pages → Build and deployment**, a fonte deve ser **GitHub Actions** (já configurada no repositório).
 
 O workflow usa Node 24, instala pelo lockfile, valida lint/TypeScript/domínio, exporta e testa o build com Playwright antes de enviar **somente `dist`** ao Pages. O deploy depende desse job de build. O workflow `Validate platform` continua executando sua suíte completa e também verifica os exports na raiz e no subdiretório. Demo permanece desativado em produção.
 
@@ -95,13 +95,13 @@ O job `build` recebe a configuração do Supabase hospedado pelas **Repository V
 
 Com ambas preenchidas, o frontend utiliza o Supabase hospedado. Sem elas, a página pública continua carregando e os recursos dependentes do backend permanecem no fallback de indisponibilidade. Esses valores públicos são incorporados ao build; após alterá-los no GitHub, execute um novo deploy para atualizar o frontend. Nenhuma credencial privada deve ser incluída no build.
 
-`EXPO_PUBLIC_WEB_BASE_PATH` é o prefixo de caminho, sem domínio. Vazio ou `/` significa raiz (padrão local); no Pages, `/convite-felipe-e-lais`. Expo `experiments.baseUrl` e scripts de export/preview compartilham `config/web-paths.cjs`. `EXPO_PUBLIC_WEB_BASE_URL` é a URL HTTPS completa, incluindo esse prefixo, usada para os links públicos de convite.
+`EXPO_PUBLIC_WEB_BASE_PATH` é o prefixo de caminho, sem domínio. Vazio ou `/` significa raiz (padrão local); no domínio personalizado, `/`. O prefixo `/convite-felipe-e-lais` continua suportado para builds legados de teste. Expo `experiments.baseUrl` e scripts de export/preview compartilham `config/web-paths.cjs`. `EXPO_PUBLIC_WEB_BASE_URL` é a URL HTTPS completa, incluindo esse prefixo, usada para os links públicos de convite.
 
 Para reproduzir o Pages localmente:
 
 ```sh
-export EXPO_PUBLIC_WEB_BASE_PATH=/convite-felipe-e-lais
-export EXPO_PUBLIC_WEB_BASE_URL=https://felipecontaremota-dot.github.io/convite-felipe-e-lais
+export EXPO_PUBLIC_WEB_BASE_PATH=/
+export EXPO_PUBLIC_WEB_BASE_URL=https://felipeelais2026.com.br
 export EXPO_PUBLIC_DEMO_MODE=false
 # Substitua os placeholders localmente; não commite valores de configuração.
 export EXPO_PUBLIC_SUPABASE_URL='<URL_DO_PROJETO_SUPABASE>'
@@ -109,16 +109,16 @@ export EXPO_PUBLIC_SUPABASE_ANON_KEY='<PUBLISHABLE_KEY_PUBLICA>'
 npm run build:web
 npm run test:export
 npm run serve:web
-# Preview manual: http://127.0.0.1:8082/convite-felipe-e-lais/
+# Preview manual: http://127.0.0.1:8082/
 ```
 
 Os placeholders acima não são valores utilizáveis: forneça a URL e a Publishable key pública do seu projeto antes do build. `npm run test:export` simula a autenticação sem acessar o Supabase real; o preview manual utiliza a configuração fornecida. Para reproduzir o fallback sem backend, deixe ambas as variáveis vazias.
 
-O export gera `404.html` com a mesma shell de `index.html`, mantendo o pathname original. Um acesso direto a `/convite-felipe-e-lais/c/<code>` recebe HTTP 404 do Pages, carrega os bundles corretos e o Expo Router assume `/c/[code]`, sem perder o código ou redirecionar à raiz. `dist/.nojekyll` preserva `_expo`.
+O export gera `404.html` com a mesma shell de `index.html`, mantendo o pathname original. Um acesso direto a `/c/<code>` recebe HTTP 404 do Pages, carrega os bundles corretos e o Expo Router assume `/c/[code]`, sem perder o código ou redirecionar à raiz. `dist/.nojekyll` preserva `_expo`.
 
 Manifest, ícones, assets e registro do service worker respeitam o prefixo. O worker controla somente esse escopo e mantém cache versionado por aplicação/caminho; preserva caches de outros projetos no mesmo host. Armazena apenas a shell e assets públicos listados no build, nunca URLs `/c/<code>`, respostas Supabase/API ou outras respostas privadas. A shell funciona offline após a primeira visita online.
 
-Para um futuro domínio próprio, configure o domínio no Pages e altere as variáveis **nos workflows**: `EXPO_PUBLIC_WEB_BASE_PATH=/` e `EXPO_PUBLIC_WEB_BASE_URL=https://seu-dominio`. Gere/deploye um novo build: Router, manifest, cache e escopo acompanharão a raiz. Não há `CNAME` nem domínio personalizado nesta entrega.
+O artefato inclui `CNAME` com `felipeelais2026.com.br`. Em publicação via GitHub Actions, configure também **Settings → Pages → Custom domain**: o arquivo não substitui essa configuração. O export na raiz aceita URLs com o prefixo legado, removendo-o antes do Router e preservando código, query e fragmento. Veja o [plano de ativação, DNS, Supabase e PWA](docs/custom-domain.md).
 
 ## Arquitetura e próximo deploy
 

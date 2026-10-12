@@ -29,6 +29,16 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:export
       - run: npm run test:e2e
+      - name: Build custom domain at root
+        run: npm run build:web
+        env:
+          EXPO_PUBLIC_WEB_BASE_PATH: /
+          EXPO_PUBLIC_WEB_BASE_URL: https://felipeelais2026.com.br
+      - name: Validate custom domain export and legacy paths
+        run: npm run test:export
+        env:
+          EXPO_PUBLIC_WEB_BASE_PATH: /
+          EXPO_PUBLIC_WEB_BASE_URL: https://felipeelais2026.com.br
       - name: Build Pages subdirectory
         run: npm run build:web
         env:
