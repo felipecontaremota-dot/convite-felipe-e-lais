@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Text } from "react-native";
+import { Pressable, Text } from "react-native";
 import {
   Button,
   Card,
@@ -13,40 +13,24 @@ import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import { demoEnabled, eventId, supabase } from "../../lib/supabase";
 import { DEMO_CODE, DEMO_PIN } from "../../repositories/demo";
-import {
-  codeFromLink,
-  invitationPin,
-  staffDestination,
-} from "../../utils/security";
+import { invitationPin, staffDestination } from "../../utils/security";
+import { WeddingCountdown } from "../../components/WeddingCountdown";
+import { WEDDING_START } from "../countdown/domain";
 import { passwordLogin } from "./staffAuth";
 export function PublicHome() {
   const app = useApp(),
     feedback = useFeedback();
-  const [code, setCode] = useState(""),
-    [pin, setPin] = useState("");
+  const [pin, setPin] = useState("");
   useEffect(() => {
     if (app.data?.role)
       router.replace(staffDestination(app.data.role) || "/inicio");
   }, [app.data?.role]);
   return (
-    <Screen title="Nossa próxima aventura">
+    <Screen title="Um novo capítulo, juntos.">
       <Card>
-        <Text style={styles.title}>Um novo capítulo, juntos.</Text>
-        <Text style={styles.text}>
-          15 de dezembro de 2026 · 16h · Horário de Brasília
-        </Text>
-        <Text style={styles.text}>
-          Abra o link exclusivo que recebeu dos noivos ou informe o código e a
-          senha do seu convite.
-        </Text>
+        <WeddingCountdown startsAt={WEDDING_START} />
         <Field
-          label="Código do convite"
-          value={code}
-          onChangeText={setCode}
-          autoCapitalize="none"
-        />
-        <Field
-          label="Senha de acesso"
+          label="Senha do convite"
           value={pin}
           onChangeText={setPin}
           keyboardType="number-pad"
@@ -54,21 +38,22 @@ export function PublicHome() {
           secureTextEntry
         />
         <Button
-          title="Abrir meu convite"
-          disabled={!code.trim() || !invitationPin.safeParse(pin).success}
-          onPress={() =>
-            feedback.run(() =>
-              app.enter(codeFromLink(code.trim()) || code.trim(), pin),
-            )
-          }
+          title="Abrir convite"
+          disabled={!invitationPin.safeParse(pin).success}
+          onPress={() => feedback.run(() => app.enter(null, pin))}
         />
         {feedback.node}
       </Card>
-      <Button
-        secondary
-        title="Acesso dos noivos e cerimonial"
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel="Acesso dos noivos e cerimonial"
         onPress={() => router.push("/login")}
-      />
+        style={{ alignSelf: "center", padding: 12, marginTop: 12 }}
+      >
+        <Text style={[styles.small, { textDecorationLine: "underline" }]}>
+          Acesso dos noivos e cerimonial
+        </Text>
+      </Pressable>
       {demoEnabled ? (
         <Card>
           <Text style={styles.heading}>Conhecer a demonstração</Text>

@@ -35,7 +35,7 @@ interface ContextValue {
   scope: string;
   isDemo: boolean;
   demoLogin: (role: Role) => Promise<void>;
-  enter: (code: string, pin: string) => Promise<void>;
+  enter: (code: string | null, pin: string) => Promise<void>;
   identify: (code: string) => Promise<{ name: string; activated: boolean }>;
   logout: () => Promise<void>;
   send: (
@@ -306,7 +306,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return api.identifyInvitation(code);
     },
     enter: async (code, pin) => {
-      if (demoEnabled && code === demo.DEMO_CODE) {
+      if (demoEnabled && (code === demo.DEMO_CODE || code === null)) {
         if (pin !== demo.DEMO_PIN) throw new AppError("Senha inválida.");
         await writeCache("demo-session", "GUEST");
         setDemoRole("GUEST");

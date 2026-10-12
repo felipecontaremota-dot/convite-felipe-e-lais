@@ -128,7 +128,7 @@ async function backend(
         state.attempts++;
         if (
           state.active &&
-          body.code === code &&
+          (body.code === code || body.action === "password") &&
           body.pin === state.pin &&
           state.attempts <= 15
         ) {
@@ -139,7 +139,7 @@ async function backend(
           status = 429;
           data = {
             code:
-              state.active && body.code === code
+              state.active && (body.code === code || body.action === "password")
                 ? "invalid_password"
                 : "invalid_link",
           };
@@ -255,17 +255,16 @@ test("manual password errors are distinct from invalid/blocked links; old bindin
 }) => {
   const state = await backend(page, null);
   await page.goto("/");
-  await page.getByLabel("Código do convite", { exact: true }).fill(code);
-  await page.getByLabel("Senha de acesso", { exact: true }).fill("9999");
+  await page.getByLabel("Senha do convite", { exact: true }).fill("9999");
   await page
-    .getByRole("button", { name: "Abrir meu convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(
     page.getByText("Senha inválida.", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
+  await page.getByLabel("Senha do convite", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir meu convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   await page.goto("/c/OutroCodigoNaoEnumeravelCom32Chars");
@@ -533,7 +532,7 @@ test("an unauthenticated browser never trusts a stale public cache with staff ro
   ).toHaveCount(0);
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Abrir meu convite", exact: true }),
+    page.getByRole("button", { name: "Abrir convite", exact: true }),
   ).toBeVisible();
   expect(page.url()).not.toContain("/painel");
 });

@@ -66,12 +66,15 @@ export const accessMessages = {
     "Não foi possível carregar o convite agora. Tente novamente.",
   redeemTechnical: "Não foi possível abrir o convite agora. Tente novamente.",
 };
-export async function invitationAccess(code: string, pin?: string) {
+export async function invitationAccess(code: string | null, pin?: string) {
   const technical =
     pin === undefined
       ? accessMessages.identifyTechnical
       : accessMessages.redeemTechnical;
-  if (!invitationCode.safeParse(code).success)
+  if (
+    (code === null && pin === undefined) ||
+    (code !== null && !invitationCode.safeParse(code).success)
+  )
     throw new AuthError(
       pin === undefined ? accessMessages.link : accessMessages.unavailable,
     );
@@ -92,7 +95,7 @@ export async function invitationAccess(code: string, pin?: string) {
       "redeem-invitation",
       {
         body: {
-          code,
+          ...(code === null ? { action: "password" } : { code }),
           event_id: eventId,
           ...(pin === undefined ? { action: "identify" } : { pin }),
         },
@@ -121,7 +124,7 @@ export async function invitationAccess(code: string, pin?: string) {
   }
 }
 export const identifyInvitation = (code: string) => invitationAccess(code);
-export const redeem = (code: string, pin: string) =>
+export const redeem = (code: string | null, pin: string) =>
   invitationAccess(code, pin);
 
 export interface DispatchResult {

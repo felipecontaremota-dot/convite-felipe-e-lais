@@ -51,7 +51,8 @@ test.beforeAll(async () => {
         data = true;
       } else if (
         name === "identify_invitation" ||
-        name === "redeem_invitation"
+        name === "redeem_invitation" ||
+        name === "redeem_invitation_password"
       ) {
         const value = db
           .sql(
@@ -462,4 +463,66 @@ test("Profile real database: offline revocation, reload and reactivation preserv
   await page.reload();
   await expect(checkbox).not.toBeChecked();
   expect(receipts()).toBe(before + 2);
+});
+
+test("public password-only entry binds the correct real access and never exposes other guests", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(
+    page.getByText("Um novo capítulo, juntos.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Nossa próxima aventura", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel("Código do convite", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("textbox")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Voltar", exact: true }),
+  ).toHaveCount(0);
+  const submit = page.getByRole("button", {
+    name: "Abrir convite",
+    exact: true,
+  });
+  await expect(submit).toBeDisabled();
+  await expect(page.getByTestId("wedding-countdown")).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: "Acesso dos noivos e cerimonial",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const responses: object[] = [];
+  page.on("response", (response) => {
+    if (response.url().includes("/functions/v1/redeem-invitation"))
+      void response.json().then((data) => responses.push(data));
+  });
+  await page.getByLabel("Senha do convite", { exact: true }).fill("9999");
+  await submit.click();
+  await expect(
+    page.getByText("Senha inválida.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Pessoa CORS", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Família CORS", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Senha do convite", { exact: true }).fill("0047");
+  await submit.click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await expect(
+    page.getByText("Boas-vindas, Pessoa CORS", { exact: true }),
+  ).toBeVisible();
+  expect(responses).toEqual([{ code: "invalid_password" }, { linked: true }]);
+  await page.reload();
+  await expect(
+    page.getByText("Boas-vindas, Pessoa CORS", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await expect(page.getByText("Família CORS", { exact: true })).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

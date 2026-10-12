@@ -107,3 +107,24 @@ it("duplicate/legacy mutation with unknown message ID cannot claim unrelated ema
     await dispatchMessage(["EMAIL"], "11111111-1111-4111-8111-111111111111"),
   ).toBe("Mensagem registrada. E-mail enviado.");
 });
+it("password-only entry posts no code and returns no lookup metadata before authorization", async () => {
+  c.functions.invoke.mockResolvedValue({ data: { linked: true }, error: null });
+  await invitationAccess(null, "0047");
+  expect(c.functions.invoke).toHaveBeenCalledExactlyOnceWith(
+    "redeem-invitation",
+    {
+      body: { action: "password", event_id: "event", pin: "0047" },
+    },
+  );
+});
+it.each(["", "12", "abcd"])(
+  "invalid root password %s never creates a session or calls the Function",
+  async (pin) => {
+    await expect(invitationAccess(null, pin)).rejects.toThrow(
+      accessMessages.password,
+    );
+    expect(c.auth.getSession).not.toHaveBeenCalled();
+    expect(c.auth.signInAnonymously).not.toHaveBeenCalled();
+    expect(c.functions.invoke).not.toHaveBeenCalled();
+  },
+);

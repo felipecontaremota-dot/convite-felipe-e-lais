@@ -19,6 +19,20 @@ export function accessHandler(deps: Dependencies) {
       body = JSON.parse(raw);
     } catch { return json({ code: "invalid_link" }, 400); }
     const identify = body?.action === "identify";
+    const passwordOnly = body?.action === "password";
+    if (passwordOnly) {
+      if (typeof body.event_id !== "string" || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(body.event_id) ||
+          typeof body.pin !== "string" || !/^[0-9]{4}$/.test(body.pin) || body.code !== undefined)
+        return json({ code: "invalid_password" }, 400);
+      try {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(request.headers.get("x-real-ip") || "unknown"));
+        const bucket = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+        const { data, error } = await deps.rpc("redeem_invitation_password", { p_event: body.event_id, p_user: user.id, p_pin: body.pin, p_bucket: bucket });
+        if (error) return json({ code: "technical" }, 503);
+        return data === true ? json({ linked: true }) : json({ code: "invalid_password" }, 400);
+      } catch { return json({ code: "technical" }, 503); }
+    }
+
     if (typeof body?.code !== "string" || !/^[A-Za-z0-9_-]{32,64}$/.test(body.code) ||
         typeof body.event_id !== "string" || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(body.event_id) ||
         (body.action !== undefined && !identify)) return json({ code: "invalid_link" }, 400);

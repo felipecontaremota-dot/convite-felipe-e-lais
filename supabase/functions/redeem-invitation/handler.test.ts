@@ -31,3 +31,26 @@ Deno.test("technical lookup failure never becomes invalid password and staff is 
   const staff = accessHandler({ authenticate: async () => ({ id: "u", is_anonymous: false }), rpc: () => { throw Error("never call"); } });
   assert((await (await staff(request({ event_id: event, code, action: "identify" }))).json()).code === "staff_session", "explicit staff session");
 });
+Deno.test("password-only entry calls private RPC and returns no invitation metadata", async () => {
+  let calls = 0;
+  const handle = accessHandler({ authenticate: async () => ({ id: "u", is_anonymous: true }), rpc: async (name, args) => {
+    calls++; assert(name === "redeem_invitation_password", "only password RPC");
+    assert(args.p_pin === "0047" && !("p_code" in args), "no code needed");
+    assert(String(args.p_bucket).length === 64, "IP hashed");
+    return { data: true, error: null };
+  } });
+  const response = await handle(request({ event_id: event, action: "password", pin: "0047" }));
+  assert(response.status === 200 && JSON.stringify(await response.json()) === '{"linked":true}', "minimal result");
+  assert(calls === 1, "single RPC");
+});
+Deno.test("unknown, ambiguous and throttled passwords share a generic response; malformed input never queries", async () => {
+  let calls = 0;
+  const handle = accessHandler({ authenticate: async () => ({ id: "u", is_anonymous: true }), rpc: async () => { calls++; return { data: false, error: null }; } });
+  for (const pin of ["0047", "1234", "9999"]) {
+    const response = await handle(request({ event_id: event, action: "password", pin }));
+    assert(response.status === 400 && JSON.stringify(await response.json()) === '{"code":"invalid_password"}', "generic failure");
+  }
+  const before = calls;
+  for (const pin of ["", "123", "abcd", 47]) await handle(request({ event_id: event, action: "password", pin }));
+  assert(calls === before, "invalid shape never queries");
+});
