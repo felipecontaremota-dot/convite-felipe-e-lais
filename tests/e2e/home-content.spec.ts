@@ -5,6 +5,7 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.clock.install({ time: new Date("2026-10-10T19:00:00Z") });
+  await page.clock.setFixedTime(new Date("2026-10-10T19:00:00Z"));
   await page.goto("/");
   await page
     .getByRole("button", { name: "Demo convidado", exact: true })
@@ -12,9 +13,10 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
   await expect(
     page.getByText("Bem-vindos, Convidado Um e família", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText('Faltam 66 dias até o "Sim"', { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByTestId("wedding-countdown")).toHaveAttribute(
+    "aria-label",
+    "Contagem regressiva: 66 dias, 0 horas, 0 minutos e 0 segundos",
+  );
   await expect(
     page.getByText("· 15 de dezembro de 2026", {
       exact: true,
@@ -24,10 +26,12 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
     page.getByRole("link", { name: "Villarejo", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("· Villarejo", { exact: true })).toHaveCount(1);
+  await page.clock.setFixedTime(new Date("2026-10-11T19:00:00Z"));
   await page.clock.fastForward(86400000);
-  await expect(
-    page.getByText('Faltam 65 dias até o "Sim"', { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByTestId("wedding-countdown")).toHaveAttribute(
+    "aria-label",
+    "Contagem regressiva: 65 dias, 0 horas, 0 minutos e 0 segundos",
+  );
   for (const form of ["MASCULINE", "FEMININE", null]) {
     await page.evaluate((form) => {
       const db = JSON.parse(localStorage.getItem("demo-db")!);

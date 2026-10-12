@@ -1,3 +1,4 @@
+import { CalendarAction } from "./CalendarAction";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
@@ -25,6 +26,7 @@ function RsvpForm({ guest }: { guest: Guest }) {
   const record = app.data?.rsvps.find((r) => r.guest_id === guest.id);
   const response = effectiveResponse(guest.id, record, app.pending);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<RSVP>(response.status),
     [dietary, setDietary] = useState(response.dietary),
     [note, setNote] = useState(response.note);
@@ -88,20 +90,32 @@ function RsvpForm({ guest }: { guest: Guest }) {
           />
           <Button
             title={confirmationLabels[status]}
-            onPress={() =>
-              feedback.run(async () => {
-                const result = await app.send("RSVP_UPDATE", {
-                  guest_id: guest.id,
-                  ...rsvpSchema.parse({ status, dietary, note }),
+            onPress={async () => {
+              setSaving(true);
+              try {
+                await feedback.run(async () => {
+                  const result = await app.send("RSVP_UPDATE", {
+                    guest_id: guest.id,
+                    ...rsvpSchema.parse({ status, dietary, note }),
+                  });
+                  setEditing(false);
+                  return result;
                 });
-                setEditing(false);
-                return result;
-              })
-            }
+              } finally {
+                setSaving(false);
+              }
+            }}
           />
         </>
       )}
       {feedback.node}
+      {response.answered &&
+      response.status === "CONFIRMED" &&
+      !editing &&
+      !saving &&
+      app.data ? (
+        <CalendarAction event={app.data.event} />
+      ) : null}
     </Card>
   );
 }

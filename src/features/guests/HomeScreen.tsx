@@ -17,7 +17,7 @@ export function GuestHome() {
       title={homeGreeting(s?.invitations[0], s?.guests ?? [])}
     >
       <Card>
-        {s ? <WeddingCountdown startsAt={s.event.starts_at} quoteSim /> : null}
+        {s ? <WeddingCountdown startsAt={s.event.starts_at} /> : null}
         <Image
           source={require("../../../assets/branding/icon.png")}
           accessibilityLabel="Monograma Felipe & Laís"
@@ -37,7 +37,7 @@ export function GuestHome() {
         />
         <WeddingDetail
           icon="M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"
-          text="às 16h"
+          text="Às 16h"
         />
         <Pressable
           accessibilityRole="link"

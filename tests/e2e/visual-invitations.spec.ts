@@ -9,7 +9,7 @@ for (const width of [390, 1280]) {
       .getByRole("button", { name: "Demo convidado", exact: true })
       .click();
     await expect(page.getByLabel("Monograma Felipe & Laís")).toBeVisible();
-    await expect(page.getByText("· às 16h", { exact: true })).toBeVisible();
+    await expect(page.getByText("· Às 16h", { exact: true })).toBeVisible();
     await expect(page.getByText("Convidado Um", { exact: true })).toHaveCount(
       0,
     );
