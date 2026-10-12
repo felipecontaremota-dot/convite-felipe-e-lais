@@ -223,6 +223,15 @@ for (const width of [390, 1440]) {
       }
       expect(linkBox.y).toBeGreaterThan(titleBox.y);
       expect(linkBox.x + linkBox.width).toBeLessThanOrEqual(copyBox.x);
+      expect(copyBox.x - (linkBox.x + linkBox.width)).toBeCloseTo(8, 0);
+      if (width === 1440 && title === FIRST_LIST.title) {
+        const textRight = await link.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return range.getBoundingClientRect().right;
+        });
+        expect(copyBox.x - textRight).toBeCloseTo(8, 0);
+      }
       const pageCount = context.pages().length;
       const beforeUrl = page.url();
       await copy.click();
