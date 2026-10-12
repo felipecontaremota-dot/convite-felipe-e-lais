@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build:web": "expo export --platform web && node scripts/web-assets.mjs",
+    "build:web": "expo export --platform web --clear && node scripts/web-assets.mjs",
     "test:e2e": "playwright test",
     "test:db": "bash scripts/test-db.sh",
     "check:functions": "deno check --config supabase/functions/deno.json supabase/functions/redeem-invitation/index.ts supabase/functions/dispatch-notifications/index.ts supabase/functions/sync-sheets/index.ts supabase/functions/send-invitations/index.ts",

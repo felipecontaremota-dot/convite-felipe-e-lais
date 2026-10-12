@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { runInNewContext } from "node:vm";
 import { readFile, access } from "node:fs/promises";
 import { once } from "node:events";
 import { chromium } from "playwright";
@@ -24,12 +25,56 @@ let signupRequests = 0;
 const basePath = getExportWebBasePath();
 const shell = webPath("", basePath);
 const html = await readFile("dist/index.html", "utf8");
+if (!basePath) {
+  const compatibility = html.match(
+    /<script>([^<]*var p="\/convite-felipe-e-lais"[^<]*)<\/script>/,
+  )?.[1];
+  assert.ok(
+    compatibility,
+    "Root export must normalize legacy paths before Router",
+  );
+  for (const [path, expected] of [
+    [
+      "/convite-felipe-e-lais/recuperar-senha?token_hash=fixture&type=recovery#fixture",
+      "/recuperar-senha?token_hash=fixture&type=recovery#fixture",
+    ],
+    [
+      "/convite-felipe-e-lais/c/Code?source=old#anchor",
+      "/c/Code?source=old#anchor",
+    ],
+    ["/convite-felipe-e-lais", "/"],
+    ["/convite-felipe-e-lais//untrusted.test/path", "//untrusted.test/path"],
+    ["/convite-felipe-e-lais-other/c/Code", null],
+  ]) {
+    let result = null;
+    runInNewContext(compatibility, {
+      URL,
+      window: { location: { href: "https://felipeelais2026.com.br" + path } },
+      history: {
+        state: null,
+        replaceState: (_state, _title, url) => {
+          result = url;
+        },
+      },
+    });
+    assert.equal(
+      result,
+      expected === null ? null : "https://felipeelais2026.com.br" + expected,
+      "Legacy normalization must preserve recovery credentials and exact prefix boundaries",
+    );
+  }
+}
+
 assert.equal(
   await readFile("dist/404.html", "utf8"),
   html,
   "404 must use the identical shell",
 );
 await access("dist/.nojekyll");
+assert.equal(
+  (await readFile("dist/CNAME", "utf8")).trim(),
+  "felipeelais2026.com.br",
+);
 const manifest = JSON.parse(
   await readFile("dist/manifest.webmanifest", "utf8"),
 );
@@ -39,6 +84,33 @@ const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(
   (match) => match[1],
 );
 assert.ok(scripts.length > 0, "Export must contain bundled JS");
+if (
+  (process.env.EXPO_PUBLIC_WEB_BASE_URL ?? dotenv.EXPO_PUBLIC_WEB_BASE_URL) ===
+  "https://felipeelais2026.com.br"
+) {
+  const bundles = await Promise.all(
+    scripts.map((script) =>
+      readFile("dist/" + script.slice(shell.length), "utf8"),
+    ),
+  );
+  const runtime = [
+    html,
+    JSON.stringify(manifest),
+    await readFile("dist/sw.js", "utf8"),
+    ...bundles,
+  ].join("\n");
+  assert.ok(
+    runtime.includes("https://felipeelais2026.com.br"),
+    "Public invitation base must be compiled into the build",
+  );
+  assert.ok(
+    !runtime.includes(
+      "https://felipecontaremota-dot.github.io/convite-felipe-e-lais",
+    ),
+    "Production runtime must not depend on the old absolute origin",
+  );
+}
+
 const urls = [...html.matchAll(/(?:src|href)="(\/[^"]+)"/g)].map(
   (match) => match[1],
 );
@@ -161,6 +233,40 @@ try {
     invite,
     "Router must retain the original invitation path/code",
   );
+  if (!basePath) {
+    // Existing normalizeWebUrl intentionally drops unused invitation queries;
+    // the pre-Router shim above must still preserve recovery queries until capture.
+    const legacy =
+      origin + "/convite-felipe-e-lais/c/CodigoTeste?source=old#anchor";
+    await page.goto(legacy);
+    await page.getByText("Seu convite", { exact: true }).waitFor();
+    assert.equal(page.url(), origin + "/c/CodigoTeste#anchor");
+    await page.reload();
+    await page.getByText("Seu convite", { exact: true }).waitFor();
+    assert.equal(page.url(), origin + "/c/CodigoTeste#anchor");
+  }
+  for (const route of [
+    "login",
+    "inicio",
+    "painel",
+    "presentes",
+    "ingressos",
+    "perfil",
+    "presenca",
+    "como-chegar",
+  ]) {
+    const target = origin + webPath(route, basePath);
+    await page.goto(target);
+    if (route === "login")
+      await page.getByRole("button", { name: "Entrar", exact: true }).waitFor();
+    else await page.getByText(/Acesso restrito/).waitFor();
+    assert.equal(page.url(), target);
+    await page.reload();
+    if (route === "login")
+      await page.getByRole("button", { name: "Entrar", exact: true }).waitFor();
+    else await page.getByText(/Acesso restrito/).waitFor();
+    assert.equal(page.url(), target);
+  }
   // The demo code must use normal access in production, never the demo bypass.
   await page.goto(
     origin + webPath("c/DemoConviteExclusivoFelipeLais2026", basePath),

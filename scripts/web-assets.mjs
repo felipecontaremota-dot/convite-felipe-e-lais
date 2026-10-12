@@ -5,10 +5,15 @@ import { getExportWebBasePath, webPath } from "../config/web-paths.cjs";
 const basePath = getExportWebBasePath();
 const shell = webPath("", basePath);
 const html = await readFile("dist/index.html", "utf8");
+// GitHub's old project URL can redirect with its repository prefix intact.
+// Normalize it before Expo Router/recovery capture, retaining code, query and hash.
+const legacyCompatibility = basePath
+  ? ""
+  : `<script>(function(){var p="/convite-felipe-e-lais",u=new URL(window.location.href);if(u.pathname===p||u.pathname.startsWith(p+"/")){u.pathname=u.pathname.slice(p.length)||"/";history.replaceState(history.state,"",u.href);}})();</script>`;
 const decorated = html
   .replace(
     "</head>",
-    `<link rel="manifest" href="${webPath("manifest.webmanifest", basePath)}"><meta name="theme-color" content="#183F35"></head>`,
+    `${legacyCompatibility}<link rel="manifest" href="${webPath("manifest.webmanifest", basePath)}"><meta name="theme-color" content="#183F35"></head>`,
   )
   .replace(
     "</body>",
