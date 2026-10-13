@@ -43,7 +43,7 @@ npx supabase functions serve
 
 `redeem-invitation` valida o JWT no servidor e exige sessão anônima e associa seu usuário ao convite somente após validar código + PIN. Identificação por código retorna apenas nome e vínculo daquele dispositivo. A RPC de associação não pode ser executada diretamente por clientes. As demais RPCs verificam evento, papel e vínculo; as tabelas não concedem mutações diretas aos clientes. Rotacionar/bloquear códigos encerra vínculos existentes desse convite.
 
-Para um projeto hospedado, revise migrations/seed antes de `supabase db push` e faça deploy das três Edge Functions. Nenhuma implantação hospedada é executada por este projeto. Workers requerem `WORKER_SECRET`, devem ser agendados por um scheduler seguro e não são acionados pelo app. Esta fase acrescenta a migration incremental `202610090003_access_families.sql` e exige deploy manual da Edge atualizada após o merge. Veja [acessos, primeira senha e implantação](docs/access-families.md). Configuração detalhada: [banco](docs/database.md), [notificações](docs/notifications.md), [Sheets](docs/google-sheets-integration.md).
+Para um projeto hospedado, revise migrations/seed antes de `supabase db push` e faça deploy das três Edge Functions. Nenhuma implantação hospedada é executada por este projeto. Workers requerem `WORKER_SECRET`, devem ser agendados por um scheduler seguro e não são acionados pelo app. Esta fase acrescenta a migration incremental `20261009191313_access_families.sql` e exige deploy manual da Edge atualizada após o merge. Veja [acessos, primeira senha e implantação](docs/access-families.md). Configuração detalhada: [banco](docs/database.md), [notificações](docs/notifications.md), [Sheets](docs/google-sheets-integration.md).
 
 ## Offline e QR
 
@@ -136,3 +136,7 @@ O artefato inclui `CNAME` com `felipeelais2026.com.br`. Em publicação via GitH
 `eas.json` prepara development/preview/production; bundle/package IDs e domínio são configuráveis. EAS, associação do domínio, builds nativos assinados, contas de lojas, política final e credenciais de push devem ser configurados antes da distribuição. Nenhuma publicação, cobrança ou pagamento foi implementado nesta fase.
 
 A estabilização de acesso, fila e envios, a migration 006 e os passos de publicação das Functions estão documentados em [Estabilização e envios](docs/stabilization-deliveries.md). O roadmap da futura tela “Seu convite” consta nesse documento.
+
+## Ambientes permanentes
+
+Desenvolvimento em `develop`, produção em `main`. Veja [configuração DEV/PROD](docs/development-environments.md) e [manutenção/implantação controlada](docs/controlled-deployment.md). Workflows develop geram artefatos e testes, sem deploy remoto.

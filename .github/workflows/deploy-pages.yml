@@ -17,6 +17,7 @@ jobs:
       contents: read
       pages: read
     env:
+      EXPO_PUBLIC_APP_ENV: production
       EXPO_NO_TELEMETRY: "1"
       EXPO_NO_CACHE: "1"
       EXPO_PUBLIC_WEB_BASE_PATH: /

@@ -1,3 +1,4 @@
+import { externalDeliveryDisabled } from "./environment.ts";
 import { ProviderUncertainError, requestJson } from "./http.ts";
 export interface Delivery {
   id: string;
@@ -137,6 +138,7 @@ export class ExpoPushProvider implements Provider {
   }
 }
 export function provider(channel: string): Provider {
+  if (externalDeliveryDisabled()) return new DisabledProvider("development_disabled");
   if (
     channel === "EMAIL" && Deno.env.get("EMAIL_PROVIDER") === "resend" &&
     Deno.env.get("EMAIL_API_KEY") && Deno.env.get("EMAIL_FROM")

@@ -23,9 +23,9 @@ for scenario in clean upgrade; do
  database="${prefix}_${scenario}"; create_db "$database"
  if [[ "$scenario" == clean && "${GITHUB_ACTIONS:-false}" != true ]]; then sql < tests/db-bootstrap.sql >/dev/null;
  else sed '/^create role /d' tests/db-bootstrap.sql | sql >/dev/null; fi
- for migration in supabase/migrations/20261009000*.sql supabase/migrations/202610110007_home_greeting.sql; do sql < "$migration" >/dev/null; done
+ for migration in supabase/migrations/20261009*.sql supabase/migrations/20261010165618_invitation_deliveries.sql supabase/migrations/20261011015738_home_greeting.sql; do sql < "$migration" >/dev/null; done
  sql < supabase/seed.sql >/dev/null
- if [[ "$scenario" == clean ]]; then sql < supabase/migrations/202610110008_profile_consent.sql >/dev/null; fi
+ if [[ "$scenario" == clean ]]; then sql < supabase/migrations/20261013125226_profile_consent.sql >/dev/null; fi
  # A legacy collision must abort installation, with only aggregate diagnostics.
  sql <<'SQL' >/dev/null
 insert into invitations(id,event_id,name,code_hash) values
@@ -35,7 +35,7 @@ insert into invitation_access(event_id,invitation_id,pin) values
 ('00000000-0000-4000-8000-000000000001','ffcb0000-0000-4000-8000-000000000001','9762'),
 ('00000000-0000-4000-8000-000000000001','ffcb0000-0000-4000-8000-000000000002','9762');
 SQL
- if sql < supabase/migrations/202610120009_password_entry.sql > "$scratch/preflight" 2>&1; then echo 'Preflight incorrectly accepted duplicate credentials' >&2; exit 1; fi
+ if sql < supabase/migrations/20261013125227_password_entry.sql > "$scratch/preflight" 2>&1; then echo 'Preflight incorrectly accepted duplicate credentials' >&2; exit 1; fi
  grep -Fq 'password entry preflight: 1 collision groups in 1 events; credentials unchanged' "$scratch/preflight"
  sql <<'SQL' >/dev/null
 do $$begin
@@ -45,7 +45,7 @@ end$$;
 delete from invitations where id in ('ffcb0000-0000-4000-8000-000000000001','ffcb0000-0000-4000-8000-000000000002');
 SQL
  sql < tests/password-upgrade-prepare.sql >/dev/null
- sql < supabase/migrations/202610120009_password_entry.sql >/dev/null
+ sql < supabase/migrations/20261013125227_password_entry.sql >/dev/null
  sql < tests/password-upgrade-verify.sql >/dev/null
  sql < tests/password-entry.sql >/dev/null
  sql < tests/password-allocation.sql >/dev/null

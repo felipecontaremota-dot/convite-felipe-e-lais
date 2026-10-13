@@ -1,6 +1,6 @@
 # Banco e migrations
 
-Aplique `202610090001_foundation.sql`, `202610090002_operations.sql` e `202610090003_access_families.sql`, depois o seed, nesta ordem, em um projeto Supabase de desenvolvimento. `supabase db reset` usa essas fontes localmente. Não execute reset em produção. Seed é repetível e preserva edições existentes; o evento tem ID `00000000-0000-4000-8000-000000000001`, data absoluta `2026-12-15T19:00:00Z`, fuso `America/Sao_Paulo` e localização null.
+Aplique `20261009121829_foundation.sql`, `20261009124151_operations.sql` e `20261009191313_access_families.sql`, depois o seed, nesta ordem, em um projeto Supabase de desenvolvimento. `supabase db reset` usa essas fontes localmente. Não execute reset em produção. Seed é repetível e preserva edições existentes; o evento tem ID `00000000-0000-4000-8000-000000000001`, data absoluta `2026-12-15T19:00:00Z`, fuso `America/Sao_Paulo` e localização null.
 
 | Domínio      | Tabelas                                                                                             |
 | ------------ | --------------------------------------------------------------------------------------------------- |

@@ -10,3 +10,10 @@ test-results/
 .supabase/
 *.log
 .DS_Store
+
+!.env.development.example
+!.env.production.example
+# Local diagnostics and recovery archives never belong in Git
+producao-schema.sql
+*.dump
+*.backup

@@ -6,12 +6,12 @@ cd "$(dirname "$0")/../.."
 [[ "${REBUILD_CONFIRMATION:-}" == DISCARD_TEST_DATA_REBUILD_PR21 ]] || { echo 'Explicit discard confirmation required' >&2; exit 1; }
 # No db push, schema_migrations write, remote deploy or hidden cleanup.
 files=(scripts/rebuild-pr21/cleanup-reviewed.sql
- supabase/migrations/202610090001_foundation.sql
- supabase/migrations/202610090002_operations.sql
- supabase/migrations/202610090003_access_families.sql
- supabase/migrations/202610090004_access_units.sql
- supabase/migrations/202610090005_message_recipients.sql
- supabase/migrations/202610090006_invitation_deliveries.sql
+ supabase/migrations/20261009121829_foundation.sql
+ supabase/migrations/20261009124151_operations.sql
+ supabase/migrations/20261009191313_access_families.sql
+ supabase/migrations/20261009221552_access_units.sql
+ supabase/migrations/20261009233212_message_recipients.sql
+ supabase/migrations/20261010165618_invitation_deliveries.sql
  supabase/seed.sql scripts/rebuild-pr21/bootstrap-reviewed.sql)
 args=()
 for file in "${files[@]}"; do args+=(--file="$file"); done

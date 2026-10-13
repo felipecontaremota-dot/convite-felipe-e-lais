@@ -37,7 +37,7 @@ Copiar link e copiar link + senha apenas copiam e mostram feedback. Não identif
 Durante este PR não publicar Functions nem aplicar migrations em produção.
 
 1. Atualizar o checkout para a main após merge e vincular o projeto correto (`supabase link --project-ref "$SUPABASE_PROJECT_REF"`). Confirmar `supabase migration list`: 001–005 já aplicadas. Nunca reaplicar essas migrations.
-2. Aplicar somente `202610090006_invitation_deliveries.sql` pelo fluxo de migrations (`supabase db push`, depois de conferir a lista pendente). Ela cria histórico/RLS, reserva/finalização privadas, claim de jobs por evento/mensagem e extensão do snapshot ADMIN. Não repetir a 005.
+2. Aplicar somente `20261010165618_invitation_deliveries.sql` pelo fluxo de migrations (`supabase db push`, depois de conferir a lista pendente). Ela cria histórico/RLS, reserva/finalização privadas, claim de jobs por evento/mensagem e extensão do snapshot ADMIN. Não repetir a 005.
 3. Configurar secrets das Functions com valores obtidos no ambiente autorizado, nunca no repositório:
 
 ```bash

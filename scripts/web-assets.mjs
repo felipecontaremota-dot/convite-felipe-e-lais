@@ -2,6 +2,11 @@ import { readFile, writeFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { getExportWebBasePath, webPath } from "../config/web-paths.cjs";
 
+import { validateEnvironment } from "../config/environments.cjs";
+const environment = validateEnvironment(process.env, process.env.GITHUB_REF_NAME);
+if (environment === "development") {
+  await writeFile("dist/CNAME", "develop.felipeelais2026.com.br\n");
+}
 const basePath = getExportWebBasePath();
 const shell = webPath("", basePath);
 const html = await readFile("dist/index.html", "utf8");

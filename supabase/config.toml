@@ -13,6 +13,8 @@ enabled = true
 site_url = "http://localhost:8081"
 additional_redirect_urls = ["felipeelais://", "http://localhost:8081"]
 enable_anonymous_sign_ins = true
+enable_signup = true
+enable_manual_linking = false
 [functions.redeem-invitation]
 verify_jwt = false
 [functions.dispatch-notifications]

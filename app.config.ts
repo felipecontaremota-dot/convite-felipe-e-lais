@@ -1,17 +1,20 @@
 import type { ExpoConfig } from "expo/config";
 import { getWebBasePath } from "./config/web-paths.cjs";
+import { validateEnvironment, currentBranch } from "./config/environments.cjs";
+const environment = validateEnvironment(process.env, currentBranch());
+const development = environment === "development";
 const domain = process.env.EXPO_PUBLIC_WEB_BASE_URL;
 const host = domain ? new URL(domain).hostname : undefined;
 const config: ExpoConfig = {
-  name: "Felipe & Laís",
+  name: development ? "Felipe & Laís DEV" : "Felipe & Laís",
   slug: "convite-felipe-e-lais",
   version: "1.0.0",
-  scheme: "felipeelais",
+  scheme: development ? "felipeelaisdev" : "felipeelais",
   icon: "./assets/branding/icon.png",
   orientation: "default",
   userInterfaceStyle: "light",
   ios: {
-    bundleIdentifier: process.env.IOS_BUNDLE_ID || "com.felipeelais.convite",
+    bundleIdentifier: process.env.IOS_BUNDLE_ID || (development ? "com.felipeelais.convite.develop" : "com.felipeelais.convite"),
     supportsTablet: true,
     infoPlist: {
       LSApplicationQueriesSchemes: ["comgooglemaps", "waze", "uber"],
@@ -19,7 +22,7 @@ const config: ExpoConfig = {
     ...(host ? { associatedDomains: [`applinks:${host}`] } : {}),
   },
   android: {
-    package: process.env.ANDROID_PACKAGE_ID || "com.felipeelais.convite",
+    package: process.env.ANDROID_PACKAGE_ID || (development ? "com.felipeelais.convite.develop" : "com.felipeelais.convite"),
     ...(host
       ? {
           intentFilters: [

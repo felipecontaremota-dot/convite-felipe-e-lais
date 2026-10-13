@@ -1,0 +1,9 @@
+{
+  "freeWorkerLifetimeSeconds": 150,
+  "drainMarginSeconds": 30,
+  "source": "https://supabase.com/docs/guides/functions/limits",
+  "confirmationRequiredBeforeRemoteUse": true,
+  "marginReason": "Operational allowance for timestamp/observation uncertainty; not a substitute for a confirmed hard worker lifetime.",
+  "productionRef": "nwgyxmwaqckpghznbfzm",
+  "developmentRef": "oxdalpfvahcgzvqyctkq"
+}

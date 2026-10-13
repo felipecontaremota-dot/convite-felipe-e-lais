@@ -138,7 +138,7 @@ Deno.test("production eventAdmin verifies JWT user and user-scoped event_role; A
     "SUPABASE_SERVICE_ROLE_KEY",
   ];
   const saved = env.map((k) => Deno.env.get(k));
-  Deno.env.set("SUPABASE_URL", "https://fixture.test");
+  Deno.env.set("SUPABASE_URL", "https://nwgyxmwaqckpghznbfzm.supabase.co");
   Deno.env.set("SUPABASE_ANON_KEY", "public-fixture-key");
   Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "server-only-fixture-key");
   try {

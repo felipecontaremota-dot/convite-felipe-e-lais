@@ -1,0 +1,37 @@
+name: Develop artifact (no deploy)
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_APP_ENV: development
+      EXPO_PUBLIC_SUPABASE_URL: https://oxdalpfvahcgzvqyctkq.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.DEV_EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_WEB_BASE_URL: https://develop.felipeelais2026.com.br
+      EXPO_PUBLIC_WEB_BASE_PATH: /
+      EXPO_PUBLIC_DEMO_MODE: 'false'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:db
+      - run: npm run build:web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:export
+      - uses: actions/upload-artifact@v4
+        with:
+          name: develop-web
+          path: dist

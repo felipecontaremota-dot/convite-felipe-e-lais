@@ -24,9 +24,9 @@ for scenario in clean upgrade; do
  create_db "$database"
  if [[ "$scenario" == clean && "${GITHUB_ACTIONS:-false}" != true ]]; then sql < tests/db-bootstrap.sql >/dev/null;
  else sed '/^create role /d' tests/db-bootstrap.sql | sql >/dev/null; fi
- for migration in supabase/migrations/20261009000*.sql supabase/migrations/202610110007_home_greeting.sql; do sql < "$migration" >/dev/null; done
+ for migration in supabase/migrations/20261009*.sql supabase/migrations/20261010165618_invitation_deliveries.sql supabase/migrations/20261011015738_home_greeting.sql; do sql < "$migration" >/dev/null; done
  if [[ "$scenario" == upgrade ]]; then sql < tests/profile-upgrade-prepare.sql >/dev/null; fi
- sql < supabase/migrations/202610110008_profile_consent.sql >/dev/null
+ sql < supabase/migrations/20261013125226_profile_consent.sql >/dev/null
  if [[ "$scenario" == upgrade ]]; then sql < tests/profile-upgrade-verify.sql >/dev/null; fi
  sql < supabase/seed.sql >/dev/null
  sql < tests/profile-consent.sql >/dev/null

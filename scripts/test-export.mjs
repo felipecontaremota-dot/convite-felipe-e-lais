@@ -16,6 +16,8 @@ const supabaseUrl =
 const supabaseKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
   dotenv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const expectedDomain = (process.env.EXPO_PUBLIC_APP_ENV ?? dotenv.EXPO_PUBLIC_APP_ENV) === 'development'
+  ? 'develop.felipeelais2026.com.br' : 'felipeelais2026.com.br';
 const configured = Boolean(supabaseUrl && supabaseKey);
 const signupUrl = configured
   ? `${supabaseUrl.replace(/\/$/, "")}/auth/v1/signup`
@@ -73,7 +75,7 @@ assert.equal(
 await access("dist/.nojekyll");
 assert.equal(
   (await readFile("dist/CNAME", "utf8")).trim(),
-  "felipeelais2026.com.br",
+  expectedDomain,
 );
 const manifest = JSON.parse(
   await readFile("dist/manifest.webmanifest", "utf8"),
@@ -84,6 +86,12 @@ const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(
   (match) => match[1],
 );
 assert.ok(scripts.length > 0, "Export must contain bundled JS");
+const bundledScripts = await Promise.all(scripts.map(script => readFile('dist/' + script.slice(shell.length), 'utf8')));
+assert.ok(!bundledScripts.join('\n').includes('nonsecret-bundle-canary'), 'Server-only variable must never enter the frontend bundle');
+if (expectedDomain === 'develop.felipeelais2026.com.br') {
+  if (configured) assert.ok(bundledScripts.join('\n').includes('https://oxdalpfvahcgzvqyctkq.supabase.co'), 'Configured DEV bundle must use DEV project');
+  assert.ok(!bundledScripts.join('\n').includes('https://nwgyxmwaqckpghznbfzm.supabase.co'), 'DEV bundle must never use PROD project');
+}
 if (
   (process.env.EXPO_PUBLIC_WEB_BASE_URL ?? dotenv.EXPO_PUBLIC_WEB_BASE_URL) ===
   "https://felipeelais2026.com.br"

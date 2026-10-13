@@ -1,0 +1,38 @@
+[
+  {
+    "file": "20261009121829_foundation.sql",
+    "sha256": "7383ca2b633847ecb7e733cf7a7a95f32386a507bc6a56726c8d8bddcc46f473"
+  },
+  {
+    "file": "20261009124151_operations.sql",
+    "sha256": "53f2afd34a703f8379541d3b0461619e3f3233ded39706e41934f6458cbc82cc"
+  },
+  {
+    "file": "20261009191313_access_families.sql",
+    "sha256": "86376872a400c7c48ea0ae5dcbb02f7f636eacba6174d92132e439d99cf0906a"
+  },
+  {
+    "file": "20261009221552_access_units.sql",
+    "sha256": "57908dee3d7a869d4080aecadafabc3c2a7ae2029d6c94aadb81da0f749ebde0"
+  },
+  {
+    "file": "20261009233212_message_recipients.sql",
+    "sha256": "3ad7faece75147b34456557b1ffc2f71d39732ad71460f1ef5b1f043cee6a4c9"
+  },
+  {
+    "file": "20261010165618_invitation_deliveries.sql",
+    "sha256": "7db2513443cfec3a474aa46b0fe840dae3a36b82d0316a98403c0707f0f62f2d"
+  },
+  {
+    "file": "20261011015738_home_greeting.sql",
+    "sha256": "c833e11e2af6c89a297bf78b93a716bc849f876c977a2e29f07419c0c0d42619"
+  },
+  {
+    "file": "20261013125226_profile_consent.sql",
+    "sha256": "9395763600d2cdbf9b04db449bff1419121c0396c579d2679cf5b04f70b42e8b"
+  },
+  {
+    "file": "20261013125227_password_entry.sql",
+    "sha256": "a5e2f5228730bfd9bbe194d602a30d246dc10df0e6a709db7ddf5070b9de43b4"
+  }
+]

@@ -1,3 +1,4 @@
+import { runtimeEnvironment, externalDeliveryDisabled } from "./environment.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.3";
 export const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -10,12 +11,14 @@ export const json = (body: unknown, status = 200) =>
     status,
     headers: { ...cors, "Content-Type": "application/json" },
   });
-export const service = () =>
-  createClient(
+export const service = () => {
+  runtimeEnvironment();
+  return createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } },
   );
+};
 export async function authenticated(request: Request) {
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "");
   if (!token) throw Error("unauthorized");
@@ -38,6 +41,7 @@ export class ProviderUncertainError extends Error {
   }
 }
 export async function requestJson(url: string, init: RequestInit = {}) {
+  if (externalDeliveryDisabled()) throw new ProviderDefinitiveError(undefined, "development_disabled");
   let response: Response;
   try {
     response = await fetch(url, {

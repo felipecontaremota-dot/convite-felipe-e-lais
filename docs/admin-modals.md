@@ -12,7 +12,7 @@ O badge vermelho ! aparece somente para observação não vazia após trim, poss
 
 ## Mensagens e migration 005
 
-`202610090005_message_recipients.sql` reutiliza message_recipients; não cria tabela. Pessoa seleciona convidados ativos diretamente, em ordem PT-BR, inclusive acessos individuais e famílias diferentes. Família continua uma seleção independente; Todos não exige seletor.
+`20261009233212_message_recipients.sql` reutiliza message_recipients; não cria tabela. Pessoa seleciona convidados ativos diretamente, em ordem PT-BR, inclusive acessos individuais e famílias diferentes. Família continua uma seleção independente; Todos não exige seletor.
 
 O frontend usa MESSAGE_SEND_TO_GUESTS, rejeitado como unknown mutation por backends anteriores à 005: publicar frontend antes do banco não pode transformar o envio em broadcast. Todos/Família e a conversa de convidados mantêm MESSAGE_SEND.
 
