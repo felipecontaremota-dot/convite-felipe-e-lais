@@ -236,10 +236,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           });
       }
       if (mutation.type === "CONTACT_UPDATE") {
+        const confirmedRevocation =
+          base?.contacts.find((c) => c.guest_id === p.guest_id)
+            ?.communications_revoked ?? false;
         projected.contacts = projected.contacts.filter(
           (c) => c.guest_id !== p.guest_id,
         );
-        projected.contacts.push(p as unknown as Snapshot["contacts"][number]);
+        projected.contacts.push({
+          ...p,
+          communications_revoked: confirmedRevocation,
+        } as unknown as Snapshot["contacts"][number]);
       }
       if (mutation.type === "GIFT_SELECT") {
         projected.gift_selections = projected.gift_selections.filter(

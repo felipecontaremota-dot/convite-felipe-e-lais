@@ -71,3 +71,6 @@ else
  source scripts/rebuild-pr21/test-rebuild.sh
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
+
+# Independent clean-008 and production-shaped upgrade catalogs, plus concurrent sessions.
+bash scripts/test-profile-db.sh

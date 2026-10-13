@@ -410,6 +410,18 @@ test("Profile real database: offline revocation, reload and reactivation preserv
       { exact: true },
     ),
   ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Estado confirmado: comunicações conforme os consentimentos autorizados.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Alteração pendente de confirmação do servidor. O estado remoto mantém a confirmação anterior.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   expect(contact()).toEqual({
     revoked: false,
     phone: "62999990047",
@@ -525,4 +537,79 @@ test("public password-only entry binds the correct real access and never exposes
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test("Profile persistence failure never presents an effective remote revocation, including reload", async ({
+  page,
+}) => {
+  db.rpc(admin, "app_mutate", {
+    p_event: event,
+    p_mutation: crypto.randomUUID(),
+    p_type: "CONTACT_UPDATE",
+    p_payload: { guest_id: individualId, communications_revoked: false },
+  });
+  await page.goto(`/c/${code}`);
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
+  await page
+    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await page.route("**/rest/v1/rpc/app_mutate", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        code: "fixture_failure",
+        message: "Fixture persistence unavailable",
+      }),
+    }),
+  );
+  await page
+    .getByRole("checkbox", {
+      name: "Revogar permissão de receber mensagens e notificações",
+      exact: true,
+    })
+    .check();
+  await page
+    .getByRole("button", { name: "Salvar contato de Pessoa CORS", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Salvo neste dispositivo. A sincronização falhou; tente novamente.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Estado confirmado: comunicações conforme os consentimentos autorizados.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Estado confirmado: comunicações revogadas.", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(
+    db
+      .sql(
+        `select communications_revoked from guest_contacts where guest_id='${individualId}';`,
+      )
+      .trim(),
+  ).toBe("f");
+  await page.reload();
+  await expect(
+    page.getByText(
+      "Estado confirmado: comunicações conforme os consentimentos autorizados.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Alteração pendente de confirmação do servidor. O estado remoto mantém a confirmação anterior.",
+      { exact: true },
+    ),
+  ).toBeVisible();
 });

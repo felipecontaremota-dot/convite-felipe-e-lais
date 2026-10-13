@@ -13,7 +13,7 @@ import {
   useFeedback,
 } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
-import { AppError } from "../../lib/errors";
+import { registerProfilePush } from "./profilePush";
 import { theme } from "../../theme/tokens";
 import type { Contact, Guest } from "../../types/domain";
 import {
@@ -111,6 +111,19 @@ function ContactForm({ guest }: { guest: Guest }) {
           setDraft((current) => withRevocation(current || form, value));
         }}
       />
+      <Text style={styles.small}>
+        {app.data?.contacts.find((c) => c.guest_id === guest.id)
+          ?.communications_revoked
+          ? "Estado confirmado: comunicações revogadas."
+          : "Estado confirmado: comunicações conforme os consentimentos autorizados."}
+      </Text>
+      <Text style={styles.small}>
+        {app.pending.some(
+          (m) => m.type === "CONTACT_UPDATE" && m.payload.guest_id === guest.id,
+        )
+          ? "Alteração pendente de confirmação do servidor. O estado remoto mantém a confirmação anterior."
+          : "A revogação passa a valer após confirmação do servidor; envios já iniciados podem terminar."}
+      </Text>
       <Button
         title={`Salvar contato de ${guest.name}`}
         onPress={() =>
@@ -149,21 +162,17 @@ function ContactForm({ guest }: { guest: Guest }) {
                 name: "Casamento",
                 importance: Notifications.AndroidImportance.DEFAULT,
               });
-            const { status } = await Notifications.requestPermissionsAsync();
-            if (status !== "granted")
-              throw new AppError("Permissão de notificações não concedida.");
-            const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-            if (!projectId)
-              throw new AppError(
-                "Configure o projeto EAS antes de registrar push.",
-              );
-            const token = (
-              await Notifications.getExpoPushTokenAsync({ projectId })
-            ).data;
-            return app.send("PUSH_REGISTER", {
-              guest_id: guest.id,
-              token,
-              platform: Platform.OS,
+            return registerProfilePush({
+              requestPermission: () => Notifications.requestPermissionsAsync(),
+              projectId: () => Constants.expoConfig?.extra?.eas?.projectId,
+              token: async (projectId) =>
+                (await Notifications.getExpoPushTokenAsync({ projectId })).data,
+              register: (token) =>
+                app.send("PUSH_REGISTER", {
+                  guest_id: guest.id,
+                  token,
+                  platform: Platform.OS,
+                }),
             });
           })
         }

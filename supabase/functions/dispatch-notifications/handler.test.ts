@@ -1,5 +1,5 @@
 import { dispatchHandler } from "./index.ts";
-import { service } from "../_shared/http.ts";
+import { ProviderDefinitiveError, ProviderUncertainError, service } from "../_shared/http.ts";
 import { type Delivery, DisabledProvider } from "../_shared/providers.ts";
 const event = "00000000-0000-4000-8000-000000000001";
 function assert(value: unknown, label: string) {
@@ -18,6 +18,8 @@ function fixture(
   let sent = 0;
   const job = {
     id: "job",
+    attempts: 1,
+    locked_at: "2026-10-12T00:00:00Z",
     event_id: event,
     guest_id: "guest",
     message_id: "11111111-1111-4111-8111-111111111111",
@@ -28,6 +30,12 @@ function fixture(
   const db = {
     rpc: async (name: string, args?: Record<string, unknown>) => {
       calls.push({ name, args });
+      if (name === "authorize_notification_attempt") return { data: {
+        authorized: consent && !revoked && !(mode === "revoked_before_start" && args?.p_start),
+        reason: "consent",
+        admission: args?.p_start ? "2026-10-12T00:00:01Z" : null,
+      }, error: null };
+      if (name === "finish_notification_attempt") return { data: true, error: null };
       return { data: name.startsWith("claim_") ? [job] : null, error: null };
     },
     from: (table: string) => {
@@ -56,10 +64,11 @@ function fixture(
             data: table === "notification_jobs"
               ? [{
                 channel: "EMAIL",
-                status: !consent || mode === "disabled"
+                status: !consent || revoked || mode === "revoked_before_start" || mode === "disabled"
                   ? "skipped"
                   : mode === "failed"
                   ? "failed"
+                  : mode === "uncertain" ? "uncertain"
                   : "sent",
               }]
               : [],
@@ -81,7 +90,8 @@ function fixture(
         send: async (d: Delivery) => {
           assert(d.key === "stable", "stable provider key");
           sent++;
-          if (mode === "failed") throw Error("sensitive");
+          if (mode === "failed") throw new ProviderDefinitiveError(401);
+          if (mode === "uncertain") throw new ProviderUncertainError();
           return { status: "sent" as const, provider: "resend" };
         },
       },
@@ -97,7 +107,7 @@ Deno.test("ADMIN dispatch claims only authorized event and does not run global s
   const f = fixture();
   const result = await (await f.handler(request())).json();
   assert(
-    f.calls.length === 1 && f.calls[0].name === "claim_event_notifications" &&
+    f.calls.filter((c) => c.name.startsWith("claim_")).length === 1 && f.calls[0].name === "claim_event_notifications" &&
       f.calls[0].args?.p_event === event &&
       f.calls[0].args?.p_message === "11111111-1111-4111-8111-111111111111",
     "event isolated",
@@ -135,7 +145,7 @@ Deno.test("non ADMIN cannot claim jobs; secret worker retains scheduling and ori
   const worker = fixture(true, "sent", false, true);
   await worker.handler(request());
   assert(
-    worker.calls.map((c) => c.name).join(",") ===
+    worker.calls.filter((c) => !c.name.endsWith("notification_attempt")).map((c) => c.name).join(",") ===
       "schedule_notifications,claim_notifications",
     "scheduler preserved",
   );
@@ -197,3 +207,43 @@ Deno.test("reactivated channel consent permits normal delivery again", async () 
     assert(f.sent() === (channel === "IN_APP" ? 0 : 1), "expected provider calls");
   }
 });
+
+Deno.test(
+  "revocation between loading content and final admission prevents provider invocation",
+  async () => {
+    const f = fixture(true, "revoked_before_start");
+    const result = await (await f.handler(request())).json();
+    assert(
+      f.sent() === 0 && result.skipped === 1,
+      "zero provider POSTs after revocation",
+    );
+    const admissions = f.calls.filter(
+      (c) => c.name === "authorize_notification_attempt",
+    );
+    assert(
+      admissions.length === 2 &&
+        admissions[0].args?.p_start === false &&
+        admissions[1].args?.p_start === true,
+      "final revalidation",
+    );
+  },
+);
+Deno.test(
+  "timeout after provider admission is recorded uncertain, never failed or automatically resent",
+  async () => {
+    const f = fixture(true, "uncertain");
+    const result = await (await f.handler(request())).json();
+    assert(
+      f.sent() === 1 && result.uncertain === 1 && result.failed === 0,
+      "honest outcome",
+    );
+    assert(
+      f.calls.some(
+        (c) =>
+          c.name === "finish_notification_attempt" &&
+          c.args?.p_status === "uncertain",
+      ),
+      "SQL keeps uncertainty",
+    );
+  },
+);
