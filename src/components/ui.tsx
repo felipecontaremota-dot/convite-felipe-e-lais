@@ -272,10 +272,12 @@ const nav = {
 };
 export function Screen({
   title,
+  titleAccessory,
   section,
   children,
 }: {
   title: string;
+  titleAccessory?: React.ReactNode;
   section?: "guest" | "admin" | "ceremonial";
   children: React.ReactNode;
 }) {
@@ -325,6 +327,7 @@ export function Screen({
       ) : null}
       <Text accessibilityRole="header" style={styles.heading}>
         {title}
+        {titleAccessory}
       </Text>
       {!app.online ? (
         <Text style={styles.notice}>

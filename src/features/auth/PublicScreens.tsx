@@ -18,6 +18,7 @@ import { WeddingCountdown } from "../../components/WeddingCountdown";
 import { WEDDING_START } from "../countdown/domain";
 import { useInvitationEntry } from "./useInvitationEntry";
 import { passwordLogin } from "./staffAuth";
+import { HomeProposalVideo } from "../../components/HomeProposalVideo";
 export function PublicHome() {
   const pathname = usePathname();
   const app = useApp();
@@ -29,75 +30,91 @@ export function PublicHome() {
       router.replace(staffDestination(app.data.role) || "/inicio");
   }, [app.data?.role, pathname, entry.busy, entry.error]);
   return (
-    <Screen title="Um novo capítulo, juntos.">
-      <Card>
-        <WeddingCountdown startsAt={WEDDING_START} />
-        <Field
-          label="Nome do convidado"
-          value={name}
-          onChangeText={(value) => setName(value.toLocaleUpperCase("pt-BR"))}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          maxLength={200}
-          editable={!entry.busy}
-        />
-        <Field
-          label="Senha do convite"
-          value={pin}
-          onChangeText={(value) => setPin(value.replace(/[^0-9]/g, ""))}
-          editable={!entry.busy}
-          keyboardType="number-pad"
-          maxLength={4}
-          secureTextEntry
-        />
-        <Button
-          title="Abrir convite"
-          disabled={
-            entry.busy || !name.trim() || !invitationPin.safeParse(pin).success
-          }
-          onPress={() => entry.run(() => app.enterByName(name, pin))}
-        />
-        {entry.error ? (
-          <Text accessibilityRole="alert" style={styles.error}>
-            {entry.error}
-          </Text>
-        ) : null}
-        {entry.canResume ? (
-          <Button
-            secondary
-            title="Carregar convite novamente"
-            onPress={entry.resume}
-          />
-        ) : null}
-      </Card>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel="Acesso dos noivos e cerimonial"
-        onPress={() => router.push("/login")}
-        style={{ alignSelf: "center", padding: 12, marginTop: 12 }}
-      >
-        <Text style={[styles.small, { textDecorationLine: "underline" }]}>
-          Acesso dos noivos e cerimonial
-        </Text>
-      </Pressable>
-      {demoEnabled ? (
-        <Card>
-          <Text style={styles.heading}>Conhecer a demonstração</Text>
-          <Text style={styles.small}>
-            Somente em desenvolvimento. Nenhum acesso privilegiado ao Supabase.
-          </Text>
-          <Button
-            title="Demo convidado"
-            onPress={() => app.enter(DEMO_CODE, DEMO_PIN)}
-          />
-          <Button title="Demo noivos" onPress={() => app.demoLogin("ADMIN")} />
-          <Button
-            title="Demo cerimonial"
-            onPress={() => app.demoLogin("CEREMONIALIST")}
-          />
-        </Card>
-      ) : null}
-    </Screen>
+    <HomeProposalVideo active={pathname === "/" && !app.data?.role}>
+      {({ titleAccessory, video }) => (
+        <Screen
+          title="Um novo capítulo, juntos."
+          titleAccessory={titleAccessory}
+        >
+          {video}
+          <Card>
+            <WeddingCountdown startsAt={WEDDING_START} />
+            <Field
+              label="Nome do convidado"
+              value={name}
+              onChangeText={(value) =>
+                setName(value.toLocaleUpperCase("pt-BR"))
+              }
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={200}
+              editable={!entry.busy}
+            />
+            <Field
+              label="Senha do convite"
+              value={pin}
+              onChangeText={(value) => setPin(value.replace(/[^0-9]/g, ""))}
+              editable={!entry.busy}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+            />
+            <Button
+              title="Abrir convite"
+              disabled={
+                entry.busy ||
+                !name.trim() ||
+                !invitationPin.safeParse(pin).success
+              }
+              onPress={() => entry.run(() => app.enterByName(name, pin))}
+            />
+            {entry.error ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {entry.error}
+              </Text>
+            ) : null}
+            {entry.canResume ? (
+              <Button
+                secondary
+                title="Carregar convite novamente"
+                onPress={entry.resume}
+              />
+            ) : null}
+          </Card>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Acesso dos noivos e cerimonial"
+            onPress={() => router.push("/login")}
+            style={{ alignSelf: "center", padding: 12, marginTop: 12 }}
+          >
+            <Text style={[styles.small, { textDecorationLine: "underline" }]}>
+              Acesso dos noivos e cerimonial
+            </Text>
+          </Pressable>
+          {demoEnabled ? (
+            <Card>
+              <Text style={styles.heading}>Conhecer a demonstração</Text>
+              <Text style={styles.small}>
+                Somente em desenvolvimento. Nenhum acesso privilegiado ao
+                Supabase.
+              </Text>
+              <Button
+                title="Demo convidado"
+                onPress={() => app.enter(DEMO_CODE, DEMO_PIN)}
+              />
+              <Button
+                title="Demo noivos"
+                onPress={() => app.demoLogin("ADMIN")}
+              />
+              <Button
+                title="Demo cerimonial"
+                onPress={() => app.demoLogin("CEREMONIALIST")}
+              />
+            </Card>
+          ) : null}
+        </Screen>
+      )}
+    </HomeProposalVideo>
   );
 }
 export function InvitationAccess() {
