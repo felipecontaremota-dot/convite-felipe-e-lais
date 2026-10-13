@@ -36,7 +36,7 @@ insert into invitation_access(event_id,invitation_id,pin) values
 ('00000000-0000-4000-8000-000000000001','ffcb0000-0000-4000-8000-000000000002','9762');
 SQL
  if sql < supabase/migrations/202610120009_password_entry.sql > "$scratch/preflight" 2>&1; then echo 'Preflight incorrectly accepted duplicate credentials' >&2; exit 1; fi
- rg -q 'password entry preflight: 1 collision groups in 1 events; credentials unchanged' "$scratch/preflight"
+ grep -Fq 'password entry preflight: 1 collision groups in 1 events; credentials unchanged' "$scratch/preflight"
  sql <<'SQL' >/dev/null
 do $$begin
  if exists(select 1 from pg_namespace where nspname='password_entry_private') or
