@@ -54,3 +54,28 @@ Deno.test("unknown, ambiguous and throttled passwords share a generic response; 
   for (const pin of ["", "123", "abcd", 47]) await handle(request({ event_id: event, action: "password", pin }));
   assert(calls === before, "invalid shape never queries");
 });
+Deno.test("root password rejects abnormal UUID/PIN and client identity overrides cannot select the user", async () => {
+  let calls = 0;
+  const handle = accessHandler({ authenticate: async () => ({ id: "server-user", is_anonymous: true }), rpc: async (name, args) => {
+    calls++; assert(name === "redeem_invitation_password" && args.p_user === "server-user", "trusted identity only");
+    return { data: true, error: null };
+  } });
+  for (const body of [
+    { event_id: "not-uuid", pin: "0047" },
+    { event_id: event, pin: "１２３４" },
+    { event_id: event, pin: "0047 ", },
+    { event_id: event, pin: "0047", code },
+    { event_id: event, pin: null },
+  ]) {
+    const response = await handle(request({ ...body, action: "password" }));
+    assert(response.status === 400 && JSON.stringify(await response.json()) === '{"code":"invalid_password"}', "uniform rejection");
+  }
+  assert(calls === 0, "bad input never queries");
+  await handle(request({ event_id: event, pin: "0047", action: "password", user_id: "attacker" }));
+  assert(calls === 1, "server UID used");
+});
+Deno.test("root password technical errors never serialize provider or database details", async () => {
+  const handle = accessHandler({ authenticate: async () => ({ id: "u", is_anonymous: true }), rpc: async () => ({ data: null, error: { message: "fixture-private-detail" } }) });
+  const response = await handle(request({ event_id: event, pin: "0047", action: "password" }));
+  assert(response.status === 503 && JSON.stringify(await response.json()) === '{"code":"technical"}', "sanitized technical response");
+});

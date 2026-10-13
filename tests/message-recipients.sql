@@ -11,7 +11,7 @@ set local role authenticated;
 set local request.jwt.claim.sub=:'admin';
 select admin_action(:'event','GUEST_CREATE','{"name":"Pessoa destinatária","whatsapp":"62999990047"}') as a \gset
 select admin_action(:'event','GUEST_CREATE','{"name":"Outra destinatária"}') as b \gset
-select admin_action(:'event','GUEST_CREATE','{"name":"Não selecionada","whatsapp":"62999990047"}') as c \gset
+select admin_action(:'event','GUEST_CREATE','{"name":"Não selecionada","whatsapp":"62999990048"}') as c \gset
 select (:'a'::jsonb)->>'id' as ga,(:'a'::jsonb)->>'invitation_id' as ia,(:'b'::jsonb)->>'id' as gb,(:'c'::jsonb)->>'id' as gc,(:'c'::jsonb)->>'invitation_id' as ic \gset
 select sharing_code as codea from invitation_access where invitation_id=:'ia' \gset
 select sharing_code as codec from invitation_access where invitation_id=:'ic' \gset
@@ -51,7 +51,7 @@ end$$;
 select pg_temp.assert_true(not exists(select 1 from messages where content='Never broadcast on old backend'),'old backend fails closed');
 set local role service_role;
 select pg_temp.assert_true(redeem_invitation(:'event',:'device',:'codea','0047','msg-a'),'selected device active');
-select pg_temp.assert_true(redeem_invitation(:'event',:'other_device',:'codec','0047','msg-c'),'unselected device active');
+select pg_temp.assert_true(redeem_invitation(:'event',:'other_device',:'codec','0048','msg-c'),'unselected device active');
 reset role;
 set local role authenticated;
 set local request.jwt.claim.sub=:'device';
