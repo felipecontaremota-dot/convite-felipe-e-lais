@@ -15,6 +15,7 @@ jobs:
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.DEV_EXPO_PUBLIC_SUPABASE_ANON_KEY }}
       EXPO_PUBLIC_WEB_BASE_URL: https://develop.felipeelais2026.com.br
       EXPO_PUBLIC_WEB_BASE_PATH: /
+      EXPO_PUBLIC_EVENT_ID: b95c2517-fcc0-422a-ac44-13df860d3bd8
       EXPO_PUBLIC_DEMO_MODE: 'false'
       EXPO_NO_TELEMETRY: '1'
     steps:
