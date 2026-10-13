@@ -99,7 +99,12 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
       exact: true,
     })
     .click();
-  await navigation(page, "Mensagens");
+  await page
+    .getByRole("button", {
+      name: "Deixe uma mensagem para o casal",
+      exact: true,
+    })
+    .click();
   await expect(
     page.getByRole("radio", { name: "Convidada Dois", exact: true }),
   ).toHaveAttribute("aria-checked", "true");

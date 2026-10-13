@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -249,7 +250,7 @@ const nav = {
     ["Convites", "/ingressos"],
     ["Presentes", "/presentes"],
     ["Local", "/como-chegar"],
-    ["Mensagens", "/mensagens"],
+    ...(Platform.OS === "web" ? [] : [["Mensagens", "/mensagens"]]),
     ["Informações", "/informacoes"],
     ["Perfil", "/perfil"],
   ],
