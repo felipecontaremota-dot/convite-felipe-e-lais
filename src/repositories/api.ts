@@ -128,6 +128,7 @@ export const redeem = (code: string | null, pin: string) =>
   invitationAccess(code, pin);
 
 export interface DispatchResult {
+  uncertain?: number;
   sent: number;
   skipped: number;
   failed: number;
@@ -137,6 +138,8 @@ export function messageDeliverySummary(
   channels: string[],
   result: DispatchResult,
 ): string {
+  if (result.results.some((r) => r.status === "uncertain"))
+    return "Mensagem registrada. O resultado de um envio externo não foi confirmado; não será reenviado automaticamente.";
   const email = result.results.filter((r) => r.channel === "EMAIL");
   if (channels.includes("EMAIL")) {
     if (!email.length)

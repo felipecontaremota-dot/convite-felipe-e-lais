@@ -128,3 +128,14 @@ it.each(["", "12", "abcd"])(
     expect(c.functions.invoke).not.toHaveBeenCalled();
   },
 );
+
+it("does not describe an uncertain external outcome as sent or failed", () => {
+  const message = messageDeliverySummary(["EMAIL"], {
+    sent: 0,
+    skipped: 0,
+    failed: 0,
+    results: [{ channel: "EMAIL", status: "uncertain" }],
+  });
+  expect(message).toContain("não foi confirmado");
+  expect(message).toContain("não será reenviado automaticamente");
+});

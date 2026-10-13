@@ -3,22 +3,23 @@ create function pg_temp.assert_true(value boolean,label text) returns void langu
 -- Before any post-upgrade mutation, compare ALL event tables byte-for-byte in JSON.
 do $$declare t record; rows jsonb;begin
  for t in select * from profile_upgrade_rows loop
-  execute format('select coalesce(jsonb_agg(%s order by %s::text),''[]''::jsonb) from %I x where event_id=$1',case when t.table_name='guest_contacts' then '(to_jsonb(x)-''communications_revoked'')' else 'to_jsonb(x)' end,case when t.table_name='guest_contacts' then '(to_jsonb(x)-''communications_revoked'')' else 'to_jsonb(x)' end,t.table_name) into rows using 'fefe0000-2000-4000-8000-000000000003'::uuid;
+  execute format('select coalesce(jsonb_agg(%s order by %s::text),''[]''::jsonb) from %I x where event_id=$1',case when t.table_name='guest_contacts' then '(to_jsonb(x)-''communications_revoked'')' when t.table_name='notification_jobs' then '(to_jsonb(x)-''delivery_started_at'')' else 'to_jsonb(x)' end,case when t.table_name='guest_contacts' then '(to_jsonb(x)-''communications_revoked'')' when t.table_name='notification_jobs' then '(to_jsonb(x)-''delivery_started_at'')' else 'to_jsonb(x)' end,t.table_name) into rows using 'fefe0000-2000-4000-8000-000000000003'::uuid;
   if rows is distinct from t.original then raise exception '008 changed existing data in %',t.table_name;end if;
  end loop;
+ if exists(select 1 from notification_jobs where delivery_started_at is not null) then raise exception '008 admitted a preexisting job';end if;
  if exists(select 1 from guest_contacts where communications_revoked) then raise exception '008 unexpectedly revoked existing permissions';end if;
 end$$;
 -- Public contracts retain role privileges; private aliases retain the exact old body/signature.
 do $$declare f record; current_oid oid; alias_oid oid;begin
  for f in select * from profile_upgrade_privileges loop
   current_oid=case when f.proname='app_mutate' then 'app_mutate(uuid,uuid,text,jsonb)'::regprocedure else 'app_snapshot(uuid)'::regprocedure end;
-  alias_oid=case when f.proname='app_mutate' then 'app_mutate_v7(uuid,uuid,text,jsonb)'::regprocedure else 'app_snapshot_v7(uuid)'::regprocedure end;
+  alias_oid=case when f.proname='app_mutate' then 'internal_mutation_core(uuid,uuid,text,jsonb)'::regprocedure else 'internal_snapshot_core(uuid)'::regprocedure end;
   if has_function_privilege(f.rolname,current_oid,'EXECUTE') is distinct from f.allowed then raise exception 'EXECUTE changed for % / %',f.proname,f.rolname;end if;
   if not exists(select 1 from pg_proc where oid=current_oid and proargnames=f.proargnames and proargtypes=f.proargtypes and prorettype=f.prorettype and prosecdef=f.prosecdef and proconfig=f.proconfig) then raise exception 'public RPC contract changed for %',f.proname;end if;
   if alias_oid<>f.oid or not exists(select 1 from pg_proc where oid=alias_oid and prosrc=f.prosrc and proargnames=f.proargnames and proargtypes=f.proargtypes and prorettype=f.prorettype) then raise exception 'renamed implementation changed for %',f.proname;end if;
  end loop;
  if exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join pg_roles r where n.nspname='public' and p.proname ~ '^app_(mutate|snapshot)_v[0-9]+$' and r.rolname in ('anon','authenticated','service_role') and has_function_privilege(r.oid,p.oid,'EXECUTE')) then raise exception 'private versioned implementation exposed';end if;
- if exists(select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a where p.oid in ('app_mutate(uuid,uuid,text,jsonb)'::regprocedure,'app_snapshot(uuid)'::regprocedure,'app_mutate_v7(uuid,uuid,text,jsonb)'::regprocedure,'app_snapshot_v7(uuid)'::regprocedure) and a.grantee=0 and a.privilege_type='EXECUTE') then raise exception 'PUBLIC EXECUTE exposed';end if;
+ if exists(select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a where p.oid in ('app_mutate(uuid,uuid,text,jsonb)'::regprocedure,'app_snapshot(uuid)'::regprocedure,'internal_mutation_core(uuid,uuid,text,jsonb)'::regprocedure,'internal_snapshot_core(uuid)'::regprocedure) and a.grantee=0 and a.privilege_type='EXECUTE') then raise exception 'PUBLIC EXECUTE exposed';end if;
 end$$;
 select pg_temp.assert_true((select array_agg(enumlabel::text order by enumsortorder)=array['PENDING','CONFIRMED','DECLINED'] from pg_enum where enumtypid='rsvp_status'::regtype),'only the three established RSVP states');
 select * from profile_upgrade_context \gset
