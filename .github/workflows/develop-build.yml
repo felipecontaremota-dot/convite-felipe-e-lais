@@ -1,4 +1,4 @@
-name: Develop artifact (no deploy)
+name: Develop build and deploy
 on:
   push:
     branches: [develop]
@@ -35,3 +35,19 @@ jobs:
         with:
           name: develop-web
           path: dist
+      - name: Publish DEVELOP site repository
+        env:
+          DEV_PAGES_DEPLOY_TOKEN: ${{ secrets.DEV_PAGES_DEPLOY_TOKEN }}
+        run: |
+          test -n "$DEV_PAGES_DEPLOY_TOKEN"
+          cd dist
+          touch .nojekyll
+          printf '%s\n' 'develop.felipeelais2026.com.br' > CNAME
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deploy DEVELOP from ${GITHUB_SHA}"
+          git branch -M main
+          git remote add origin "https://x-access-token:${DEV_PAGES_DEPLOY_TOKEN}@github.com/felipecontaremota-dot/convite-felipe-e-lais-develop-pages.git"
+          git push --force origin main
