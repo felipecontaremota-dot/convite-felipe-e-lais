@@ -10,6 +10,7 @@ async function backend(
   const state = {
     role,
     bound: false,
+    legacyContract: false,
     pin: "0047",
     active: true,
     attempts: 0,
@@ -68,7 +69,11 @@ async function backend(
         : state.role;
       data = {
         role: actualRole,
-        current_invitation_id: actualRole === "GUEST" ? family : null,
+        current_invitation_id: state.legacyContract
+          ? undefined
+          : actualRole === "GUEST"
+            ? family
+            : null,
         event: {
           id: event,
           title: "Felipe & Laís",
@@ -137,7 +142,9 @@ async function backend(
         ) {
           state.bound = true;
           state.activations++;
-          data = { linked: true, invitation_id: family };
+          data = state.legacyContract
+            ? { linked: true }
+            : { linked: true, invitation_id: family };
         } else {
           status = 429;
           data = {
@@ -715,4 +722,24 @@ test("Enter submits the shared login action only once while authentication is bu
   release();
   await expect(page).toHaveURL(/\/painel$/);
   expect(requests).toBe(1);
+});
+
+test("already deployed legacy Function and snapshot keep individual links working", async ({
+  page,
+}) => {
+  const state = await backend(page, null);
+  state.legacyContract = true;
+  await page.goto(`/c/${code}`);
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
+  await page
+    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await expect(page.getByText("Alteração salva.", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.reload();
+  await expect(
+    page.getByText("Bem-vindos, Família Teste", { exact: true }),
+  ).toBeVisible();
 });

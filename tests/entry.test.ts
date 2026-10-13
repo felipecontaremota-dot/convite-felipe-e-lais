@@ -41,3 +41,8 @@ it("a concurrent binding switch cannot open the other unit", () =>
   expect(() => validateEntrySnapshot(snapshot, "event-a", "unit-b")).toThrow(
     /carregar o convite/,
   ));
+it("legacy snapshot is accepted only in the explicit link compatibility path", () => {
+  const legacy = { ...snapshot, current_invitation_id: undefined };
+  expect(() => validateEntrySnapshot(legacy, "event-a")).toThrow();
+  expect(validateEntrySnapshot(legacy, "event-a", null, true)).toBe(legacy);
+});

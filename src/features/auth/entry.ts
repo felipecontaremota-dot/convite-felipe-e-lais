@@ -6,8 +6,11 @@ export function validateEntrySnapshot(
   snapshot: Snapshot,
   event: string,
   expected?: string | null,
+  legacyLink = false,
 ): Snapshot {
-  const invitation = snapshot.current_invitation_id;
+  const invitation =
+    snapshot.current_invitation_id ||
+    (legacyLink ? snapshot.invitations[0]?.id : null);
   if (
     snapshot.role !== "GUEST" ||
     snapshot.event?.id !== event ||
@@ -26,9 +29,10 @@ export async function loadEntrySnapshot(
   load: () => Promise<Snapshot>,
   event: string,
   expected?: string | null,
+  legacyLink = false,
 ) {
   try {
-    return validateEntrySnapshot(await load(), event, expected);
+    return validateEntrySnapshot(await load(), event, expected, legacyLink);
   } catch {
     throw new AppError(entryLoadMessage, "ENTRY_LOAD");
   }

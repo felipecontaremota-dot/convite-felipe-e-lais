@@ -1,4 +1,4 @@
-import { loadEntrySnapshot } from "../features/auth/entry";
+import { loadEntrySnapshot, entryLoadMessage } from "../features/auth/entry";
 import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import React, {
   createContext,
@@ -73,6 +73,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const entryBusy = useRef(false);
   const entryEpoch = useRef(0);
   const entryTarget = useRef<string | null>(null);
+  const legacyEntryCode = useRef<string | null>(null);
   const [entering, setEntering] = useState(false);
   const [entryBlocked, setEntryBlocked] = useState(false);
   const scope = `${eventId}:${demoRole ? "demo-" + demoRole : user || "public"}`;
@@ -299,7 +300,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       api.getSnapshot,
       eventId,
       entryTarget.current,
+      !!legacyEntryCode.current,
     );
+    if (legacyEntryCode.current) {
+      try {
+        const identity = await api.identifyInvitation(legacyEntryCode.current);
+        if (
+          !identity.activated ||
+          identity.name !== snapshot.invitations[0]?.name
+        )
+          throw new AppError(entryLoadMessage, "ENTRY_LOAD");
+      } catch {
+        throw new AppError(entryLoadMessage, "ENTRY_LOAD");
+      }
+    }
     await writeCache(`cache:${nextScope}`, snapshot);
     setCache({ scope: nextScope, data: snapshot });
     client.setQueryData(["snapshot", nextScope, null], snapshot);
@@ -307,6 +321,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
   const enterInvitation = async (
     redeem: () => Promise<api.LinkedInvitation>,
+    legacyCode?: string,
   ) => {
     if (entryBusy.current) return;
     entryBusy.current = true;
@@ -318,7 +333,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const result = await redeem();
       if (result.linked !== true)
         throw new AppError("Não foi possível abrir o convite.");
-      entryTarget.current = result.invitation_id;
+      entryTarget.current = result.invitation_id || null;
+      legacyEntryCode.current =
+        !result.invitation_id && legacyCode ? legacyCode : null;
       setEntryBlocked(true);
       await finishEntry();
     } finally {
@@ -385,7 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setDemoRole("GUEST");
         return;
       }
-      await enterInvitation(() => api.redeem(code, pin));
+      await enterInvitation(() => api.redeem(code, pin), code);
     },
     enterByName: async (name, pin) => {
       if (demoEnabled && !supabase) {
@@ -412,6 +429,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     logout: async () => {
       setEntryBlocked(false);
       entryTarget.current = null;
+      legacyEntryCode.current = null;
       await storage.removeItem("demo-session");
       await queue.clear();
       await storage.removeItem(`cache:${scope}`);

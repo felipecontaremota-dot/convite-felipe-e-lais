@@ -69,7 +69,7 @@ export const accessMessages = {
 };
 export interface LinkedInvitation {
   linked: true;
-  invitation_id: string;
+  invitation_id?: string;
 }
 export interface IdentifiedInvitation {
   name: string;
@@ -145,6 +145,14 @@ export async function invitationAccess(
       throw new AppError(technical);
     }
     if (pin !== undefined) {
+      // The already deployed legacy Function returns only linked:true.
+      // Named entry always requires the exact target from the new contract.
+      if (
+        code !== null &&
+        data?.linked === true &&
+        data.invitation_id === undefined
+      )
+        return { linked: true };
       if (
         data?.linked !== true ||
         typeof data.invitation_id !== "string" ||

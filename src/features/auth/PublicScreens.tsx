@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, usePathname } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text } from "react-native";
 import {
@@ -19,14 +19,15 @@ import { WEDDING_START } from "../countdown/domain";
 import { useInvitationEntry } from "./useInvitationEntry";
 import { passwordLogin } from "./staffAuth";
 export function PublicHome() {
+  const pathname = usePathname();
   const app = useApp();
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const entry = useInvitationEntry();
   useEffect(() => {
-    if (app.data?.role)
+    if (pathname === "/" && app.data?.role && !entry.busy && !entry.error)
       router.replace(staffDestination(app.data.role) || "/inicio");
-  }, [app.data?.role]);
+  }, [app.data?.role, pathname, entry.busy, entry.error]);
   return (
     <Screen title="Um novo capítulo, juntos.">
       <Card>
@@ -178,6 +179,7 @@ export function InvitationAccess() {
   );
 }
 export function Login() {
+  const pathname = usePathname();
   const app = useApp(),
     feedback = useFeedback();
   const [email, setEmail] = useState(""),
@@ -203,8 +205,8 @@ export function Login() {
   };
   useEffect(() => {
     const path = staffDestination(app.data?.role || null);
-    if (path) router.replace(path);
-  }, [app.data?.role]);
+    if (pathname === "/login" && path) router.replace(path);
+  }, [app.data?.role, pathname]);
   return (
     <Screen title="Acesso dos noivos e cerimonial">
       <Card>

@@ -64,6 +64,16 @@ role GUEST e unidade iguais ao alvo retornado. O frontend navega explicitamente 
 /inicio; não usa “Alteração salva.”. Falha após vínculo oferece nova tentativa somente
 de carregamento; snapshots incompatíveis não liberam a tela do convidado.
 
+## Compatibilidade durante a atualização
+
+A Function já implantada pode retornar somente `{ linked: true }`, e seu snapshot
+não conter `current_invitation_id`. Somente o fluxo /c/{codigo} aceita esse contrato:
+exige snapshot GUEST de uma unidade, confirma novamente `identify_invitation` com o
+código já fornecido, ativação da mesma sessão e nome da unidade. Esse caminho é
+coberto por teste E2E com o contrato antigo. O login por nome nunca usa esse fallback;
+ele exige o identificador exato retornado pelo novo backend. Telas públicas ocultas
+não podem disparar redirecionamentos de outra rota.
+
 ## Aplicação futura em produção — NÃO executada nesta tarefa
 
 1. Inspecionar o histórico real e comparar o baseline. Se a 009 ainda estiver pendente,
@@ -91,9 +101,10 @@ Os ícones nativos e demais assets de branding não são alterados.
 
 ## Validação local desta entrega
 
-Lint, typecheck, 207 testes unitários, 55 testes de Functions, suíte DB completa
+Lint, typecheck, 210 testes unitários, 55 testes de Functions, suíte DB completa
 (incluindo upgrade/backfill nos baselines 007, 008 e 009 e conexões concorrentes),
-84 E2E, build web e teste de export passaram. O teste afetado pelo ajuste do atalho
+84 E2E da suíte completa, 28 testes de autenticação reexecutados (incluindo um novo
+caso de contrato legado), build web e teste de export passaram. O teste afetado pelo ajuste do atalho
 de cadastro foi repetido após a correção final e passou. Não houve comunicação real
 ou execução de SQL/deploy de Functions no Supabase remoto.
 

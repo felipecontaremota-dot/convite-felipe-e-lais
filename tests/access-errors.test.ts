@@ -187,3 +187,15 @@ it("named credential failures are generic", async () => {
     accessMessages.namePassword,
   );
 });
+it("already deployed legacy success remains compatible", async () => {
+  c.functions.invoke.mockResolvedValue({ data: { linked: true }, error: null });
+  await expect(invitationAccess(code, "0047")).resolves.toEqual({
+    linked: true,
+  });
+});
+it("named success without the exact target is rejected", async () => {
+  c.functions.invoke.mockResolvedValue({ data: { linked: true }, error: null });
+  await expect(invitationAccess(null, "0047", "Test name")).rejects.toThrow(
+    accessMessages.redeemTechnical,
+  );
+});
