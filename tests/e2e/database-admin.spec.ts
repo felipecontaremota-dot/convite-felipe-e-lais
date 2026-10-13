@@ -982,8 +982,8 @@ test("guest form: shared save shortcut, validation, full-list duplicates and sel
   ]) {
     await open();
     await name.fill(duplicate);
-    await save.click();
-    await expect(page.getByRole("alert")).toHaveText("Convidado já adicionado");
+    await expect(page.getByText(/Homônimos são permitidos/)).toBeVisible();
+    await expect(save).toBeEnabled();
     expect(creations()).toHaveLength(1);
     await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   }
@@ -1035,12 +1035,20 @@ test("guest form: shared save shortcut, validation, full-list duplicates and sel
     .getByRole("button", { name: "Editar convidado", exact: true })
     .click();
   await name.fill(" pessoa   botão novo ");
+  await expect(page.getByText(/Homônimos são permitidos/)).toBeVisible();
   await name.press("Control+Enter");
-  await expect(page.getByRole("alert")).toHaveText("Convidado já adicionado");
-  expect(updates()).toHaveLength(1);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(updates()).toHaveLength(2);
   expect(db.sql(`select name from guests where id='${joseId}'`).trim()).toBe(
-    "José da Silva Santos",
+    "pessoa   botão novo",
   );
+  expect(
+    db
+      .sql(
+        "select count(*) from guests where lower(regexp_replace(trim(name),'\\s+',' ','g'))='pessoa botão novo'",
+      )
+      .trim(),
+  ).toBe("2");
 });
 
 test("external gift lists persist, edit and delete through the real existing gift RPC", async ({

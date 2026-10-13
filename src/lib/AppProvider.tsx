@@ -1,3 +1,4 @@
+import { loadEntrySnapshot } from "../features/auth/entry";
 import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import React, {
   createContext,
@@ -35,7 +36,9 @@ interface ContextValue {
   scope: string;
   isDemo: boolean;
   demoLogin: (role: Role) => Promise<void>;
-  enter: (code: string | null, pin: string) => Promise<void>;
+  enter: (code: string, pin: string) => Promise<void>;
+  enterByName: (name: string, pin: string) => Promise<void>;
+  resumeEntry: () => Promise<void>;
   identify: (code: string) => Promise<{ name: string; activated: boolean }>;
   logout: () => Promise<void>;
   send: (
@@ -67,6 +70,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       scope: string;
       data: Snapshot | null;
     } | null>(null);
+  const entryBusy = useRef(false);
+  const entryEpoch = useRef(0);
+  const entryTarget = useRef<string | null>(null);
+  const [entering, setEntering] = useState(false);
+  const [entryBlocked, setEntryBlocked] = useState(false);
   const scope = `${eventId}:${demoRole ? "demo-" + demoRole : user || "public"}`;
   const cached =
     (user || demoRole) && cache?.scope === scope ? cache.data : null;
@@ -124,9 +132,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const query = useQuery({
     queryKey: ["snapshot", scope, demoRole],
     queryFn: async () => {
+      const epoch = entryEpoch.current;
       const data = demoRole
         ? await demo.demoSnapshot(demoRole)
         : await api.getSnapshot();
+      if (epoch !== entryEpoch.current)
+        throw new AppError("O acesso foi atualizado.");
       if (!data.role) {
         await queue.clear();
         setPending([]);
@@ -135,7 +146,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await writeCache(`cache:${scope}`, data);
       return data;
     },
-    enabled: ready && online && (!!demoRole || !!user),
+    enabled:
+      ready && online && !entering && !entryBlocked && (!!demoRole || !!user),
     retry: 1,
   });
   useEffect(() => {
@@ -151,7 +163,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [scope, queue]);
   const sync = useCallback(async () => {
-    if (!online || (!user && !demoRole)) {
+    if (entryBusy.current || !online || (!user && !demoRole)) {
       const items = await queue.list();
       return {
         initial: items.length,
@@ -162,6 +174,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
     const result = await queue.flushDetailed(async (item) => {
+      if (entryBusy.current)
+        throw new AppError("Aguarde a conclusão do acesso.");
       if (demoRole) await demo.demoMutate(item, demoRole);
       else {
         const result = (await api.mutate(item)) as { id?: string };
@@ -219,7 +233,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [scope, credentialState, online, demoRole, refetch],
   );
-  const base = user || demoRole ? query.data || cached : null;
+  const base =
+    !entering && !entryBlocked && (user || demoRole)
+      ? query.data || cached
+      : null;
   const projected = base
     ? (JSON.parse(JSON.stringify(base)) as Snapshot)
     : null;
@@ -259,6 +276,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }
+  const finishEntry = async () => {
+    if (!supabase)
+      throw new AppError("Configure o Supabase para abrir o convite.");
+    const session = await supabase.auth.getSession();
+    const uid = session.data.session?.user.id;
+    if (session.error || !uid)
+      throw new AppError("Não foi possível carregar o convite.", "ENTRY_LOAD");
+    const nextScope = `${eventId}:${uid}`;
+    await queue.clear();
+    await new MutationQueue(storage, `queue:${nextScope}`).clear();
+    setPending([]);
+    setCache(null);
+    await client.cancelQueries({ queryKey: ["snapshot"] });
+    client.removeQueries({ queryKey: ["snapshot"] });
+    for (const oldScope of new Set([scope, nextScope])) {
+      for (const prefix of ["cache", "tickets", "identity", "codes"])
+        await storage.removeItem(`${prefix}:${oldScope}`);
+    }
+    setUser(uid);
+    const snapshot = await loadEntrySnapshot(
+      api.getSnapshot,
+      eventId,
+      entryTarget.current,
+    );
+    await writeCache(`cache:${nextScope}`, snapshot);
+    setCache({ scope: nextScope, data: snapshot });
+    client.setQueryData(["snapshot", nextScope, null], snapshot);
+    setEntryBlocked(false);
+  };
+  const enterInvitation = async (
+    redeem: () => Promise<api.LinkedInvitation>,
+  ) => {
+    if (entryBusy.current) return;
+    entryBusy.current = true;
+    entryEpoch.current++;
+    setEntering(true);
+    try {
+      await client.cancelQueries({ queryKey: ["snapshot"] });
+      await queue.idle();
+      const result = await redeem();
+      if (result.linked !== true)
+        throw new AppError("Não foi possível abrir o convite.");
+      entryTarget.current = result.invitation_id;
+      setEntryBlocked(true);
+      await finishEntry();
+    } finally {
+      entryBusy.current = false;
+      setEntering(false);
+    }
+  };
   const value: ContextValue = {
     data: projected,
     loading: !ready || query.isLoading,
@@ -312,21 +379,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return api.identifyInvitation(code);
     },
     enter: async (code, pin) => {
-      if (demoEnabled && (code === demo.DEMO_CODE || code === null)) {
+      if (demoEnabled && code === demo.DEMO_CODE) {
         if (pin !== demo.DEMO_PIN) throw new AppError("Senha inválida.");
         await writeCache("demo-session", "GUEST");
         setDemoRole("GUEST");
         return;
       }
-      await api.redeem(code, pin);
-      await queue.clear();
-      setPending([]);
-      setCache(null);
-      client.removeQueries({ queryKey: ["snapshot"] });
-      await storage.removeItem(`tickets:${scope}`);
-      await client.invalidateQueries({ queryKey: ["snapshot"] });
+      await enterInvitation(() => api.redeem(code, pin));
+    },
+    enterByName: async (name, pin) => {
+      if (demoEnabled && !supabase) {
+        if (pin !== demo.DEMO_PIN || !name.trim())
+          throw new AppError("Nome ou senha inválidos.");
+        await writeCache("demo-session", "GUEST");
+        setDemoRole("GUEST");
+        return;
+      }
+      await enterInvitation(() => api.redeemByName(name, pin));
+    },
+    resumeEntry: async () => {
+      if (entryBusy.current) return;
+      entryBusy.current = true;
+      entryEpoch.current++;
+      setEntering(true);
+      try {
+        await finishEntry();
+      } finally {
+        entryBusy.current = false;
+        setEntering(false);
+      }
     },
     logout: async () => {
+      setEntryBlocked(false);
+      entryTarget.current = null;
       await storage.removeItem("demo-session");
       await queue.clear();
       await storage.removeItem(`cache:${scope}`);

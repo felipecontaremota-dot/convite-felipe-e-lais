@@ -1,13 +1,13 @@
 import { test, expect } from "@playwright/test";
 for (const width of [390, 1440]) {
-  test(`public home has only a password and the shared countdown at ${width}px`, async ({
+  test(`public home has a name and password and the shared countdown at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.clock.install();
     await page.clock.setFixedTime(new Date("2026-12-15T18:59:50Z"));
     await page.goto("/");
-    await expect(page.getByRole("textbox")).toHaveCount(1);
+    await expect(page.getByRole("textbox")).toHaveCount(2);
     await expect(
       page.getByLabel("Senha do convite", { exact: true }),
     ).toBeVisible();
@@ -35,6 +35,10 @@ for (const width of [390, 1440]) {
       exact: true,
     });
     await expect(submit).toBeDisabled();
+    await page.getByLabel("Nome do convidado").fill("felipe de sousa alencar");
+    await expect(page.getByLabel("Nome do convidado")).toHaveValue(
+      "FELIPE DE SOUSA ALENCAR",
+    );
     await page.getByLabel("Senha do convite").fill("0047");
     await expect(submit).toBeEnabled();
     expect(

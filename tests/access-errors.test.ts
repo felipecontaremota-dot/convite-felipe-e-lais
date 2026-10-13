@@ -107,21 +107,32 @@ it("duplicate/legacy mutation with unknown message ID cannot claim unrelated ema
     await dispatchMessage(["EMAIL"], "11111111-1111-4111-8111-111111111111"),
   ).toBe("Mensagem registrada. E-mail enviado.");
 });
-it("password-only entry posts no code and returns no lookup metadata before authorization", async () => {
-  c.functions.invoke.mockResolvedValue({ data: { linked: true }, error: null });
-  await invitationAccess(null, "0047");
+it("name + PIN entry posts no code and returns no lookup metadata before authorization", async () => {
+  c.functions.invoke.mockResolvedValue({
+    data: {
+      linked: true,
+      invitation_id: "11111111-1111-4111-8111-111111111111",
+    },
+    error: null,
+  });
+  await invitationAccess(null, "0047", "Laís Romão");
   expect(c.functions.invoke).toHaveBeenCalledExactlyOnceWith(
     "redeem-invitation",
     {
-      body: { action: "password", event_id: "event", pin: "0047" },
+      body: {
+        action: "name_pin",
+        name: "Laís Romão",
+        event_id: "event",
+        pin: "0047",
+      },
     },
   );
 });
 it.each(["", "12", "abcd"])(
   "invalid root password %s never creates a session or calls the Function",
   async (pin) => {
-    await expect(invitationAccess(null, pin)).rejects.toThrow(
-      accessMessages.password,
+    await expect(invitationAccess(null, pin, "Laís Romão")).rejects.toThrow(
+      accessMessages.namePassword,
     );
     expect(c.auth.getSession).not.toHaveBeenCalled();
     expect(c.auth.signInAnonymously).not.toHaveBeenCalled();
@@ -144,7 +155,35 @@ it("explicit password collision has a controlled administrative explanation", as
   expect(administrativeError("invitation password conflict")).toBe(
     "Esta senha já está em uso neste evento. Escolha outra senha.",
   );
-  expect(administrativeError("initial invitation password allocation exhausted")).toBe(
+  expect(
+    administrativeError("initial invitation password allocation exhausted"),
+  ).toBe(
     "Não foi possível criar uma senha inicial disponível. A operação não foi concluída.",
+  );
+});
+
+it("missing name cannot redeem a PIN", async () => {
+  await expect(invitationAccess(null, "0047")).rejects.toThrow(
+    accessMessages.namePassword,
+  );
+  expect(c.functions.invoke).not.toHaveBeenCalled();
+});
+it("false success cannot become an authorized entry", async () => {
+  c.functions.invoke.mockResolvedValue({
+    data: { linked: false },
+    error: null,
+  });
+  await expect(invitationAccess(null, "0047", "Test name")).rejects.toThrow(
+    accessMessages.redeemTechnical,
+  );
+});
+it("named credential failures are generic", async () => {
+  c.functions.invoke.mockResolvedValue({
+    error: {
+      context: Response.json({ code: "invalid_credentials" }, { status: 400 }),
+    },
+  });
+  await expect(invitationAccess(null, "0047", "Test name")).rejects.toThrow(
+    accessMessages.namePassword,
   );
 });

@@ -63,6 +63,12 @@ export function AccessControls({
         {i.sent_at ? "Convite enviado" : "Convite não enviado"} ·{" "}
         {i.first_activated_at ? "Já ativado" : "Ainda não ativado"}
       </Text>
+      {i.name_login_conflict ? (
+        <Text style={styles.error}>
+          Há nome e senha iguais em unidades diferentes. O acesso por essa
+          combinação fica bloqueado; configure uma senha alternativa.
+        </Text>
+      ) : null}
       <Field
         label={i.kind === "INDIVIDUAL" ? "Senha" : "Senha da família"}
         value={pinValue}

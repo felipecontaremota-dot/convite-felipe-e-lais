@@ -68,6 +68,7 @@ async function backend(
         : state.role;
       data = {
         role: actualRole,
+        current_invitation_id: actualRole === "GUEST" ? family : null,
         event: {
           id: event,
           title: "Felipe & Laís",
@@ -128,20 +129,24 @@ async function backend(
         state.attempts++;
         if (
           state.active &&
-          (body.code === code || body.action === "password") &&
+          (body.code === code ||
+            (body.action === "name_pin" &&
+              body.name === "INTEGRANTE PROTEGIDO")) &&
           body.pin === state.pin &&
           state.attempts <= 15
         ) {
           state.bound = true;
           state.activations++;
-          data = { linked: true };
+          data = { linked: true, invitation_id: family };
         } else {
           status = 429;
           data = {
             code:
-              state.active && (body.code === code || body.action === "password")
-                ? "invalid_password"
-                : "invalid_link",
+              body.action === "name_pin"
+                ? "invalid_credentials"
+                : state.active && body.code === code
+                  ? "invalid_password"
+                  : "invalid_link",
           };
         }
       }
@@ -255,12 +260,15 @@ test("manual password errors are distinct from invalid/blocked links; old bindin
 }) => {
   const state = await backend(page, null);
   await page.goto("/");
+  await page
+    .getByLabel("Nome do convidado", { exact: true })
+    .fill("integrante protegido");
   await page.getByLabel("Senha do convite", { exact: true }).fill("9999");
   await page
     .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(
-    page.getByText("Senha inválida.", { exact: true }),
+    page.getByText("Nome ou senha inválidos.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Senha do convite", { exact: true }).fill("0047");
   await page

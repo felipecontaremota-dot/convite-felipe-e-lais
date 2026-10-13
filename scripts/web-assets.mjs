@@ -53,6 +53,7 @@ async function files(directory) {
     .sort();
 }
 const publicFiles = [
+  "favicon.ico",
   "manifest.webmanifest",
   "icon.svg",
   "icon-192.png",

@@ -16,11 +16,13 @@ import { DEMO_CODE, DEMO_PIN } from "../../repositories/demo";
 import { invitationPin, staffDestination } from "../../utils/security";
 import { WeddingCountdown } from "../../components/WeddingCountdown";
 import { WEDDING_START } from "../countdown/domain";
+import { useInvitationEntry } from "./useInvitationEntry";
 import { passwordLogin } from "./staffAuth";
 export function PublicHome() {
-  const app = useApp(),
-    feedback = useFeedback();
+  const app = useApp();
+  const [name, setName] = useState("");
   const [pin, setPin] = useState("");
+  const entry = useInvitationEntry();
   useEffect(() => {
     if (app.data?.role)
       router.replace(staffDestination(app.data.role) || "/inicio");
@@ -30,19 +32,42 @@ export function PublicHome() {
       <Card>
         <WeddingCountdown startsAt={WEDDING_START} />
         <Field
+          label="Nome do convidado"
+          value={name}
+          onChangeText={(value) => setName(value.toLocaleUpperCase("pt-BR"))}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={200}
+          editable={!entry.busy}
+        />
+        <Field
           label="Senha do convite"
           value={pin}
-          onChangeText={setPin}
+          onChangeText={(value) => setPin(value.replace(/[^0-9]/g, ""))}
+          editable={!entry.busy}
           keyboardType="number-pad"
           maxLength={4}
           secureTextEntry
         />
         <Button
           title="Abrir convite"
-          disabled={!invitationPin.safeParse(pin).success}
-          onPress={() => feedback.run(() => app.enter(null, pin))}
+          disabled={
+            entry.busy || !name.trim() || !invitationPin.safeParse(pin).success
+          }
+          onPress={() => entry.run(() => app.enterByName(name, pin))}
         />
-        {feedback.node}
+        {entry.error ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {entry.error}
+          </Text>
+        ) : null}
+        {entry.canResume ? (
+          <Button
+            secondary
+            title="Carregar convite novamente"
+            onPress={entry.resume}
+          />
+        ) : null}
       </Card>
       <Pressable
         accessibilityRole="link"
@@ -76,8 +101,8 @@ export function PublicHome() {
 }
 export function InvitationAccess() {
   const { code } = useLocalSearchParams<{ code: string }>();
-  const app = useApp(),
-    feedback = useFeedback();
+  const app = useApp();
+  const entry = useInvitationEntry();
   const [pin, setPin] = useState(""),
     [family, setFamily] = useState<{ code: string; name: string } | null>(null),
     [error, setError] = useState("");
@@ -132,15 +157,21 @@ export function InvitationAccess() {
         />
         <Button
           title="Abrir nosso convite"
-          disabled={!invitationPin.safeParse(pin).success}
-          onPress={() =>
-            feedback.run(async () => {
-              await app.enter(code, pin);
-              router.replace("/inicio");
-            })
-          }
+          disabled={entry.busy || !invitationPin.safeParse(pin).success}
+          onPress={() => entry.run(() => app.enter(code, pin))}
         />
-        {feedback.node}
+        {entry.error ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {entry.error}
+          </Text>
+        ) : null}
+        {entry.canResume ? (
+          <Button
+            secondary
+            title="Carregar convite novamente"
+            onPress={entry.resume}
+          />
+        ) : null}
         <Button secondary title="Voltar" onPress={() => router.replace("/")} />
       </Card>
     </Screen>

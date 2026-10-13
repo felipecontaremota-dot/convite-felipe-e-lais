@@ -17,6 +17,7 @@ else
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
 for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql tests/profile-consent.sql tests/password-entry.sql tests/password-allocation.sql; do
+ if [[ "$source" == supabase/migrations/20261013204105_name_pin_access.sql ]]; then continue; fi
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
   run_sql < tests/access-upgrade-prepare.sql
  fi
@@ -31,6 +32,15 @@ for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql
   run_sql < tests/access-upgrade-verify.sql
  fi
 done
+
+# Preserve the historical 009 assertions above; validate the new final behavior separately.
+run_sql < tests/name-backfill-prepare.sql
+run_sql < supabase/migrations/20261013204105_name_pin_access.sql
+run_sql < tests/name-backfill-verify.sql
+run_sql < tests/name-normalization.sql
+run_sql < tests/name-pin-access.sql
+if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then python3 tests/name-pin-concurrency.py --database "$database";
+else python3 tests/name-pin-concurrency.py --container "$container"; fi
 
 # Dedicated production-shaped 007 -> 008 upgrade, separate from clean install.
 if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
@@ -48,6 +58,13 @@ for migration in supabase/migrations/20261009000*.sql supabase/migrations/202610
 run_sql < tests/profile-upgrade-prepare.sql
 run_sql < supabase/migrations/202610110008_profile_consent.sql
 run_sql < tests/profile-upgrade-verify.sql
+# The new login also upgrades a 007/008 database without installing retired 009.
+run_sql < supabase/seed.sql
+run_sql < tests/name-backfill-prepare.sql
+run_sql < supabase/migrations/20261013204105_name_pin_access.sql
+run_sql < tests/name-backfill-verify.sql
+run_sql < tests/name-normalization.sql
+run_sql < tests/name-pin-access.sql
 if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
  database="$original_database"
  sudo -u postgres dropdb "$profile_database"
@@ -64,11 +81,21 @@ if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
  cleanup() { sudo -u postgres dropdb --if-exists "$original_database"; sudo -u postgres dropdb --if-exists "$rebuild_database"; }
  database="$rebuild_database"
  source scripts/rebuild-pr21/test-rebuild.sh
+ run_sql < tests/name-backfill-prepare.sql
+ run_sql < supabase/migrations/20261013204105_name_pin_access.sql
+ run_sql < tests/name-backfill-verify.sql
+ run_sql < tests/name-normalization.sql
+ run_sql < tests/name-pin-access.sql
  database="$original_database"
 else
  docker exec "$container" createdb -U postgres rebuild_baseline
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -d rebuild_baseline -v ON_ERROR_STOP=1; }
  source scripts/rebuild-pr21/test-rebuild.sh
+ run_sql < tests/name-backfill-prepare.sql
+ run_sql < supabase/migrations/20261013204105_name_pin_access.sql
+ run_sql < tests/name-backfill-verify.sql
+ run_sql < tests/name-normalization.sql
+ run_sql < tests/name-pin-access.sql
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
 

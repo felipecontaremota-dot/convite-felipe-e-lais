@@ -25,6 +25,10 @@ let signupRequests = 0;
 const basePath = getExportWebBasePath();
 const shell = webPath("", basePath);
 const html = await readFile("dist/index.html", "utf8");
+assert.match(html, /rel="(?:shortcut )?icon"[^>]*favicon\.ico/);
+const favicon = await readFile("dist/favicon.ico");
+assert.ok(favicon.length > 100);
+assert.deepEqual([...favicon.subarray(0, 4)], [0, 0, 1, 0]);
 if (!basePath) {
   const compatibility = html.match(
     /<script>([^<]*var p="\/convite-felipe-e-lais"[^<]*)<\/script>/,

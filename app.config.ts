@@ -2,6 +2,13 @@ import type { ExpoConfig } from "expo/config";
 import { getWebBasePath } from "./config/web-paths.cjs";
 const domain = process.env.EXPO_PUBLIC_WEB_BASE_URL;
 const host = domain ? new URL(domain).hostname : undefined;
+if (
+  process.env.EXPO_PUBLIC_SUPABASE_URL &&
+  !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(
+    process.env.EXPO_PUBLIC_EVENT_ID || "",
+  )
+)
+  throw new Error("Configure EXPO_PUBLIC_EVENT_ID para este ambiente.");
 const config: ExpoConfig = {
   name: "Felipe & Laís",
   slug: "convite-felipe-e-lais",
@@ -33,7 +40,12 @@ const config: ExpoConfig = {
         }
       : {}),
   },
-  web: { bundler: "metro", output: "single", name: "Felipe & Laís" },
+  web: {
+    bundler: "metro",
+    output: "single",
+    name: "Felipe & Laís",
+    favicon: "./assets/aliancas-felipe-e-lais.png",
+  },
   experiments: { baseUrl: getWebBasePath() },
   plugins: [
     "expo-router",

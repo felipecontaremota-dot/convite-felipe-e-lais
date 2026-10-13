@@ -14,6 +14,7 @@ export interface WeddingEvent {
   longitude: number | null;
 }
 export interface Invitation {
+  name_login_conflict?: boolean;
   kind?: "FAMILY" | "INDIVIDUAL";
   archived_at?: string | null;
   pin?: string | null;
@@ -145,6 +146,7 @@ export interface SheetJob {
   version: number;
 }
 export interface Snapshot {
+  current_invitation_id?: string | null;
   role: Role | null;
   event: WeddingEvent;
   invitations: Invitation[];

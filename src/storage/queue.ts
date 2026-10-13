@@ -81,6 +81,9 @@ export class MutationQueue {
       );
     });
   }
+  idle() {
+    return this.serialized(async () => undefined);
+  }
   clear() {
     return this.serialized(() => this.storage.removeItem(this.key));
   }

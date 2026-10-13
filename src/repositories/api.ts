@@ -60,26 +60,49 @@ export const accessMessages = {
   link: "Este link de convite é inválido ou não está mais ativo.",
   unavailable: "Este convite não está mais disponível.",
   password: "Senha inválida.",
+  namePassword: "Nome ou senha inválidos.",
   staff:
     "Você está conectado em uma conta administrativa. Saia dessa conta ou abra o convite em outro navegador/dispositivo.",
   identifyTechnical:
     "Não foi possível carregar o convite agora. Tente novamente.",
   redeemTechnical: "Não foi possível abrir o convite agora. Tente novamente.",
 };
-export async function invitationAccess(code: string | null, pin?: string) {
+export interface LinkedInvitation {
+  linked: true;
+  invitation_id: string;
+}
+export interface IdentifiedInvitation {
+  name: string;
+  activated: boolean;
+}
+export async function invitationAccess(
+  code: string | null,
+  pin?: string,
+  name?: string,
+): Promise<LinkedInvitation | IdentifiedInvitation> {
   const technical =
     pin === undefined
       ? accessMessages.identifyTechnical
       : accessMessages.redeemTechnical;
   if (
-    (code === null && pin === undefined) ||
+    (code === null &&
+      (pin === undefined ||
+        typeof name !== "string" ||
+        !name.trim() ||
+        name.length > 400)) ||
     (code !== null && !invitationCode.safeParse(code).success)
   )
     throw new AuthError(
-      pin === undefined ? accessMessages.link : accessMessages.unavailable,
+      code === null
+        ? accessMessages.namePassword
+        : pin === undefined
+          ? accessMessages.link
+          : accessMessages.unavailable,
     );
   if (pin !== undefined && !invitationPin.safeParse(pin).success)
-    throw new AuthError(accessMessages.password);
+    throw new AuthError(
+      code === null ? accessMessages.namePassword : accessMessages.password,
+    );
   if (!supabase) throw new AppError(technical);
   try {
     const current = await supabase.auth.getSession();
@@ -95,7 +118,7 @@ export async function invitationAccess(code: string | null, pin?: string) {
       "redeem-invitation",
       {
         body: {
-          ...(code === null ? { action: "password" } : { code }),
+          ...(code === null ? { action: "name_pin", name } : { code }),
           event_id: eventId,
           ...(pin === undefined ? { action: "identify" } : { pin }),
         },
@@ -111,21 +134,47 @@ export async function invitationAccess(code: string | null, pin?: string) {
         throw new AuthError(
           pin === undefined ? accessMessages.link : accessMessages.unavailable,
         );
+      if (body?.code === "invalid_credentials")
+        throw new AuthError(accessMessages.namePassword);
       if (body?.code === "invalid_password")
-        throw new AuthError(accessMessages.password);
+        throw new AuthError(
+          code === null ? accessMessages.namePassword : accessMessages.password,
+        );
       if (body?.code === "staff_session")
         throw new AuthError(accessMessages.staff);
       throw new AppError(technical);
     }
-    return data as { name: string; activated: boolean };
+    if (pin !== undefined) {
+      if (
+        data?.linked !== true ||
+        typeof data.invitation_id !== "string" ||
+        !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(data.invitation_id)
+      )
+        throw new AppError(technical);
+      return { linked: true, invitation_id: data.invitation_id };
+    }
+    if (typeof data?.name !== "string" || typeof data?.activated !== "boolean")
+      throw new AppError(technical);
+    return data as IdentifiedInvitation;
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(technical);
   }
 }
-export const identifyInvitation = (code: string) => invitationAccess(code);
-export const redeem = (code: string | null, pin: string) =>
-  invitationAccess(code, pin);
+export const identifyInvitation = async (
+  code: string,
+): Promise<IdentifiedInvitation> =>
+  (await invitationAccess(code)) as IdentifiedInvitation;
+export const redeem = async (
+  code: string,
+  pin: string,
+): Promise<LinkedInvitation> =>
+  (await invitationAccess(code, pin)) as LinkedInvitation;
+export const redeemByName = async (
+  name: string,
+  pin: string,
+): Promise<LinkedInvitation> =>
+  (await invitationAccess(null, pin, name)) as LinkedInvitation;
 
 export interface DispatchResult {
   uncertain?: number;

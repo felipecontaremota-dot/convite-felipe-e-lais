@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
   Platform,
   Pressable,
@@ -25,7 +25,6 @@ import {
   Tag,
 } from "../../components/adminUi";
 import { AdminModal, SelectedChips } from "../../components/AdminModal";
-import { AppError } from "../../lib/errors";
 import { useApp } from "../../lib/AppProvider";
 import {
   lastInvitationDelivery,
@@ -76,8 +75,6 @@ function GuestForm({
     setSaving(true);
     try {
       await feedback.run(async () => {
-        if (hasDuplicateGuestName(app.data?.guests || [], name, guest?.id))
-          throw new AppError("Convidado já adicionado");
         guestContact.parse({
           email: email.trim(),
           whatsapp: brazilPhone(phone),
@@ -101,6 +98,11 @@ function GuestForm({
       setSaving(false);
     }
   };
+  const saveRef = useRef(save);
+  useLayoutEffect(() => {
+    saveRef.current = save;
+  });
+  const dialogTitle = guest ? "Editar convidado" : "Adicionar convidado";
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const handle = (event: KeyboardEvent) => {
@@ -110,22 +112,28 @@ function GuestForm({
         event.isComposing ||
         !(event.target instanceof Element) ||
         event.target.closest('[role="dialog"]')?.getAttribute("aria-label") !==
-          (guest ? "Editar convidado" : "Adicionar convidado")
+          dialogTitle
       )
         return;
       event.preventDefault();
-      if (!event.repeat) void save();
+      if (!event.repeat) void saveRef.current();
     };
     // TextInput stops bubbling key events on Web; capture only this dialog shortcut.
     document.addEventListener("keydown", handle, true);
     return () => document.removeEventListener("keydown", handle, true);
-  });
+  }, [dialogTitle]);
   return (
     <AdminModal
       title={guest ? "Editar convidado" : "Adicionar convidado"}
       onClose={onClose}
       dismissible={!saving}
     >
+      {hasDuplicateGuestName(app.data?.guests || [], name, guest?.id) ? (
+        <Text style={styles.notice}>
+          Já existe um convidado com nome equivalente. Homônimos são permitidos;
+          confira se as unidades possuem senhas diferentes.
+        </Text>
+      ) : null}
       <Field label="Nome" value={name} onChangeText={setName} maxLength={200} />
       <Select
         label="Gênero"

@@ -43,6 +43,7 @@ async function rpc(name: string, args: Record<string, unknown>, id: string) {
   return r.json();
 }
 const access = accessHandler({
+  configuredEvent: Deno.env.get("TEST_EVENT_ID"),
   authenticate: async (request) => user(uid(request)),
   rpc: async (name, args) => rpc(name, args, String(args.p_user)),
 });

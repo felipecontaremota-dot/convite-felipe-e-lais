@@ -14,9 +14,9 @@ else
  cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$scratch"; }
  trap cleanup EXIT
  docker run --name "$container" -e POSTGRES_PASSWORD=isolated-test-only -d postgres:17-alpine >/dev/null
- for attempt in {1..30}; do if docker exec "$container" pg_isready -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
- sql() { docker exec -i "$container" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d "$database"; }
- create_db() { docker exec "$container" createdb -U postgres "$1"; }
+ for attempt in {1..30}; do if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
+ sql() { docker exec -i "$container" psql -h 127.0.0.1 -X -qAt -v ON_ERROR_STOP=1 -U postgres -d "$database"; }
+ create_db() { docker exec "$container" createdb -h 127.0.0.1 -U postgres "$1"; }
 fi
 trap cleanup EXIT
 for scenario in clean upgrade; do

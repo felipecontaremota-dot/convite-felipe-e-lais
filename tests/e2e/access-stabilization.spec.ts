@@ -52,7 +52,8 @@ test.beforeAll(async () => {
       } else if (
         name === "identify_invitation" ||
         name === "redeem_invitation" ||
-        name === "redeem_invitation_password"
+        name === "redeem_invitation_link" ||
+        name === "redeem_invitation_by_name"
       ) {
         const value = db
           .sql(
@@ -95,6 +96,7 @@ test.beforeAll(async () => {
         ...process.env,
         DENO_DIR: process.env.DENO_DIR || "/tmp/wedding-deno",
         TEST_RPC_BRIDGE: `http://127.0.0.1:${address.port}`,
+        TEST_EVENT_ID: event,
       },
       stdio: "pipe",
     },
@@ -477,7 +479,7 @@ test("Profile real database: offline revocation, reload and reactivation preserv
   expect(receipts()).toBe(before + 2);
 });
 
-test("public password-only entry binds the correct real access and never exposes other guests", async ({
+test("public name + PIN entry binds the correct real access and never exposes other guests", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -491,7 +493,7 @@ test("public password-only entry binds the correct real access and never exposes
   await expect(
     page.getByLabel("Código do convite", { exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByRole("textbox")).toHaveCount(1);
+  await expect(page.getByRole("textbox")).toHaveCount(2);
   await expect(
     page.getByRole("button", { name: "Voltar", exact: true }),
   ).toHaveCount(0);
@@ -512,10 +514,14 @@ test("public password-only entry binds the correct real access and never exposes
     if (response.url().includes("/functions/v1/redeem-invitation"))
       void response.json().then((data) => responses.push(data));
   });
+  await page
+    .getByLabel("Nome do convidado", { exact: true })
+    .fill("pessoa cors");
+  await expect(page.getByLabel("Nome do convidado")).toHaveValue("PESSOA CORS");
   await page.getByLabel("Senha do convite", { exact: true }).fill("9999");
   await submit.click();
   await expect(
-    page.getByText("Senha inválida.", { exact: true }),
+    page.getByText("Nome ou senha inválidos.", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Pessoa CORS", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Família CORS", { exact: true })).toHaveCount(0);
@@ -525,7 +531,18 @@ test("public password-only entry binds the correct real access and never exposes
   await expect(
     page.getByText("Boas-vindas, Pessoa CORS", { exact: true }),
   ).toBeVisible();
-  expect(responses).toEqual([{ code: "invalid_password" }, { linked: true }]);
+  await expect(page.getByText("Alteração salva.", { exact: true })).toHaveCount(
+    0,
+  );
+  expect(responses).toEqual([
+    { code: "invalid_credentials" },
+    {
+      linked: true,
+      invitation_id: db
+        .sql(`select invitation_id from guests where id='${individualId}';`)
+        .trim(),
+    },
+  ]);
   await page.reload();
   await expect(
     page.getByText("Boas-vindas, Pessoa CORS", { exact: true }),
@@ -612,4 +629,114 @@ test("Profile persistence failure never presents an effective remote revocation,
       { exact: true },
     ),
   ).toBeVisible();
+});
+
+test("name normalization, homonyms and any family member resolve only their correct unit", async ({
+  browser,
+}) => {
+  const family = db.rpc(admin, "admin_action", {
+    p_event: event,
+    p_action: "INVITATION_SAVE",
+    p_payload: { name: "Named family", pin: "4778" },
+  });
+  db.rpc(admin, "admin_action", {
+    p_event: event,
+    p_action: "CODE_ROTATE",
+    p_payload: { id: family.id, version: 1 },
+  });
+  db.sql(
+    `insert into guests(event_id,invitation_id,name) values('${event}','${family.id}','Felipe de Sousa Alencar'),('${event}','${family.id}','Laís Lorrane Cariolano Romão'),('${event}','${family.id}','LAIS LORRANE CARIOLANO ROMAO');`,
+  );
+  const other = db.rpc(admin, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: { name: "Felipe de Sousa Alencar", whatsapp: "62999996521" },
+  });
+  for (const [name, pin, expected] of [
+    ["felipe de sousa alencar", "4778", family.id],
+    [" FELIPE   DE SOUSA ALENCAR ", "4778", family.id],
+    ["LAIS LORRANE CARIOLANO ROMAO", "4778", family.id],
+    ["Lai\u0301s Lorrane Cariolano Roma\u0303o", "4778", family.id],
+    ["Felipe de Sousa Alencar", "6521", other.invitation_id],
+  ]) {
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:8083",
+    });
+    const page = await context.newPage();
+    await page.goto("/");
+    await page.getByLabel("Nome do convidado").fill(name!);
+    await page.getByLabel("Senha do convite").fill(pin!);
+    await page
+      .getByRole("button", { name: "Abrir convite", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/inicio$/);
+    await expect(
+      page.getByText("Alteração salva.", { exact: true }),
+    ).toHaveCount(0);
+    const binding = db
+      .sql(
+        `select count(*) from invitation_sessions where invitation_id='${expected}';`,
+      )
+      .trim();
+    expect(Number(binding)).toBeGreaterThan(0);
+    await page.reload();
+    await expect(page).toHaveURL(/\/inicio$/);
+    await expect(
+      page.getByRole("link", { name: "Perfil", exact: true }),
+    ).toBeVisible();
+    await context.close();
+  }
+  db.sql(
+    `update invitation_access set pin='4778' where invitation_id='${other.invitation_id}';`,
+  );
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:8083",
+  });
+  const page = await context.newPage();
+  await page.goto("/");
+  await page.getByLabel("Nome do convidado").fill("FELIPE DE SOUSA ALENCAR");
+  await page.getByLabel("Senha do convite").fill("4778");
+  await page
+    .getByRole("button", { name: "Abrir convite", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toHaveText("Nome ou senha inválidos.");
+  await expect(page).toHaveURL(/\/$/);
+  await context.close();
+});
+
+test("snapshot failure after binding retries loading without redeeming credentials again", async ({
+  page,
+}) => {
+  let attempts = 0;
+  page.on("request", (r) => {
+    if (
+      r.url().includes("/functions/v1/redeem-invitation") &&
+      r.method() === "POST"
+    )
+      attempts++;
+  });
+  await page.route("**/rest/v1/rpc/app_snapshot", (r) =>
+    r.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: '{"message":"synthetic failure"}',
+    }),
+  );
+  await page.goto("/");
+  await page.getByLabel("Nome do convidado").fill("Pessoa CORS");
+  await page.getByLabel("Senha do convite").fill("0047");
+  await page
+    .getByRole("button", { name: "Abrir convite", exact: true })
+    .click();
+  await expect(page.getByText(/Seu acesso foi confirmado/)).toBeVisible();
+  await expect(
+    page.getByText("Nome ou senha inválidos.", { exact: true }),
+  ).toHaveCount(0);
+  expect(attempts).toBe(1);
+  await page.unroute("**/rest/v1/rpc/app_snapshot");
+  await page
+    .getByRole("button", { name: "Carregar convite novamente", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  expect(attempts).toBe(1);
 });
