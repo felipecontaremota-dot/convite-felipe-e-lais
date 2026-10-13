@@ -16,7 +16,7 @@ else
  for attempt in {1..30}; do if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
-for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql tests/profile-consent.sql tests/password-entry.sql; do
+for source in tests/db-bootstrap.sql supabase/migrations/*.sql supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql tests/profile-consent.sql tests/password-entry.sql tests/password-allocation.sql; do
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
   run_sql < tests/access-upgrade-prepare.sql
  fi
@@ -74,3 +74,6 @@ fi
 
 # Independent clean-008 and production-shaped upgrade catalogs, plus concurrent sessions.
 bash scripts/test-profile-db.sh
+
+# Independent 009 install/upgrade and real concurrent transactions.
+bash scripts/test-password-db.sh

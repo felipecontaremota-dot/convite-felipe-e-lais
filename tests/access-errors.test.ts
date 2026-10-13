@@ -139,3 +139,12 @@ it("does not describe an uncertain external outcome as sent or failed", () => {
   expect(message).toContain("não foi confirmado");
   expect(message).toContain("não será reenviado automaticamente");
 });
+it("explicit password collision has a controlled administrative explanation", async () => {
+  const { administrativeError } = await import("../src/lib/errors");
+  expect(administrativeError("invitation password conflict")).toBe(
+    "Esta senha já está em uso neste evento. Escolha outra senha.",
+  );
+  expect(administrativeError("initial invitation password allocation exhausted")).toBe(
+    "Não foi possível criar uma senha inicial disponível. A operação não foi concluída.",
+  );
+});

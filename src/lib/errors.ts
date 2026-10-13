@@ -29,6 +29,10 @@ export class SyncError extends AppError {
   }
 }
 export function administrativeError(message: string): string | null {
+  if (message === "invitation password conflict")
+    return "Esta senha já está em uso neste evento. Escolha outra senha.";
+  if (message === "initial invitation password allocation exhausted")
+    return "Não foi possível criar uma senha inicial disponível. A operação não foi concluída.";
   if (message.includes("conflict"))
     return "Os dados foram alterados em outra sessão. Atualize e tente novamente.";
   if (message.includes("not found"))

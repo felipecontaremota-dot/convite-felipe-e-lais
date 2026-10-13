@@ -806,7 +806,7 @@ test("surviving family alias confirms individual resend directly without retryin
   });
   const family = admin("INVITATION_SAVE", {
     name: "Individual alias family",
-    pin: "1234",
+    pin: "7612",
   });
   admin("CODE_ROTATE", { id: family.id, version: 1 });
   admin("FAMILY_ADD_MEMBERS", {
