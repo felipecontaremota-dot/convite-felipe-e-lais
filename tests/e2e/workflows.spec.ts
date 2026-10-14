@@ -105,9 +105,15 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
       exact: true,
     })
     .click();
-  await expect(
-    page.getByRole("radio", { name: "Convidada Dois", exact: true }),
-  ).toHaveAttribute("aria-checked", "true");
+  await expect
+    .poll(() =>
+      page
+        .getByRole("combobox", { name: "Quem está enviando", exact: true })
+        .evaluate(
+          (select: HTMLSelectElement) => select.selectedOptions[0]?.textContent,
+        ),
+    )
+    .toBe("Convidada Dois");
   await page
     .getByLabel("Mensagem aos noivos", { exact: true })
     .fill("Que alegria participar!");
@@ -117,6 +123,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await expect(
     page.getByText("Que alegria participar!", { exact: true }),
   ).toBeVisible();
+  await page.keyboard.press("Escape");
   await navigation(page, "Local");
   await expect(
     page.getByRole("button", { name: "Abrir localização", exact: true }),

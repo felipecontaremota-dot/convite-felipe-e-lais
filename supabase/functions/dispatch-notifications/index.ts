@@ -139,8 +139,15 @@ export function dispatchHandler(
           throw Error("Falha ao carregar dados de entrega");
         }
         if (!rule && !message) throw Error("Conteúdo não disponível");
-        const title = rule?.title || "Felipe & Laís",
-          body = rule?.body || message?.content;
+        const title =
+            rule?.title || message?.notification_title || "Felipe & Laís",
+          body =
+            rule?.body ||
+            (message?.notification_title &&
+            job.channel !== "WHATSAPP" &&
+            message.content.startsWith(message.notification_title + "\n")
+              ? message.content.slice(message.notification_title.length + 1)
+              : message?.content);
         let result: ProviderResult;
         const { data: tokens, error: tokenError } =
           job.channel === "PUSH"
@@ -204,6 +211,18 @@ export function dispatchHandler(
               { onConflict: "id" },
             );
             if (merr) throw Error("Falha ao criar aviso");
+            const { error: recipientError } = await db
+              .from("message_recipients")
+              .upsert(
+                {
+                  event_id: job.event_id,
+                  message_id: job.id,
+                  guest_id: job.guest_id,
+                },
+                { onConflict: "message_id,guest_id" },
+              );
+            if (recipientError)
+              throw Error("Falha ao registrar destinatário do aviso");
             const { error: aerr } = await db.from("announcements").upsert(
               {
                 event_id: job.event_id,

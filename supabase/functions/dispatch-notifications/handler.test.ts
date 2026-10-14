@@ -13,9 +13,11 @@ function fixture(
   missing = false,
   channel = "EMAIL",
   revoked = false,
+  scheduled = false,
 ) {
   const calls: { name: string; args?: Record<string, unknown> }[] = [];
   let sent = 0;
+  const payloads: Delivery[] = [];
   const job = {
     id: "job",
     attempts: 1,
@@ -25,7 +27,7 @@ function fixture(
     message_id: "11111111-1111-4111-8111-111111111111",
     channel,
     idempotency_key: "stable",
-    rule_id: null,
+    rule_id: mode === "rule" ? "rule" : null,
   };
   const db = {
     rpc: async (name: string, args?: Record<string, unknown>) => {
@@ -46,16 +48,22 @@ function fixture(
           consent_push: consent, consent_in_app: consent,
           email: "guest@example.test",
         }
+        : table === "notification_rules" ? { id: "rule", title: "Aviso", body: "Recado" }
+        : table === "guests" ? { invitation_id: "unit" }
+        : table === "message_threads" ? { id: "thread" }
         : table === "messages"
         ? (missing
           ? null
-          : { id: "11111111-1111-4111-8111-111111111111", content: "Recado" })
+          : { id: "11111111-1111-4111-8111-111111111111", content: scheduled ? "Título programado\nCorpo programado" : "Recado", ...(scheduled ? {notification_title:"Título programado"} : {}) })
         : {};
       const chain = {
         select: () => chain,
         eq: () => chain,
         update: () => chain,
-        upsert: () => chain,
+        upsert: (payload: Record<string, unknown>, options?: Record<string, unknown>) => {
+          calls.push({ name: "write:" + table, args: { payload, options } });
+          return chain;
+        },
         insert: () => chain,
         single: async () => ({ data: row, error: null }),
         maybeSingle: async () => ({ data: row, error: null }),
@@ -90,13 +98,14 @@ function fixture(
         send: async (d: Delivery) => {
           assert(d.key === "stable", "stable provider key");
           sent++;
+          payloads.push(d);
           if (mode === "failed") throw new ProviderDefinitiveError(401);
           if (mode === "uncertain") throw new ProviderUncertainError();
           return { status: "sent" as const, provider: "resend" };
         },
       },
   });
-  return { handler, calls, sent: () => sent };
+  return { handler, calls, payloads, sent: () => sent };
 }
 const request = (message: unknown = "11111111-1111-4111-8111-111111111111") =>
   new Request("https://fixture.test", {
@@ -247,3 +256,22 @@ Deno.test(
     );
   },
 );
+
+for (const channel of ["EMAIL","PUSH","WHATSAPP"]) {
+ Deno.test(`scheduled ${channel} keeps title and body without changing legacy contracts`,async()=>{
+  const f=fixture(true,"sent",true,false,false,channel,false,true);
+  await f.handler(request());
+  assert(f.sent()===1,"one provider call");
+  assert(f.payloads[0].title==="Título programado","configured notification title");
+  assert(f.payloads[0].body===(channel==="WHATSAPP"?"Título programado\nCorpo programado":"Corpo programado"),"compatible body for the channel");
+ });
+}
+
+Deno.test("relative IN_APP rules register the exact recipient idempotently", async () => {
+  const f = fixture(true, "rule", true, true, false, "IN_APP");
+  await f.handler(request());
+  const writes = f.calls.filter(c => c.name === "write:message_recipients");
+  assert(writes.length === 1, "one scoped recipient upsert");
+  assert(JSON.stringify(writes[0].args?.payload) === JSON.stringify({ event_id: event, message_id: "job", guest_id: "guest" }), "recipient bound to the job, guest and event");
+  assert((writes[0].args?.options as Record<string, unknown>)?.onConflict === "message_id,guest_id", "stable recipient conflict key");
+});

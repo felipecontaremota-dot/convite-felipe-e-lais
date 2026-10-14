@@ -49,6 +49,8 @@ export function AdminModal({
   premium = false,
   centerTitle = false,
   closing = false,
+  chat = false,
+  footer,
 }: {
   title: string;
   children: React.ReactNode;
@@ -58,6 +60,8 @@ export function AdminModal({
   premium?: boolean;
   centerTitle?: boolean;
   closing?: boolean;
+  chat?: boolean;
+  footer?: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -171,21 +175,26 @@ export function AdminModal({
     <Modal
       visible
       transparent
-      animationType="fade"
+      animationType={chat && Platform.OS === "web" ? "none" : "fade"}
       onRequestClose={() => {
         if (dismissible) onClose();
       }}
     >
       <KeyboardAvoidingView
-        enabled={premium && Platform.OS === "ios"}
-        behavior={premium && Platform.OS === "ios" ? "padding" : undefined}
+        {...(chat && Platform.OS === "web"
+          ? { dataSet: { chatViewport: "true" } }
+          : {})}
+        enabled={(premium || chat) && Platform.OS === "ios"}
+        behavior={
+          (premium || chat) && Platform.OS === "ios" ? "padding" : undefined
+        }
         style={{
           flex: 1,
           backgroundColor: theme.colors.overlay,
-          justifyContent: "center",
-          alignItems: "center",
+          justifyContent: chat ? "flex-end" : "center",
+          alignItems: chat ? "flex-end" : "center",
           padding: width < 600 ? 10 : 24,
-          ...(premium
+          ...(premium || chat
             ? {
                 paddingTop: Math.max(insets.top, width < 600 ? 10 : 24),
                 paddingBottom: Math.max(insets.bottom, width < 600 ? 10 : 24),
@@ -211,6 +220,7 @@ export function AdminModal({
             ? {
                 dataSet: {
                   adminModal: "true",
+                  chatDialog: chat ? (closing ? "closing" : "open") : undefined,
                   premiumModal: premium
                     ? closing
                       ? "closing"
@@ -238,13 +248,18 @@ export function AdminModal({
               : undefined,
             {
               width: "100%",
-              maxWidth: 760,
+              maxWidth: chat ? 420 : 760,
               maxHeight: "94%",
               padding: width < 600 ? 16 : 24,
             },
           ]}
         >
-          <View style={styles.row}>
+          <View
+            style={[
+              styles.row,
+              chat && { minHeight: 44, alignItems: "center" },
+            ]}
+          >
             <Text
               accessibilityRole="header"
               style={[
@@ -296,6 +311,21 @@ export function AdminModal({
           >
             {children}
           </ScrollView>
+          {footer ? (
+            <View
+              style={{
+                flexShrink: 1,
+                maxHeight: "60%",
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.line,
+                paddingTop: 10,
+              }}
+            >
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {footer}
+              </ScrollView>
+            </View>
+          ) : null}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -307,18 +337,23 @@ export function ConfirmModal({
   onCancel,
   confirmLabel = "Excluir",
   destructive = true,
+  title = "Confirmação",
+  premium = false,
 }: {
   text: string;
   onConfirm: () => Promise<unknown>;
   onCancel: () => void;
   confirmLabel?: string;
   destructive?: boolean;
+  title?: string;
+  premium?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
     <AdminModal
-      title="Confirmação"
+      title={title}
+      premium={premium}
       onClose={onCancel}
       dismissible={!busy}
       closeOnOutside={false}

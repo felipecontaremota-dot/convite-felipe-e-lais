@@ -13,6 +13,7 @@ import {
 import { useApp } from "../../lib/AppProvider";
 import type { Rule } from "../../types/domain";
 import { notificationTime } from "../notifications/domain";
+import { ScheduledNotifications } from "./ScheduledNotifications";
 import { ChannelChoices } from "./ChannelChoices";
 function RuleEditor({ rule: r }: { rule: Rule }) {
   const app = useApp(),
@@ -69,6 +70,8 @@ export function RulesScreen() {
   const app = useApp();
   return (
     <Screen section="admin" title="Lembretes do nosso dia">
+      <ScheduledNotifications />
+      <Text style={styles.heading}>Lembretes relativos ao casamento</Text>
       {app.data?.rules.map((r) => (
         <RuleEditor key={r.id} rule={r} />
       ))}

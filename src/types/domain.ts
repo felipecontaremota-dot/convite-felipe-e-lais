@@ -77,7 +77,15 @@ export interface Gift {
   reservation_enabled: boolean;
   version: number;
 }
+export type MessageAudience =
+  "GENERAL" | "FAMILY" | "INDIVIDUAL" | "PRIVATE" | "LEGACY";
 export interface Message {
+  notification_title?: string | null;
+  thread_id?: string;
+  audience?: MessageAudience;
+  viewer_read_at?: string | null;
+  legacy_admin_read_at?: string | null;
+  deleted_at?: string | null;
   id: string;
   event_id: string;
   invitation_id: string | null;
@@ -92,6 +100,7 @@ export interface Message {
   read_at: string | null;
 }
 export interface Announcement {
+  message_id?: string | null;
   id: string;
   event_id: string;
   title: string;
@@ -130,7 +139,24 @@ export interface Checkin {
   created_at: string;
   local?: boolean;
 }
+export interface NotificationSchedule {
+  id: string;
+  event_id: string;
+  title: string;
+  body: string;
+  scheduled_at: string;
+  audience: "GENERAL" | "FAMILY" | "INDIVIDUAL";
+  invitation_id: string | null;
+  recipient_guest_ids: string[];
+  channels: Channel[];
+  active: boolean;
+  status: "scheduled" | "dispatched" | "cancelled";
+  version: number;
+  created_at: string;
+}
 export interface DeliveryJob {
+  message_id?: string | null;
+  delivery_started_at?: string | null;
   id: string;
   channel: Channel;
   status: string;
@@ -146,6 +172,8 @@ export interface SheetJob {
   version: number;
 }
 export interface Snapshot {
+  capabilities?: { messaging_v2?: boolean; notification_schedules?: boolean };
+  notification_schedules?: NotificationSchedule[];
   current_invitation_id?: string | null;
   role: Role | null;
   event: WeddingEvent;
@@ -184,6 +212,8 @@ export type MutationType =
   | "CHECKIN_CREATE"
   | "MESSAGE_SEND"
   | "MESSAGE_SEND_TO_GUESTS"
+  | "MESSAGE_REPLY"
+  | "MESSAGE_READ"
   | "GIFT_SELECT"
   | "PUSH_REGISTER";
 export interface OfflineMutation {

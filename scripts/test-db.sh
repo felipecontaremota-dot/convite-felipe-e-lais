@@ -17,7 +17,7 @@ else
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
 for source in tests/db-bootstrap.sql $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' ! -name '20261013230000_production_consolidation.sql' | sort) supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql tests/profile-consent.sql tests/password-entry.sql tests/password-allocation.sql; do
- if [[ "$source" == supabase/migrations/20261013204105_name_pin_access.sql ]]; then continue; fi
+ if [[ "$source" == supabase/migrations/20261013204105_name_pin_access.sql || "$source" == *messaging_conversations.sql ]]; then continue; fi
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
   run_sql < tests/access-upgrade-prepare.sql
  fi
@@ -104,3 +104,9 @@ bash scripts/test-profile-db.sh
 
 # Independent 009 install/upgrade and real concurrent transactions.
 bash scripts/test-password-db.sh
+
+# Messaging extension is tested after historical contracts, never against production.
+run_sql < tests/messaging-upgrade-prepare.sql
+run_sql < supabase/migrations/20261014171048_messaging_conversations.sql
+run_sql < tests/messaging-upgrade-verify.sql
+run_sql < tests/messaging-conversations.sql

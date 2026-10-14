@@ -743,3 +743,62 @@ test("already deployed legacy Function and snapshot keep individual links workin
     page.getByText("Bem-vindos, Família Teste", { exact: true }),
   ).toBeVisible();
 });
+
+test("legacy backend blocks new messaging dependencies and normal sending hides only its transient queue notice", async ({
+  page,
+}) => {
+  await backend(page);
+  await login(page);
+  await page.getByRole("link", { name: "Notificações", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Nova notificação", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(/Novos agendamentos estarão disponíveis/),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Mensagens", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Excluir mensagem", exact: true }),
+  ).toHaveCount(0);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let requested = false;
+  await page.route(
+    "http://127.0.0.1:54321/rest/v1/rpc/app_mutate",
+    async (route) => {
+      requested = true;
+      await gate;
+      await route.fulfill({
+        status: 200,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ok: true,
+          id: "dddddddd-0000-4000-8000-000000000001",
+        }),
+      });
+    },
+  );
+  await page
+    .getByLabel("Mensagem dos noivos", { exact: true })
+    .fill("Normal message pipeline");
+  await page
+    .getByRole("button", { name: "Enviar recado", exact: true })
+    .click();
+  await expect.poll(() => requested).toBe(true);
+  await expect(
+    page.getByRole("button", { name: "Enviando…", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText(/alteração aguardando sincronização/),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Sincronizar agora", exact: true }),
+  ).toHaveCount(0);
+  release();
+  await expect(
+    page.getByRole("button", { name: "Enviar recado", exact: true }),
+  ).toBeVisible();
+});

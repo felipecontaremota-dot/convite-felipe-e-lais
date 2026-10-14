@@ -19,6 +19,8 @@ import { theme } from "../theme/tokens";
 import { useApp } from "../lib/AppProvider";
 import { canAccess } from "../utils/security";
 import { Confirmation } from "./adminUi";
+import { UnreadBadge } from "./UnreadBadge";
+import { unreadMessages } from "../features/messages/conversations";
 import { mutationAction } from "../storage/syncLabels";
 import { friendlyError } from "../lib/errors";
 export const styles = StyleSheet.create({
@@ -324,7 +326,13 @@ export function Screen({
   const focused = useIsFocused();
   const feedback = useFeedback();
   const [discardFailed, setDiscardFailed] = useState<string | null>(null);
-  const failed = app.pending.find((p) => p.lastError);
+  const visiblePending = app.pending.filter(
+    (p) =>
+      !app.online ||
+      !app.transientMutations.includes(p.mutationId) ||
+      !!p.lastError,
+  );
+  const failed = visiblePending.find((p) => p.lastError);
   const [discard, setDiscard] = useState(false);
   const guard = section && !canAccess(app.data?.role || null, section);
   const render = (slots: ProposalSlots) => (
@@ -371,6 +379,13 @@ export function Screen({
                 ? { dataSet: { themeNav: "true" } }
                 : {})}
               accessibilityRole="link"
+              accessibilityLabel={
+                section === "admin" &&
+                path === "/gestao-mensagens" &&
+                unreadMessages(app.data) > 0
+                  ? `Mensagens, ${unreadMessages(app.data)} não lidas.`
+                  : undefined
+              }
               accessibilityState={{ selected: pathname === path }}
               aria-current={pathname === path ? "page" : undefined}
               onPress={() => router.push(path as never)}
@@ -385,6 +400,9 @@ export function Screen({
               >
                 {label}
               </Text>
+              {section === "admin" && path === "/gestao-mensagens" ? (
+                <UnreadBadge count={unreadMessages(app.data)} />
+              ) : null}
             </Pressable>
           ))}
           {section === "guest" ? (
@@ -401,11 +419,11 @@ export function Screen({
           Sem conexão · exibindo os últimos dados salvos neste dispositivo.
         </Text>
       ) : null}
-      {app.pending.length ? (
+      {visiblePending.length ? (
         <Card>
           <Text style={styles.text}>
-            {app.pending.length}{" "}
-            {app.pending.length === 1
+            {visiblePending.length}{" "}
+            {visiblePending.length === 1
               ? "alteração aguardando sincronização"
               : "alterações aguardando sincronização"}
           </Text>
@@ -471,7 +489,7 @@ export function Screen({
       {feedback.node}
       {section && !guard ? (
         <>
-          {app.pending.length ? (
+          {visiblePending.length ? (
             <Toggle
               label="Descartar alterações locais não sincronizadas ao sair"
               value={discard}

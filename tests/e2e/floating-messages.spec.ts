@@ -38,7 +38,13 @@ test("apresentação completa, posição fixa e persistência entre seções", a
   await expect(button).toHaveAttribute("data-phase", "done");
   await button.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/mensagens$/);
+  await expect(
+    page.getByRole("dialog", {
+      name: "Mensagens com Felipe & Laís",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page).not.toHaveURL(/\/mensagens$/);
   await page
     .getByLabel("Mensagem aos noivos", { exact: true })
     .fill("Recado pelo botão flutuante");
@@ -51,14 +57,20 @@ test("apresentação completa, posição fixa e persistência entre seções", a
 });
 
 for (const phase of ["idle", "opening", "closing"]) {
-  test(`clique durante ${phase} abre a tela original`, async ({ page }) => {
+  test(`clique durante ${phase} abre o chat sem navegar`, async ({ page }) => {
     await enter(page);
     const button = page.getByRole("button", { name: label });
     await expect(button).toHaveAttribute("data-phase", phase, {
       timeout: 14000,
     });
     await button.click();
-    await expect(page).toHaveURL(/\/mensagens$/);
+    await expect(
+      page.getByRole("dialog", {
+        name: "Mensagens com Felipe & Laís",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page).not.toHaveURL(/\/mensagens$/);
     await expect(
       page.getByLabel("Mensagem aos noivos", { exact: true }),
     ).toBeVisible();
@@ -85,16 +97,20 @@ test("mobile estreito e movimento reduzido", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(button).toHaveAttribute("data-phase", "done");
   await button.click();
-  await expect(page).toHaveURL(/\/mensagens$/);
+  await expect(
+    page.getByRole("dialog", {
+      name: "Mensagens com Felipe & Laís",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page).not.toHaveURL(/\/mensagens$/);
 });
 
 test("admin mantém menu e não recebe botão dos convidados", async ({
   page,
 }) => {
   await page.goto("/");
-  await page
-    .getByRole("button", { name: "Demo noivos", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Demo noivos", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Mensagens", exact: true }),
   ).toBeVisible();

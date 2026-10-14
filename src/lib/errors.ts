@@ -29,6 +29,18 @@ export class SyncError extends AppError {
   }
 }
 export function administrativeError(message: string): string | null {
+  if (message.includes("notification scheduling not enabled"))
+    return "O agendamento ainda não foi ativado para este evento.";
+  if (message.includes("content too long"))
+    return "Reduza o texto para o limite seguro do canal selecionado.";
+  if (message.includes("legacy announcement needs association"))
+    return "Este recado histórico possui um destaque sem vínculo inequívoco. A exclusão foi bloqueada para preservar outras mensagens.";
+  if (message.includes("schedule immutable"))
+    return "Esta notificação já foi processada ou cancelada e não pode ser editada.";
+  if (message.includes("delivery already admitted"))
+    return "O envio já foi iniciado. Não é possível cancelar uma entrega em andamento.";
+  if (message.includes("invalid future date"))
+    return "Escolha uma data e um horário futuros.";
   if (message === "invitation password conflict")
     return "Esta senha já está em uso neste evento. Escolha outra senha.";
   if (message === "initial invitation password allocation exhausted")

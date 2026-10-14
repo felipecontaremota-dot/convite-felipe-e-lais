@@ -33,6 +33,7 @@ interface ContextValue {
   refresh: () => Promise<unknown>;
   online: boolean;
   pending: OfflineMutation[];
+  transientMutations: string[];
   scope: string;
   isDemo: boolean;
   demoLogin: (role: Role) => Promise<void>;
@@ -70,6 +71,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       scope: string;
       data: Snapshot | null;
     } | null>(null);
+  const [transientMutations, setTransientMutations] = useState<string[]>([]);
   const entryBusy = useRef(false);
   const entryEpoch = useRef(0);
   const entryTarget = useRef<string | null>(null);
@@ -182,6 +184,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const result = (await api.mutate(item)) as { id?: string };
         if (
           item.type === "MESSAGE_SEND_TO_GUESTS" ||
+          item.type === "MESSAGE_REPLY" ||
           (item.type === "MESSAGE_SEND" && Array.isArray(item.payload.channels))
         ) {
           const summary = await dispatchCommittedMessage(
@@ -208,10 +211,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [sync]);
   useEffect(() => {
     const interval = setInterval(() => {
-      if (online && (user || demoRole)) void sync().catch(() => undefined);
+      if (
+        online &&
+        (user || demoRole) &&
+        (Platform.OS !== "web" || document.visibilityState === "visible")
+      )
+        void sync().catch(() => undefined);
     }, 30000);
     return () => clearInterval(interval);
   }, [online, user, demoRole, sync]);
+  useEffect(() => {
+    let last = 0;
+    const refresh = () => {
+      if (Date.now() - last < 2000 || !online) return;
+      last = Date.now();
+      void sync().catch(() => undefined);
+    };
+    if (Platform.OS === "web") {
+      const visible = () => {
+        if (document.visibilityState === "visible") refresh();
+      };
+      window.addEventListener("focus", refresh);
+      document.addEventListener("visibilitychange", visible);
+      return () => {
+        window.removeEventListener("focus", refresh);
+        document.removeEventListener("visibilitychange", visible);
+      };
+    }
+    const listener = AppState.addEventListener("change", (state) => {
+      if (state === "active") refresh();
+    });
+    return () => listener.remove();
+  }, [online, sync]);
   const refetch = query.refetch;
   const credentialState = JSON.stringify(
     (query.data || cached)?.credentials || [],
@@ -350,6 +381,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     scope,
     online,
     pending,
+    transientMutations,
     isDemo: !!demoRole,
     refresh: async () => (user || demoRole ? query.refetch() : null),
     sync,
@@ -453,30 +485,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         attempts: 0,
         lastError: null,
       };
-      await queue.enqueue(item);
-      setPending(await queue.list());
-      if (online) {
-        await sync();
-        const left = await queue.list();
-        if (left.some((m) => m.mutationId === item.mutationId))
-          throw new AppError(
-            "Salvo neste dispositivo. A sincronização falhou; tente novamente.",
-          );
-        if (
-          (type === "MESSAGE_SEND" || type === "MESSAGE_SEND_TO_GUESTS") &&
-          (query.data || cached)?.role === "ADMIN"
-        ) {
-          if (demoRole)
-            return "Demonstração: mensagem registrada no aplicativo. Nenhum e-mail foi enviado.";
-          const summary =
-            deliveryResults.current.get(item.mutationId) ||
-            "Mensagem registrada. O processamento está pendente.";
-          deliveryResults.current.delete(item.mutationId);
-          return summary;
+      const transient =
+        online &&
+        [
+          "MESSAGE_SEND",
+          "MESSAGE_SEND_TO_GUESTS",
+          "MESSAGE_REPLY",
+          "MESSAGE_READ",
+        ].includes(type);
+      if (transient) setTransientMutations((ids) => [...ids, item.mutationId]);
+      try {
+        await queue.enqueue(item);
+        setPending(await queue.list());
+        if (online) {
+          await sync();
+          const left = await queue.list();
+          if (left.some((m) => m.mutationId === item.mutationId))
+            throw new AppError(
+              "Salvo neste dispositivo. A sincronização falhou; tente novamente.",
+            );
+          if (
+            (type === "MESSAGE_SEND" ||
+              type === "MESSAGE_SEND_TO_GUESTS" ||
+              type === "MESSAGE_REPLY") &&
+            (query.data || cached)?.role === "ADMIN"
+          ) {
+            if (demoRole)
+              return "Demonstração: mensagem registrada no aplicativo. Nenhum e-mail foi enviado.";
+            const summary =
+              deliveryResults.current.get(item.mutationId) ||
+              "Mensagem registrada. O processamento está pendente.";
+            deliveryResults.current.delete(item.mutationId);
+            return summary;
+          }
+          return "Sincronizado com sucesso.";
         }
-        return "Sincronizado com sucesso.";
+        return "Salvo neste dispositivo. Será sincronizado quando houver conexão.";
+      } finally {
+        if (transient)
+          setTransientMutations((ids) =>
+            ids.filter((id) => id !== item.mutationId),
+          );
       }
-      return "Salvo neste dispositivo. Será sincronizado quando houver conexão.";
     },
     admin: async (action, payload) => {
       if ((query.data || cached)?.role !== "ADMIN")

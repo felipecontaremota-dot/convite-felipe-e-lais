@@ -128,6 +128,7 @@ interface DemoDatabase {
   applied: string[];
   tickets: Ticket[];
   codes: Record<string, string>;
+  reads?: Record<string, string>;
 }
 let chain: Promise<unknown> = Promise.resolve();
 async function transaction<T>(
@@ -151,6 +152,16 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
   return transaction((db) => {
     const s = JSON.parse(JSON.stringify(db.snapshot)) as Snapshot;
     s.role = role;
+    s.capabilities = { messaging_v2: true, notification_schedules: true };
+    s.messages = s.messages
+      .filter((m) => !m.deleted_at)
+      .map((m) => ({
+        ...m,
+        viewer_read_at:
+          db.reads?.[`${role === "ADMIN" ? "admin" : demoFamily}:${m.id}`] ||
+          null,
+      }));
+    if (role !== "ADMIN") s.notification_schedules = [];
     if (role === "GUEST") {
       s.invitations = s.invitations.filter((i) => i.id === demoFamily);
       s.guests = s.guests.filter((g) => g.invitation_id === demoFamily);
@@ -194,6 +205,9 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
         )
       )
         s.announcements = [];
+      s.messages.forEach((m) => {
+        delete m.recipient_guest_ids;
+      });
       s.credentials = s.credentials.filter(
         (c) => guestIds.has(c.guest_id) && !c.revoked_at,
       );
@@ -267,6 +281,48 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
         s.contacts.push({ ...data, guest_id: g.id });
         break;
       }
+      case "MESSAGE_READ": {
+        const message = s.messages.find((m) => m.id === p.id && !m.deleted_at);
+        if (
+          !message ||
+          (role === "GUEST" &&
+            ((message.invitation_id && message.invitation_id !== demoFamily) ||
+              (message.from_admin &&
+                message.recipient_guest_ids &&
+                !message.recipient_guest_ids.some((id) =>
+                  s.guests.some(
+                    (g) => g.id === id && g.invitation_id === demoFamily,
+                  ),
+                ))))
+        )
+          throw Error("unauthorized");
+        db.reads ??= {};
+        db.reads[`${role === "ADMIN" ? "admin" : demoFamily}:${message.id}`] =
+          stamp();
+        break;
+      }
+      case "MESSAGE_REPLY": {
+        if (role !== "ADMIN") throw Error("unauthorized");
+        const anchor = s.messages.find(
+          (m) => m.id === p.message_id && !m.from_admin && !m.deleted_at,
+        );
+        if (!anchor?.invitation_id) throw Error("invalid conversation");
+        s.messages.push({
+          id: id(),
+          event_id: event,
+          invitation_id: anchor.invitation_id,
+          recipient_guest_id: anchor.sender_guest_id,
+          sender_guest_id: null,
+          sender_user_id: "demo",
+          from_admin: true,
+          content: String(p.content),
+          channels: ["IN_APP"],
+          audience: "PRIVATE",
+          created_at: stamp(),
+          read_at: null,
+        });
+        break;
+      }
       case "MESSAGE_SEND_TO_GUESTS":
       case "MESSAGE_SEND": {
         if (
@@ -337,6 +393,13 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             role === "ADMIN"
               ? (p.channels as Snapshot["messages"][number]["channels"])
               : ["IN_APP"],
+          audience:
+            role === "GUEST"
+              ? "PRIVATE"
+              : p.create_announcement
+                ? "GENERAL"
+                : (p.audience as import("../types/domain").MessageAudience) ||
+                  "LEGACY",
           created_at: stamp(),
           read_at: null,
         });
@@ -346,6 +409,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
           ])
             s.notification_jobs.push({
               id: id(),
+              message_id: s.messages[s.messages.length - 1]!.id,
               channel,
               status: channel === "IN_APP" ? "sent" : "skipped",
               attempts: 1,
@@ -367,6 +431,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             id: id(),
             event_id: event,
             title: "Mensagem dos noivos",
+            message_id: s.messages[s.messages.length - 1]!.id,
             content: String(p.content),
 
             created_at: stamp(),
@@ -438,7 +503,9 @@ export async function demoTicket(
         (c) => c.guest_id === guestId && !c.revoked_at,
       )
     )
-      throw Error("Convite existente; emissão explícita de novo convite necessária");
+      throw Error(
+        "Convite existente; emissão explícita de novo convite necessária",
+      );
     db.snapshot.credentials.forEach((c) => {
       if (c.guest_id === guestId) c.revoked_at = stamp();
     });
@@ -710,10 +777,58 @@ export async function demoAdmin(
         s.checkins = s.checkins.filter((c) => c.id !== entity);
         break;
       case "MESSAGE_READ":
-        s.messages.forEach((m) => {
-          if (m.id === entity) m.read_at = stamp();
-        });
+        db.reads ??= {};
+        db.reads[`admin:${entity}`] = stamp();
         break;
+      case "MESSAGE_DELETE": {
+        const message = s.messages.find((m) => m.id === entity && m.from_admin);
+        if (!message) throw Error("invalid message");
+        message.deleted_at = stamp();
+        s.announcements = s.announcements.filter(
+          (a) => a.message_id !== message.id,
+        );
+        s.notification_jobs
+          .filter((j) => j.message_id === entity && j.status !== "sent")
+          .forEach((j) => {
+            j.status = "skipped";
+            j.last_error = "Mensagem excluída";
+          });
+        break;
+      }
+      case "NOTIFICATION_SAVE": {
+        s.notification_schedules ??= [];
+        const old = s.notification_schedules.find((n) => n.id === entity);
+        if (old && (old.status !== "scheduled" || old.version !== version))
+          throw Error("Dados alterados. Atualize.");
+        if (new Date(String(p.scheduled_at)).getTime() <= Date.now())
+          throw Error("Data deve ser futura.");
+        const schedule = {
+          ...p,
+          id: entity,
+          event_id: event,
+          status: "scheduled",
+          version: old ? old.version + 1 : 1,
+          created_at: old?.created_at || stamp(),
+        } as unknown as import("../types/domain").NotificationSchedule;
+        s.notification_schedules = s.notification_schedules.filter(
+          (n) => n.id !== entity,
+        );
+        s.notification_schedules.push(schedule);
+        break;
+      }
+      case "NOTIFICATION_CANCEL": {
+        const schedule = s.notification_schedules?.find((n) => n.id === entity);
+        if (
+          !schedule ||
+          schedule.status !== "scheduled" ||
+          schedule.version !== version
+        )
+          throw Error("Dados alterados. Atualize.");
+        schedule.status = "cancelled";
+        schedule.active = false;
+        schedule.version++;
+        break;
+      }
       default:
         throw Error("Operação desconhecida");
     }

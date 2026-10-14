@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { router, usePathname } from "expo-router";
+import { usePathname } from "expo-router";
 import { useApp } from "../lib/AppProvider";
+import { ChatWindow } from "../features/messages/ChatWindow";
+import { GuestMessages } from "../features/messages/GuestMessages";
+import { unreadMessages } from "../features/messages/conversations";
 import { theme } from "../theme/tokens";
 
 const visitKey = "wedding:messages-presentation:v1";
@@ -22,6 +25,9 @@ export function FloatingMessages() {
   const pathname = usePathname();
   const eligible = app.data?.role === "GUEST" && guestPaths.has(pathname);
   const [phase, setPhase] = useState("idle");
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState("private");
+  const unread = unreadMessages(app.data);
   useEffect(() => {
     if (!eligible) return;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -112,8 +118,13 @@ export function FloatingMessages() {
         type="button"
         className="wedding-messages"
         data-phase={phase}
-        aria-label="Deixe uma mensagem para o casal"
-        onClick={() => router.push("/mensagens")}
+        aria-label={`Deixe uma mensagem para o casal${unread ? `, ${unread} mensagens não lidas.` : ""}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => {
+          setTab("private");
+          setOpen(true);
+        }}
       >
         <span aria-hidden="true" className="wedding-messages-shimmer" />
         <span aria-hidden="true" className="wedding-messages-label">
@@ -133,6 +144,42 @@ export function FloatingMessages() {
           <path d="M12 15.5 8.7 12.4a2.2 2.2 0 0 1 3.3-2.9 2.2 2.2 0 0 1 3.3 2.9Z" />
         </svg>
       </button>
+      {unread > 0 ? (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            zIndex: 21,
+            right: "calc(16px + env(safe-area-inset-right,0px))",
+            bottom: "calc(70px + env(safe-area-inset-bottom,0px))",
+            borderRadius: 999,
+            minWidth: 20,
+            height: 20,
+            padding: "0 3px",
+            boxSizing: "border-box",
+            boxShadow: `0 1px 4px ${theme.colors.shadow}26`,
+            transition: "background-color 180ms ease",
+            fontSize: 11,
+            lineHeight: "20px",
+            textAlign: "center",
+            fontWeight: 700,
+            color: theme.colors.card,
+            background: theme.colors.error,
+            pointerEvents: "none",
+          }}
+        >
+          {unread > 99 ? "99+" : unread}
+        </span>
+      ) : null}
+      {open ? (
+        <ChatWindow
+          title="Mensagens com Felipe & Laís"
+          onClose={() => setOpen(false)}
+          footer={<GuestMessages footerOnly tab={tab} onTabChange={setTab} />}
+        >
+          <GuestMessages hideComposer tab={tab} onTabChange={setTab} />
+        </ChatWindow>
+      ) : null}
     </>
   );
 }
