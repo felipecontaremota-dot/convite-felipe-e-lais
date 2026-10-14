@@ -38,3 +38,19 @@ describe("semantic palette accessibility", () => {
     expect(contrast(colors.focus, colors.paper)).toBeGreaterThanOrEqual(3);
   });
 });
+
+it("video glass controls keep AA contrast even over white footage without blur", () => {
+  const alpha = 217 / 255;
+  const glass =
+    "#" +
+    colors.ink
+      .slice(1)
+      .match(/../g)!
+      .map((v) =>
+        Math.round(parseInt(v, 16) * alpha + 255 * (1 - alpha))
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("");
+  expect(contrast(colors.card, glass)).toBeGreaterThanOrEqual(4.5);
+});

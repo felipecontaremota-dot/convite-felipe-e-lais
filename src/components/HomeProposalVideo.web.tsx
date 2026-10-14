@@ -211,15 +211,35 @@ export function HomeProposalVideo({
       .proposal-clip { min-height: 0; overflow: hidden; border-radius: 18px; }
       .proposal-stage { position: relative; aspect-ratio: 16 / 9; background: ${theme.colors.ink}; }
       .proposal-stage video { display: block; width: 100%; height: 100%; aspect-ratio: 16 / 9; object-fit: contain; }
-      .proposal-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex; justify-content: space-between; gap: 8px; }
-      .proposal-controls button { min-height: 44px; padding: 8px 12px; border: 1px solid ${theme.colors.line};
-        border-radius: 10px; background: ${theme.colors.ink}D9; color: ${theme.colors.paper}; font: inherit; font-size: 13px; cursor: pointer; }
+      .proposal-controls { position: absolute; right: max(10px, env(safe-area-inset-right, 0px));
+        bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: max(10px, env(safe-area-inset-left, 0px));
+        display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+      .proposal-controls button { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        min-height: 44px; box-sizing: border-box; padding: 8px 14px; border: 1px solid ${theme.colors.card}26;
+        border-radius: 999px; background: ${theme.colors.ink}D9; color: ${theme.colors.card};
+        box-shadow: 0 4px 12px ${theme.colors.shadow}26, inset 0 1px 0 ${theme.colors.card}0D;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: ${theme.typography.caption}px; font-weight: 600; line-height: 1.2; cursor: pointer;
+        -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+        transition: background-color 200ms ease, transform 200ms ease, box-shadow 200ms ease; }
+      .proposal-controls .proposal-close { width: 44px; height: 44px; flex: 0 0 44px; padding: 0; }
+      .proposal-controls svg { flex-shrink: 0; pointer-events: none; }
+      @media (hover: hover) {
+        .proposal-controls button:hover { background: color-mix(in srgb, ${theme.colors.ink}D9 82%, ${theme.colors.primary}D9 18%);
+          transform: translateY(-1px); box-shadow: 0 5px 14px ${theme.colors.shadow}33, inset 0 1px 0 ${theme.colors.card}0D; }
+        .proposal-controls .proposal-close:hover { transform: scale(1.03); }
+      }
+      .proposal-controls button:active, .proposal-controls .proposal-close:active { transform: scale(.97); }
+      .proposal-controls button:focus-visible { outline: 2px solid ${theme.colors.card}; outline-offset: 2px;
+        box-shadow: 0 0 0 5px ${theme.colors.ink}E6; }
       .proposal-replay { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
         width: 44px; height: 44px; padding: 0; margin: -10px 0 -10px 6px; border: 0;
         border-radius: 10px; background: transparent; color: ${theme.colors.secondary}; cursor: pointer; }
       .proposal-replay:hover { background: ${theme.colors.wash}; }
-      .proposal-replay:focus-visible, .proposal-controls button:focus-visible { outline: 3px solid ${theme.colors.secondary}; outline-offset: 2px; }
-      @media (prefers-reduced-motion: reduce) { .proposal-space, .proposal-space[data-origin="header"] .proposal-stage { transition: none; } }
+      .proposal-replay:focus-visible { outline: 3px solid ${theme.colors.secondary}; outline-offset: 2px; }
+      @media (prefers-reduced-motion: reduce) { .proposal-space, .proposal-space[data-origin="header"] .proposal-stage { transition: none; }
+        .proposal-controls button { transition: none; }
+        .proposal-controls button:hover, .proposal-controls .proposal-close:hover, .proposal-controls button:active, .proposal-controls .proposal-close:active { transform: none; } }
     `}</style>
       <div
         className="proposal-space"
@@ -268,10 +288,49 @@ export function HomeProposalVideo({
                   setMuted(video.muted);
                 }}
               >
-                {muted ? "Ativar som" : "Silenciar"}
+                <svg
+                  aria-hidden="true"
+                  focusable="false"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M11 5 6 9H3v6h3l5 4Z" />
+                  {muted ? (
+                    <path d="m16 9 5 6m0-6-5 6" />
+                  ) : (
+                    <>
+                      <path d="M15 8a6 6 0 0 1 0 8" />
+                      <path d="M18 5a10 10 0 0 1 0 14" />
+                    </>
+                  )}
+                </svg>
+                <span>{muted ? "Ativar som" : "Silenciar"}</span>
               </button>
-              <button type="button" aria-label="Fechar vídeo" onClick={close}>
-                Fechar vídeo
+              <button
+                type="button"
+                className="proposal-close"
+                aria-label="Fechar vídeo"
+                onClick={close}
+              >
+                <svg
+                  aria-hidden="true"
+                  focusable="false"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                >
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
               </button>
             </div>
           </div>
