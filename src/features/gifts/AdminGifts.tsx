@@ -1,3 +1,4 @@
+import { ActionFeedbackButton } from "../../components/ActionFeedbackButton";
 import { theme } from "../../theme/tokens";
 import { useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
@@ -154,15 +155,18 @@ function ListCard({
           </Text>
         )}
         <View style={{ minWidth: 44, flexShrink: 0 }}>
-          <IconButton
+          <ActionFeedbackButton
+            onStart={feedback.clear}
             icon="copy"
             label={`Copiar link de ${list.title}`}
-            onPress={() =>
-              feedback.run(async () => {
-                if (!list.external_url)
-                  throw new AppError("Link indisponível.");
-                await copyText(list.external_url);
-                return "Link copiado";
+            action={async () => {
+              if (!list.external_url) throw new AppError("Link indisponível.");
+              await copyText(list.external_url);
+              return { message: "Link copiado", confirmed: true };
+            }}
+            onError={(error) =>
+              void feedback.run(async () => {
+                throw error;
               })
             }
           />

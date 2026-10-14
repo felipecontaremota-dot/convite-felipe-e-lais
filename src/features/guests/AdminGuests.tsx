@@ -1,3 +1,7 @@
+import { ActionFeedbackButton } from "../../components/ActionFeedbackButton";
+import { rsvpTone } from "../../theme/feedback";
+import { invitationActionOutcome } from "./invitationActionOutcome";
+import { AppError } from "../../lib/errors";
 import { theme } from "../../theme/tokens";
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
@@ -30,6 +34,7 @@ import { useApp } from "../../lib/AppProvider";
 import {
   lastInvitationDelivery,
   retainedInvitationRequest,
+  type InvitationSendResult,
 } from "./invitationDelivery";
 import type { Guest } from "../../types/domain";
 import * as Crypto from "expo-crypto";
@@ -239,7 +244,10 @@ export function GuestsScreen() {
     }
     setPendingKeys([...requests.current.keys()]);
   }, [app.data]);
-  const deliver = async (guest?: string) => {
+  const deliver = async (
+    guest?: string,
+    onResult?: (result: InvitationSendResult) => void,
+  ) => {
     const key = guest || "bulk";
     if (!requests.current.has(key)) {
       if (guest && requests.current.has("bulk"))
@@ -259,6 +267,7 @@ export function GuestsScreen() {
     } finally {
       setPendingKeys([...requests.current.keys()]);
     }
+    onResult?.(result);
     return result.message;
   };
   const activePeople = (app.data?.guests || []).filter((g) =>
@@ -615,7 +624,24 @@ export function GuestsScreen() {
           status =
             data?.rsvps.find((r) => r.guest_id === g.id)?.status || "PENDING";
         return (
-          <View key={g.id} style={[styles.card, { padding: 14, gap: 8 }]}>
+          <View
+            key={g.id}
+            {...(Platform.OS === "web"
+              ? {
+                  dataSet: {
+                    guestRow: g.id,
+                    selected: String(selected.includes(g.id)),
+                  },
+                }
+              : {})}
+            style={[
+              styles.card,
+              { padding: 14, gap: 8 },
+              selected.includes(g.id) && {
+                backgroundColor: `${theme.colors.wash}99`,
+              },
+            ]}
+          >
             <View style={styles.row}>
               {desktop || selected.length ? (
                 <SelectionCheckbox
@@ -646,8 +672,8 @@ export function GuestsScreen() {
               {unit && (unit.kind || "FAMILY") === "FAMILY" ? (
                 <Tag>{unit.name}</Tag>
               ) : null}
-              <Tag>{RSVP_LABELS[status]}</Tag>
-              {g.is_child ? <Tag>Criança</Tag> : null}
+              <Tag tone={rsvpTone(status)}>{RSVP_LABELS[status]}</Tag>
+              {g.is_child ? <Tag tone="child">Criança</Tag> : null}
               {g.admin_notes?.trim() ? (
                 <Text
                   accessibilityLabel="Possui observação administrativa"
@@ -668,30 +694,51 @@ export function GuestsScreen() {
                   !
                 </Text>
               ) : null}
-              <IconButton
+              <ActionFeedbackButton
+                onStart={feedback.clear}
                 icon="copy"
                 label={`Copiar link do convite de ${g.name}`}
-                onPress={() =>
-                  feedback.run(async () => {
-                    if (unit)
-                      await copyText(await resolveAccessLink(unit, app.scope));
-                    return "Link copiado.";
+                action={async () => {
+                  if (!unit) throw new AppError("Link indisponível.");
+                  await copyText(await resolveAccessLink(unit, app.scope));
+                  return { message: "Link copiado", confirmed: true };
+                }}
+                onError={(error) =>
+                  void feedback.run(async () => {
+                    throw error;
                   })
                 }
               />
-              <IconButton
+              <ActionFeedbackButton
+                onStart={feedback.clear}
                 icon="send"
                 label={`Enviar convite para ${g.name}`}
-                onPress={() =>
-                  feedback.run(async () => {
-                    if (
-                      !requests.current.has(g.id) &&
-                      !data?.contacts
-                        .find((c) => c.guest_id === g.id)
-                        ?.email.trim()
-                    )
-                      return "Este convidado não possui e-mail cadastrado.";
-                    return deliver(g.id);
+                action={async () => {
+                  if (
+                    !requests.current.has(g.id) &&
+                    !data?.contacts
+                      .find((c) => c.guest_id === g.id)
+                      ?.email.trim()
+                  )
+                    throw new AppError(
+                      "Este convidado não possui e-mail cadastrado.",
+                    );
+                  const response: { value?: InvitationSendResult } = {};
+                  const message = await deliver(g.id, (result) => {
+                    response.value = result;
+                  });
+                  return response.value
+                    ? invitationActionOutcome(response.value)
+                    : {
+                        message: "Envio não iniciado",
+                        confirmed: false,
+                        detail: message,
+                      };
+                }}
+                onNotice={(message) => void feedback.run(async () => message)}
+                onError={(error) =>
+                  void feedback.run(async () => {
+                    throw error;
                   })
                 }
               />

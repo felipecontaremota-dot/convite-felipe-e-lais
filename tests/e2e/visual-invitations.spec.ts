@@ -111,7 +111,7 @@ for (const width of [390, 1280]) {
       .getByRole("button", { name: "Copiar endereço", exact: true })
       .click();
     await expect(
-      page.getByText("Endereço copiado.", { exact: true }),
+      page.getByText("Endereço copiado", { exact: true }),
     ).toBeVisible();
     expect(
       await page.evaluate(

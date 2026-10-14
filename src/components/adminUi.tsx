@@ -1,3 +1,4 @@
+import { feedbackColors, type FeedbackTone } from "../theme/feedback";
 import { theme } from "../theme/tokens";
 import React, { useState } from "react";
 import {
@@ -182,13 +183,23 @@ export function Select({
   );
 }
 export { ConfirmModal as Confirmation } from "./AdminModal";
-export function Tag({ children }: { children: React.ReactNode }) {
+export function Tag({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: FeedbackTone;
+}) {
+  const colors = feedbackColors[tone];
   return (
     <Text
       style={[
         styles.small,
         {
-          backgroundColor: theme.colors.wash,
+          backgroundColor: colors.background,
+          color: colors.text,
+          borderColor: colors.border,
+          borderWidth: 1,
           borderRadius: 6,
           paddingHorizontal: 8,
           paddingVertical: 3,

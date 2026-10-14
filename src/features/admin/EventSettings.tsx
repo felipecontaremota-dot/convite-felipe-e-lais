@@ -1,5 +1,5 @@
+import { useFxToast } from "../../components/FxToastProvider";
 import { useState } from "react";
-import { Text } from "react-native";
 import { Button, Empty, Field, Screen, useFeedback } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { AdminModal } from "../../components/AdminModal";
@@ -53,6 +53,7 @@ function EventSettingsForm({
             setExpectedVersion(expectedVersion + 1);
             onSaved();
             onClose();
+            return "";
           })
         }
       />
@@ -64,18 +65,27 @@ function EventSettingsForm({
 export function EventSettings() {
   const app = useApp();
   const [editing, setEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const toast = useFxToast();
+  const canEdit = app.data?.role === "ADMIN";
   return (
-    <Screen section="admin" title="Local da celebração">
+    <Screen section="admin" title="Local">
       {app.data ? (
         <>
-          <LocationCard event={app.data.event} />
-          {saved ? <Text role="status">Alteração salva.</Text> : null}
-          <Button title="Editar local" onPress={() => setEditing(true)} />
-          {editing ? (
+          {canEdit ? (
+            <Button
+              secondary
+              title="Editar local"
+              onPress={() => setEditing(true)}
+            />
+          ) : null}
+          <LocationCard
+            event={app.data.event}
+            onCopied={() => toast.notify("Endereço copiado")}
+          />
+          {editing && canEdit ? (
             <EventSettingsForm
               onClose={() => setEditing(false)}
-              onSaved={() => setSaved(true)}
+              onSaved={() => toast.notify("Local salvo")}
             />
           ) : null}
         </>

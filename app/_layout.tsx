@@ -1,3 +1,4 @@
+import { FxToastProvider } from "../src/components/FxToastProvider";
 import { InstallProvider } from "../src/features/install/InstallProvider";
 import { ThemeStyles } from "../src/components/ThemeStyles";
 import React from "react";
@@ -13,9 +14,11 @@ export default function Layout() {
     <QueryClientProvider client={query}>
       <AppProvider>
         <InstallProvider>
-          <ThemeStyles />
-          <Stack screenOptions={{ headerShown: false }} />
-          <FloatingMessages />
+          <FxToastProvider>
+            <ThemeStyles />
+            <Stack screenOptions={{ headerShown: false }} />
+            <FloatingMessages />
+          </FxToastProvider>
         </InstallProvider>
       </AppProvider>
     </QueryClientProvider>

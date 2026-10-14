@@ -148,7 +148,7 @@ test("standalone creation, child/group, contact mask, email validation, detail a
       exact: true,
     })
     .click();
-  await expect(page.getByText("Link copiado.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Link copiado", { exact: true })).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain(`/c/${unit.sharing_code}`);
   expect(copied).not.toContain("0047");
@@ -441,9 +441,7 @@ test("location saves separate GPS URL, rejects HTTP and opens direct external de
     .getByLabel("Link de GPS", { exact: true })
     .fill("https://maps.test/evento");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(
-    page.getByText("Alteração salva.", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("Local salvo", { exact: true })).toBeVisible();
   const db = await database(page);
   expect(db.event).toMatchObject({
     venue_name: "Villarejo Eventos",

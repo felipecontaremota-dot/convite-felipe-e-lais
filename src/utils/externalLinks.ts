@@ -10,7 +10,33 @@ export async function openExternal(url: string | null) {
     if (opened) opened.opener = null;
   } else await Linking.openURL(safe);
 }
-export const copyText = (text: string) => Clipboard.setStringAsync(text);
+export async function copyText(text: string) {
+  if (Platform.OS === "web") {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.style.position = "fixed";
+    field.style.opacity = "0";
+    document.body.appendChild(field);
+    const focused = document.activeElement;
+    try {
+      field.select();
+      if (!document.execCommand("copy"))
+        throw new ValidationError("Não foi possível copiar. Tente novamente.");
+      return true;
+    } finally {
+      field.remove();
+      if (focused instanceof HTMLElement) focused.focus();
+    }
+  }
+  const copied = await Clipboard.setStringAsync(text);
+  if (copied === false)
+    throw new ValidationError("Não foi possível copiar. Tente novamente.");
+  return copied;
+}
 export async function shareText(text: string) {
   if (Platform.OS === "web") {
     if (navigator.share) {

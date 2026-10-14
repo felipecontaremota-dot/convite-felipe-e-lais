@@ -3,6 +3,11 @@ export function ThemeStyles() {
   const c = theme.colors;
   return (
     <style>{`
+    [data-guest-row] { transition: background-color 180ms ease-out; }
+    [data-guest-row][data-selected="true"], [data-guest-row]:focus-within { background-color: ${c.wash}99; }
+    @media(hover:hover) { [data-guest-row]:hover { background-color: ${c.wash}99; } }
+    [data-fx-action] { transition: background-color 220ms ease-out, border-color 220ms ease-out; }
+    @media(prefers-reduced-motion:reduce) { [data-guest-row], [data-fx-action] { transition:none; } }
     :root { color-scheme: light; background: ${c.paper}; }
     button:focus-visible, [role="button"]:focus-visible, [role="link"]:focus-visible,
     input:focus-visible, textarea:focus-visible, select:focus-visible {

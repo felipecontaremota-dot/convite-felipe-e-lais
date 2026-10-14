@@ -240,6 +240,10 @@ export function useFeedback() {
   return {
     message,
     error,
+    clear: () => {
+      setMessage("");
+      setError("");
+    },
     run: async (fn: () => Promise<unknown>) => {
       setMessage("");
       setError("");

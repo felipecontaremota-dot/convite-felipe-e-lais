@@ -387,14 +387,14 @@ test("real RPC: local edit refreshes saved card and official Maps iframe immedia
   );
   const popup = page.waitForEvent("popup");
   await page
-    .getByRole("button", { name: "Abrir localização", exact: true })
+    .getByRole("button", { name: "Abrir link de GPS", exact: true })
     .click();
   const destination = await popup;
   await expect(destination).toHaveURL("https://maps.test/local-salvo");
   await destination.close();
   await expect(
     page.getByRole("button", { name: "Abrir link de GPS", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
   expect(db.rpc(uid, "app_snapshot", { p_event: event }).event).toMatchObject({
     venue_name: "Espaço da celebração",
     address: "Rua São João, 12",
@@ -1174,4 +1174,68 @@ test("external gift lists persist, edit and delete through the real existing gif
       )
       .trim(),
   ).toBe("1");
+});
+
+test("inline email waits for provider result, blocks double send and permits retry after failure", async ({
+  page,
+}) => {
+  db.rpc(uid, "admin_action", {
+    p_event: event,
+    p_action: "GUEST_CREATE",
+    p_payload: {
+      name: "Inline email feedback",
+      email: "inline@example.test",
+    },
+  });
+  await backend(page);
+  let count = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(
+    "http://127.0.0.1:54321/functions/v1/send-invitations",
+    async (route) => {
+      count++;
+      if (count === 1) {
+        await route.fulfill({
+          status: 500,
+          json: { error: "Provider unavailable" },
+        });
+        return;
+      }
+      await gate;
+      await route.fulfill({
+        json: { pending: 0, sent: 1, skipped: 0, failed: 0, results: [] },
+      });
+    },
+  );
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  const send = page.getByRole("button", {
+    name: "Enviar convite para Inline email feedback",
+    exact: true,
+  });
+  await send.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(send).toBeEnabled();
+  await expect(send.getByText("E-mail enviado", { exact: true })).toHaveCount(
+    0,
+  );
+  await send.click();
+  await expect(send).toHaveAttribute("aria-busy", "true");
+  await expect(send).toBeDisabled();
+  await send.dispatchEvent("click");
+  await expect.poll(() => count).toBe(2);
+  await expect(send.getByText("E-mail enviado", { exact: true })).toHaveCount(
+    0,
+  );
+  release();
+  await expect(send.getByText("E-mail enviado", { exact: true })).toBeVisible();
+  expect(count).toBe(2);
+  await expect(page.locator(".fx-toast")).toHaveCount(0);
+  await expect(send).toBeEnabled();
 });
