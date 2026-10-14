@@ -31,10 +31,12 @@ function markSeen() {
 export function HomeProposalVideo({
   active,
   manual = false,
+  origin = "content",
   children,
 }: {
   active: boolean;
   manual?: boolean;
+  origin?: "content" | "header";
   children: (slots: ProposalSlots) => ReactNode;
 }) {
   const [phase, setPhase] = useState<"waiting" | "open" | "closing" | "closed">(
@@ -44,6 +46,23 @@ export function HomeProposalVideo({
   const [requested, setRequested] = useState(false);
   const player = useRef<HTMLVideoElement>(null);
   const replay = useRef<HTMLButtonElement>(null);
+  const header = useRef<HTMLButtonElement>(null);
+  const [anchor, setAnchor] = useState({ x: 0, y: 0 });
+  const recordOrigin = useCallback(() => {
+    if (origin !== "header") return;
+    const button = header.current?.getBoundingClientRect();
+    const space = player.current
+      ?.closest(".proposal-space")
+      ?.getBoundingClientRect();
+    if (button && space)
+      setAnchor({
+        x: Math.max(
+          0,
+          Math.min(space.width, button.left + button.width / 2 - space.left),
+        ),
+        y: button.top + button.height / 2 - space.top,
+      });
+  }, [origin]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const generation = useRef(0);
   const restoreFocus = useRef(false);
@@ -54,6 +73,7 @@ export function HomeProposalVideo({
   const close = useCallback(() => {
     generation.current++;
     clearTimers();
+    recordOrigin();
     player.current?.pause();
     restoreFocus.current = !!player.current?.parentElement?.contains(
       document.activeElement,
@@ -69,14 +89,15 @@ export function HomeProposalVideo({
         setRequested(false);
       }, duration),
     );
-  }, [clearTimers]);
+  }, [clearTimers, recordOrigin]);
   const open = useCallback(() => {
     clearTimers();
+    recordOrigin();
     if (!manual) markSeen(); // An attempted presentation counts even if autoplay/network fails.
     setMuted(true);
     setRequested(true);
     setPhase("open");
-  }, [clearTimers, manual]);
+  }, [clearTimers, manual, recordOrigin]);
   const invalidate = useCallback(() => {
     generation.current++;
   }, []);
@@ -103,12 +124,16 @@ export function HomeProposalVideo({
       invalidate();
       clearTimers();
       video?.pause();
+      if (origin === "header" && video) {
+        video.removeAttribute("src");
+        video.load();
+      }
     };
-  }, [active, manual, clearTimers, open, invalidate]);
+  }, [active, manual, clearTimers, open, invalidate, origin]);
   useEffect(() => {
     if (phase === "closed" && restoreFocus.current) {
       restoreFocus.current = false;
-      replay.current?.focus();
+      (origin === "header" ? header.current : replay.current)?.focus();
     }
     if (phase !== "open" || !active) return;
     const video = player.current;
@@ -124,7 +149,7 @@ export function HomeProposalVideo({
       if (generation.current === attempt) close();
     });
     return () => clearTimeout(watchdog);
-  }, [phase, active, close]);
+  }, [phase, active, close, origin]);
   const control = active ? (
     <button
       ref={replay}
@@ -153,6 +178,7 @@ export function HomeProposalVideo({
     control
   ) : active ? (
     <button
+      ref={header}
       type="button"
       className="proposal-replay"
       title="Assistir ao nosso vídeo"
@@ -178,6 +204,9 @@ export function HomeProposalVideo({
       <style>{`
       .proposal-space { display: grid; grid-template-rows: 0fr; margin-bottom: -20px;
         transition: grid-template-rows 850ms cubic-bezier(.22,.8,.2,1), margin-bottom 850ms cubic-bezier(.22,.8,.2,1); }
+      .proposal-space[data-origin="header"] .proposal-stage { transform-origin:var(--proposal-origin-x) var(--proposal-origin-y); transform:translateY(-8px) scale(.08); opacity:0;
+        transition:transform 850ms cubic-bezier(.22,.8,.2,1),opacity 850ms cubic-bezier(.22,.8,.2,1); }
+      .proposal-space[data-origin="header"][data-open="true"] .proposal-stage {transform:translateY(0) scale(1);opacity:1;}
       .proposal-space[data-open="true"] { grid-template-rows: 1fr; margin-bottom: 0; }
       .proposal-clip { min-height: 0; overflow: hidden; border-radius: 18px; }
       .proposal-stage { position: relative; aspect-ratio: 16 / 9; background: ${theme.colors.ink}; }
@@ -190,10 +219,19 @@ export function HomeProposalVideo({
         border-radius: 10px; background: transparent; color: ${theme.colors.secondary}; cursor: pointer; }
       .proposal-replay:hover { background: ${theme.colors.wash}; }
       .proposal-replay:focus-visible, .proposal-controls button:focus-visible { outline: 3px solid ${theme.colors.secondary}; outline-offset: 2px; }
-      @media (prefers-reduced-motion: reduce) { .proposal-space { transition: none; } }
+      @media (prefers-reduced-motion: reduce) { .proposal-space, .proposal-space[data-origin="header"] .proposal-stage { transition: none; } }
     `}</style>
       <div
         className="proposal-space"
+        data-origin={origin}
+        style={
+          origin === "header"
+            ? ({
+                "--proposal-origin-x": `${anchor.x}px`,
+                "--proposal-origin-y": `${anchor.y}px`,
+              } as React.CSSProperties)
+            : undefined
+        }
         data-open={phase === "open"}
         data-phase={phase}
       >

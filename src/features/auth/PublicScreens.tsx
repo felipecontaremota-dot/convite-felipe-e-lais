@@ -1,5 +1,10 @@
 import { theme } from "../../theme/tokens";
-import { router, useLocalSearchParams, usePathname } from "expo-router";
+import {
+  router,
+  useLocalSearchParams,
+  usePathname,
+  useIsFocused,
+} from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text } from "react-native";
 import {
@@ -129,6 +134,7 @@ export function PublicHome() {
 }
 export function InvitationAccess() {
   const { code } = useLocalSearchParams<{ code: string }>();
+  const focused = useIsFocused();
   const app = useApp();
   const entry = useInvitationEntry();
   const [pin, setPin] = useState(""),
@@ -160,49 +166,61 @@ export function InvitationAccess() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
   return (
-    <Screen title="Seu convite">
-      <Card>
-        <Text style={styles.heading}>
-          {family?.code === code
-            ? `Olá, ${family.name}!`
-            : "Convite preparado para você"}
-        </Text>
-        <Text style={styles.text}>
-          Este convite foi preparado especialmente para vocês.
-        </Text>
-        {error ? (
-          <Text accessibilityRole="alert" style={styles.error}>
-            {error}
-          </Text>
-        ) : null}
-        <Field
-          label="Senha de acesso"
-          value={pin}
-          onChangeText={setPin}
-          keyboardType="number-pad"
-          maxLength={4}
-          secureTextEntry
-        />
-        <Button
-          title="Abrir nosso convite"
-          disabled={entry.busy || !invitationPin.safeParse(pin).success}
-          onPress={() => entry.run(() => app.enter(code, pin))}
-        />
-        {entry.error ? (
-          <Text accessibilityRole="alert" style={styles.error}>
-            {entry.error}
-          </Text>
-        ) : null}
-        {entry.canResume ? (
-          <Button
-            secondary
-            title="Carregar convite novamente"
-            onPress={entry.resume}
-          />
-        ) : null}
-        <Button secondary title="Voltar" onPress={() => router.replace("/")} />
-      </Card>
-    </Screen>
+    <HomeProposalVideo active={focused} origin="header">
+      {({ headerAccessory, video }) => (
+        <Screen
+          title="Seu convite"
+          videoPosition="header"
+          videoSlots={{ titleAccessory: null, headerAccessory, video }}
+        >
+          <Card>
+            <Text style={styles.heading}>
+              {family?.code === code
+                ? `Olá, ${family.name}!`
+                : "Convite preparado para você"}
+            </Text>
+            <Text style={styles.text}>
+              Este convite foi preparado especialmente para vocês.
+            </Text>
+            {error ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {error}
+              </Text>
+            ) : null}
+            <Field
+              label="Senha de acesso"
+              value={pin}
+              onChangeText={setPin}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+            />
+            <Button
+              title="Abrir nosso convite"
+              disabled={entry.busy || !invitationPin.safeParse(pin).success}
+              onPress={() => entry.run(() => app.enter(code, pin))}
+            />
+            {entry.error ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {entry.error}
+              </Text>
+            ) : null}
+            {entry.canResume ? (
+              <Button
+                secondary
+                title="Carregar convite novamente"
+                onPress={entry.resume}
+              />
+            ) : null}
+            <Button
+              secondary
+              title="Voltar"
+              onPress={() => router.replace("/")}
+            />
+          </Card>
+        </Screen>
+      )}
+    </HomeProposalVideo>
   );
 }
 export function Login() {

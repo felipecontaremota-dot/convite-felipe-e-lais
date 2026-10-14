@@ -10,6 +10,7 @@ export function HomeProposalVideo({
 }: {
   active: boolean;
   manual?: boolean;
+  origin?: "content" | "header";
   children: (slots: ProposalSlots) => ReactNode;
 }) {
   return children({ titleAccessory: null, video: null });

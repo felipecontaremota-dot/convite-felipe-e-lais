@@ -304,12 +304,14 @@ export function Screen({
   title,
   titleAccessory,
   videoSlots,
+  videoPosition,
   section,
   children,
 }: {
   title: string;
   titleAccessory?: React.ReactNode;
   videoSlots?: ProposalSlots;
+  videoPosition?: "header";
   section?: "guest" | "admin" | "ceremonial";
   children: React.ReactNode;
 }) {
@@ -350,7 +352,7 @@ export function Screen({
           <Text style={styles.badge}>15 · 12 · 2026</Text>
         </View>
       </View>
-      {!videoSlots ? slots.video : null}
+      {!videoSlots || videoPosition === "header" ? slots.video : null}
       {app.isDemo ? (
         <Text style={styles.notice}>
           DEMONSTRAÇÃO LOCAL · Dados fictícios. Nenhum envio externo.
