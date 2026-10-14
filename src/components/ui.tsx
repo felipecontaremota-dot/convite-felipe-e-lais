@@ -1,3 +1,4 @@
+import { InstallAppButton } from "./InstallAppButton";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -352,6 +353,9 @@ export function Screen({
               </Text>
             </Pressable>
           ))}
+          {section === "guest" ? (
+            <InstallAppButton navStyle={styles.nav} textStyle={styles.small} />
+          ) : null}
         </View>
       ) : null}
       <Text accessibilityRole="header" style={styles.heading}>

@@ -1,3 +1,4 @@
+import { InstallProvider } from "../src/features/install/InstallProvider";
 import { ThemeStyles } from "../src/components/ThemeStyles";
 import React from "react";
 import { Stack } from "expo-router";
@@ -11,9 +12,11 @@ export default function Layout() {
   return (
     <QueryClientProvider client={query}>
       <AppProvider>
-        <ThemeStyles />
-        <Stack screenOptions={{ headerShown: false }} />
-        <FloatingMessages />
+        <InstallProvider>
+          <ThemeStyles />
+          <Stack screenOptions={{ headerShown: false }} />
+          <FloatingMessages />
+        </InstallProvider>
       </AppProvider>
     </QueryClientProvider>
   );
