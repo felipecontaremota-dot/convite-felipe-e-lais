@@ -1,5 +1,7 @@
+import { useIsFocused } from "expo-router";
+import { RsvpPresentation } from "./RsvpPresentation";
 import { CalendarAction } from "./CalendarAction";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
   Button,
@@ -20,7 +22,18 @@ import {
   responseMessages,
 } from "./presenceContent";
 
-function RsvpForm({ guest }: { guest: Guest }) {
+function RsvpForm({
+  guest,
+  blocked,
+  onStart,
+  onComplete,
+}: {
+  guest: Guest;
+  blocked: boolean;
+  onStart: () => number | null;
+  onComplete: (status: RSVP | null, epoch: number) => void;
+}) {
+  const savingLock = useRef(false);
   const app = useApp(),
     feedback = useFeedback();
   const record = app.data?.rsvps.find((r) => r.guest_id === guest.id);
@@ -35,11 +48,15 @@ function RsvpForm({ guest }: { guest: Guest }) {
       <Text style={styles.heading}>{guest.name}</Text>
       {response.answered && !editing ? (
         <>
-          <Text accessibilityLiveRegion="polite" style={styles.notice}>
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[styles.notice, { textAlign: "center" }]}
+          >
             {responseMessages[response.status]}
           </Text>
           <Button
             secondary
+            disabled={blocked || saving}
             title="Editar minha confirmação"
             onPress={() => {
               setStatus(response.status);
@@ -57,7 +74,11 @@ function RsvpForm({ guest }: { guest: Guest }) {
                 key={option.value}
                 accessibilityRole="radio"
                 accessibilityLabel={option.label}
-                accessibilityState={{ checked: status === option.value }}
+                accessibilityState={{
+                  checked: status === option.value,
+                  disabled: blocked || saving,
+                }}
+                disabled={blocked || saving}
                 aria-checked={status === option.value}
                 onPress={() => setStatus(option.value)}
                 style={[
@@ -79,18 +100,26 @@ function RsvpForm({ guest }: { guest: Guest }) {
           </View>
           <Field
             label={`Restrição alimentar de ${guest.name}`}
+            editable={!blocked && !saving}
             value={dietary}
             onChangeText={setDietary}
           />
           <Field
             label={`Observação de ${guest.name}`}
+            editable={!blocked && !saving}
             value={note}
             onChangeText={setNote}
             multiline
           />
           <Button
             title={confirmationLabels[status]}
+            disabled={blocked || saving}
             onPress={async () => {
+              if (savingLock.current) return;
+              const epoch = onStart();
+              if (epoch === null) return;
+              savingLock.current = true;
+              let confirmed: RSVP | null = null;
               setSaving(true);
               try {
                 await feedback.run(async () => {
@@ -99,10 +128,17 @@ function RsvpForm({ guest }: { guest: Guest }) {
                     ...rsvpSchema.parse({ status, dietary, note }),
                   });
                   setEditing(false);
+                  if (result === "Sincronizado com sucesso.") {
+                    if (!response.answered || response.status !== status)
+                      confirmed = status;
+                    return "";
+                  }
                   return result;
                 });
               } finally {
+                savingLock.current = false;
                 setSaving(false);
+                onComplete(confirmed, epoch);
               }
             }}
           />
@@ -114,7 +150,7 @@ function RsvpForm({ guest }: { guest: Guest }) {
       !editing &&
       !saving &&
       app.data ? (
-        <CalendarAction event={app.data.event} />
+        <CalendarAction event={app.data.event} disabled={blocked} />
       ) : null}
     </Card>
   );
@@ -122,6 +158,34 @@ function RsvpForm({ guest }: { guest: Guest }) {
 
 export function RsvpScreen() {
   const app = useApp();
+  const focused = useIsFocused();
+  const generation = useRef(0);
+  const lock = useRef(false),
+    alive = useRef(true);
+  const [blocked, setBlocked] = useState(false);
+  const [presentation, setPresentation] = useState<RSVP | null>(null);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!focused) {
+      generation.current++;
+      lock.current = false;
+      const timer = setTimeout(() => {
+        setBlocked(false);
+        setPresentation(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [focused]);
+  const done = () => {
+    lock.current = false;
+    setBlocked(false);
+    setPresentation(null);
+  };
   return (
     <Screen section="guest" title="Sua presença faz parte da nossa história">
       <Text style={styles.text}>
@@ -129,8 +193,26 @@ export function RsvpScreen() {
         dia do evento.
       </Text>
       {app.data?.guests.map((g) => (
-        <RsvpForm key={g.id} guest={g} />
+        <RsvpForm
+          key={g.id}
+          guest={g}
+          blocked={blocked}
+          onStart={() => {
+            if (lock.current || !focused) return null;
+            lock.current = true;
+            setBlocked(true);
+            return generation.current;
+          }}
+          onComplete={(status, epoch) => {
+            if (!alive.current || epoch !== generation.current) return;
+            if (status) setPresentation(status);
+            else done();
+          }}
+        />
       ))}
+      {presentation && focused ? (
+        <RsvpPresentation status={presentation} onDone={done} />
+      ) : null}
       {!app.data?.guests.length ? (
         <Empty text="Seu convite ainda não possui integrantes." />
       ) : null}

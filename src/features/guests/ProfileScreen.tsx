@@ -117,13 +117,14 @@ function ContactForm({ guest }: { guest: Guest }) {
           ? "Estado confirmado: comunicações revogadas."
           : "Estado confirmado: comunicações conforme os consentimentos autorizados."}
       </Text>
-      <Text style={styles.small}>
-        {app.pending.some(
-          (m) => m.type === "CONTACT_UPDATE" && m.payload.guest_id === guest.id,
-        )
-          ? "Alteração pendente de confirmação do servidor. O estado remoto mantém a confirmação anterior."
-          : "A revogação passa a valer após confirmação do servidor; envios já iniciados podem terminar."}
-      </Text>
+      {app.pending.some(
+        (m) => m.type === "CONTACT_UPDATE" && m.payload.guest_id === guest.id,
+      ) ? (
+        <Text style={styles.small}>
+          Alteração pendente de confirmação do servidor. O estado remoto mantém
+          a confirmação anterior.
+        </Text>
+      ) : null}
       <Button
         title={`Salvar contato de ${guest.name}`}
         onPress={() =>
@@ -143,7 +144,7 @@ function ContactForm({ guest }: { guest: Guest }) {
       />
       <Button
         secondary
-        title={`Ativar push para ${guest.name}`}
+        title={`Ativar notificações para ${guest.name}`}
         disabled={
           revocation(form) ||
           app.data?.contacts.find((c) => c.guest_id === guest.id)
@@ -177,12 +178,6 @@ function ContactForm({ guest }: { guest: Guest }) {
           })
         }
       />
-      {Platform.OS === "web" ? (
-        <Text style={styles.small}>
-          Push será habilitado no aplicativo nativo, com sua autorização e a
-          permissão do aparelho.
-        </Text>
-      ) : null}
       {feedback.node}
     </Card>
   );
@@ -201,8 +196,7 @@ export function ProfileScreen() {
     <Screen section="guest" title="Quem está usando este dispositivo?">
       <Card>
         <Text style={styles.text}>
-          Selecione seu nome para identificar os próximos recados. A família
-          continua acessível neste aparelho.
+          Selecione seu nome para identificar os próximos recados.
         </Text>
         <Choice
           value={who}
@@ -220,13 +214,6 @@ export function ProfileScreen() {
         />
         {feedback.node}
       </Card>
-      <Text style={styles.text}>
-        Contatos são opcionais. E-mail e WhatsApp só recebem mensagens com sua
-        autorização. Marque a opção para revogar mensagens e notificações. Ao
-        desmarcá-la, somente os canais anteriormente autorizados serão
-        restaurados. A ativação de push depende também da permissão do seu
-        aparelho.
-      </Text>
       {app.data?.guests.map((g) => (
         <ContactForm key={g.id} guest={g} />
       ))}

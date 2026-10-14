@@ -32,10 +32,11 @@ export function PublicHome() {
   }, [app.data?.role, pathname, entry.busy, entry.error]);
   return (
     <HomeProposalVideo active={pathname === "/" && !app.data?.role}>
-      {({ titleAccessory, video }) => (
+      {({ titleAccessory, video, headerAccessory }) => (
         <Screen
           title="Um novo capítulo, juntos."
           titleAccessory={titleAccessory}
+          videoSlots={{ titleAccessory, video, headerAccessory }}
         >
           {video}
           <Card>

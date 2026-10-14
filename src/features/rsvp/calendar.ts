@@ -1,11 +1,15 @@
 import type { WeddingEvent } from "../../types/domain";
 import { countdownParts } from "../countdown/domain";
 
+export const calendarDescription =
+  "💍✨ O grande dia está chegando!\n\nAgora é oficial: temos um encontro marcado para celebrar o nosso amor! ❤️🥂\n\n💙 Prepare o look, capriche na animação e venha viver esse momento tão especial com a gente!\n\nCom carinho, Felipe & Laís! 💍💕";
+export const WEDDING_END = "2026-12-16T01:00:00-03:00";
 export function calendarEvent(event: WeddingEvent) {
   countdownParts(event.starts_at); // Reject a floating date without an explicit timezone.
   return {
     title: "Casamento Felipe & Laís",
     start: new Date(event.starts_at).toISOString(),
+    end: new Date(WEDDING_END).toISOString(),
     location: [event.venue_name || "Villarejo Eventos", event.address]
       .filter(Boolean)
       .join(" — "),
@@ -20,8 +24,9 @@ export function googleCalendarUrl(event: WeddingEvent) {
   return `https://calendar.google.com/calendar/render?${new URLSearchParams({
     action: "TEMPLATE",
     text: data.title,
-    dates: `${start}/${start}`,
-    ctz: event.timezone,
+    dates: `${start}/${stamp(data.end)}`,
+    details: calendarDescription,
+    ctz: "America/Sao_Paulo",
     location: data.location,
   })}`;
 }

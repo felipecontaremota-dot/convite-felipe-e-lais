@@ -1,3 +1,6 @@
+import { HomeProposalVideo, type ProposalSlots } from "./HomeProposalVideo";
+import { CompactCountdown } from "./WeddingCountdown";
+import { WEDDING_START } from "../features/countdown/domain";
 import { InstallAppButton } from "./InstallAppButton";
 import React, { useState } from "react";
 import {
@@ -11,7 +14,7 @@ import {
   StyleSheet,
   type TextInputProps,
 } from "react-native";
-import { router, usePathname } from "expo-router";
+import { router, usePathname, useIsFocused } from "expo-router";
 import { theme } from "../theme/tokens";
 import { useApp } from "../lib/AppProvider";
 import { canAccess } from "../utils/security";
@@ -300,33 +303,54 @@ const nav = {
 export function Screen({
   title,
   titleAccessory,
+  videoSlots,
   section,
   children,
 }: {
   title: string;
   titleAccessory?: React.ReactNode;
+  videoSlots?: ProposalSlots;
   section?: "guest" | "admin" | "ceremonial";
   children: React.ReactNode;
 }) {
   const app = useApp();
   const pathname = usePathname();
+  const focused = useIsFocused();
   const feedback = useFeedback();
   const [discardFailed, setDiscardFailed] = useState<string | null>(null);
   const failed = app.pending.find((p) => p.lastError);
   const [discard, setDiscard] = useState(false);
   const guard = section && !canAccess(app.data?.role || null, section);
-  return (
+  const render = (slots: ProposalSlots) => (
     <ScrollView
       style={styles.page}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.row}>
-        <Text style={[styles.title, { flexGrow: 1 }]}>
-          Felipe <Text style={{ color: theme.colors.ink }}>&</Text> Laís
-        </Text>
-        <Text style={styles.badge}>15 · 12 · 2026</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            flexGrow: 1,
+            flexShrink: 1,
+          }}
+        >
+          <Text style={styles.title}>
+            Felipe <Text style={{ color: theme.colors.ink }}>&</Text> Laís
+          </Text>
+          {slots.headerAccessory || slots.titleAccessory}
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {focused && section === "guest" && pathname !== "/inicio" ? (
+            <CompactCountdown
+              startsAt={app.data?.event.starts_at || WEDDING_START}
+            />
+          ) : null}
+          <Text style={styles.badge}>15 · 12 · 2026</Text>
+        </View>
       </View>
+      {!videoSlots ? slots.video : null}
       {app.isDemo ? (
         <Text style={styles.notice}>
           DEMONSTRAÇÃO LOCAL · Dados fictícios. Nenhum envio externo.
@@ -467,5 +491,12 @@ export function Screen({
         casamento.
       </Text>
     </ScrollView>
+  );
+  return videoSlots ? (
+    render(videoSlots)
+  ) : (
+    <HomeProposalVideo active={focused} manual>
+      {render}
+    </HomeProposalVideo>
   );
 }

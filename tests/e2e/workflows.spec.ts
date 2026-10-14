@@ -1,3 +1,4 @@
+import { closeRsvpPresentation } from "./guest-presentation";
 import { test, expect } from "@playwright/test";
 const code = "DemoConviteExclusivoFelipeLais2026";
 async function start(
@@ -56,9 +57,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
       exact: true,
     })
     .click();
-  await expect(
-    page.getByText("Sincronizado com sucesso.").filter({ visible: true }),
-  ).toBeVisible();
+  await closeRsvpPresentation(page);
   // Each card owns its choice. Only the second person is updated.
   await second
     .getByRole("button", { name: "Editar minha confirmação", exact: true })
@@ -69,6 +68,7 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await second
     .getByRole("button", { name: "Pode reservar meu lugar! 🎉", exact: true })
     .click();
+  await closeRsvpPresentation(page);
   await navigation(page, "Convites");
   await expect(
     page.getByText("Convidado Um", { exact: true }).filter({ visible: true }),

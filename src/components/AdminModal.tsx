@@ -1,6 +1,9 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "../theme/tokens";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Animated,
   Modal,
   Platform,
   Pressable,
@@ -43,14 +46,55 @@ export function AdminModal({
   onClose,
   dismissible = true,
   closeOnOutside = true,
+  premium = false,
+  closing = false,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
   dismissible?: boolean;
   closeOnOutside?: boolean;
+  premium?: boolean;
+  closing?: boolean;
 }) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [premiumScale] = useState(() => new Animated.Value(premium ? 0.2 : 1));
+  const [premiumOpacity] = useState(() => new Animated.Value(premium ? 0 : 1));
+  useEffect(() => {
+    if (!premium || Platform.OS === "web") return;
+    let animation: Animated.CompositeAnimation | undefined;
+    let active = true;
+    void import("react-native").then(async ({ AccessibilityInfo }) => {
+      const reduced = await AccessibilityInfo.isReduceMotionEnabled();
+      if (!active) return;
+      animation = Animated.parallel([
+        reduced
+          ? Animated.timing(premiumScale, {
+              toValue: 1,
+              duration: 0,
+              useNativeDriver: true,
+            })
+          : Animated.spring(premiumScale, {
+              toValue: closing ? 0.98 : 1,
+              stiffness: 120,
+              damping: 17,
+              mass: 0.7,
+              useNativeDriver: true,
+            }),
+        Animated.timing(premiumOpacity, {
+          toValue: closing ? 0 : 1,
+          duration: reduced ? 0 : 200,
+          useNativeDriver: true,
+        }),
+      ]);
+      animation.start();
+    });
+    return () => {
+      active = false;
+      animation?.stop();
+    };
+  }, [premium, closing, premiumScale, premiumOpacity]);
   const [dialog, setDialog] = useState<HTMLElement | null>(null);
   const attach = useCallback((node: View | null) => {
     if (Platform.OS === "web") setDialog(node as unknown as HTMLElement | null);
@@ -130,13 +174,21 @@ export function AdminModal({
         if (dismissible) onClose();
       }}
     >
-      <View
+      <KeyboardAvoidingView
+        enabled={premium && Platform.OS === "ios"}
+        behavior={premium && Platform.OS === "ios" ? "padding" : undefined}
         style={{
           flex: 1,
           backgroundColor: theme.colors.overlay,
           justifyContent: "center",
           alignItems: "center",
           padding: width < 600 ? 10 : 24,
+          ...(premium
+            ? {
+                paddingTop: Math.max(insets.top, width < 600 ? 10 : 24),
+                paddingBottom: Math.max(insets.bottom, width < 600 ? 10 : 24),
+              }
+            : {}),
         }}
       >
         <Pressable
@@ -147,18 +199,41 @@ export function AdminModal({
           }}
           style={{ position: "absolute", inset: 0 }}
         />
-        <View
+        <Animated.View
           ref={attach}
           role="dialog"
           aria-modal
           accessibilityViewIsModal
           accessibilityLabel={title}
           {...(Platform.OS === "web"
-            ? { dataSet: { adminModal: "true" } }
+            ? {
+                dataSet: {
+                  adminModal: "true",
+                  premiumModal: premium
+                    ? closing
+                      ? "closing"
+                      : "open"
+                    : undefined,
+                },
+              }
             : {})}
           tabIndex={-1}
           style={[
             styles.card,
+            premium && Platform.OS !== "web"
+              ? {
+                  opacity: premiumOpacity,
+                  transform: [
+                    { scaleX: premiumScale },
+                    {
+                      scaleY: premiumScale.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.85, 1],
+                      }),
+                    },
+                  ],
+                }
+              : undefined,
             {
               width: "100%",
               maxWidth: 760,
@@ -170,7 +245,11 @@ export function AdminModal({
           <View style={styles.row}>
             <Text
               accessibilityRole="header"
-              style={[styles.heading, { flex: 1 }]}
+              style={[
+                styles.heading,
+                { flex: 1 },
+                premium && { textAlign: "center" },
+              ]}
             >
               {title}
             </Text>
@@ -179,7 +258,18 @@ export function AdminModal({
               accessibilityLabel="Fechar modal"
               disabled={!dismissible}
               onPress={onClose}
-              style={styles.nav}
+              style={[
+                styles.nav,
+                premium && {
+                  alignSelf: "flex-start",
+                  borderWidth: 0,
+                  backgroundColor: "transparent",
+                  minWidth: 44,
+                  minHeight: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                },
+              ]}
             >
               <Text style={styles.text}>×</Text>
             </Pressable>
@@ -191,8 +281,8 @@ export function AdminModal({
           >
             {children}
           </ScrollView>
-        </View>
-      </View>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

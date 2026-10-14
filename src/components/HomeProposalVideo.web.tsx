@@ -30,9 +30,11 @@ function markSeen() {
 
 export function HomeProposalVideo({
   active,
+  manual = false,
   children,
 }: {
   active: boolean;
+  manual?: boolean;
   children: (slots: ProposalSlots) => ReactNode;
 }) {
   const [phase, setPhase] = useState<"waiting" | "open" | "closing" | "closed">(
@@ -70,17 +72,17 @@ export function HomeProposalVideo({
   }, [clearTimers]);
   const open = useCallback(() => {
     clearTimers();
-    markSeen(); // An attempted presentation counts even if autoplay/network fails.
+    if (!manual) markSeen(); // An attempted presentation counts even if autoplay/network fails.
     setMuted(true);
     setRequested(true);
     setPhase("open");
-  }, [clearTimers]);
+  }, [clearTimers, manual]);
   const invalidate = useCallback(() => {
     generation.current++;
   }, []);
   useEffect(() => {
     const video = player.current;
-    if (active) {
+    if (active && !manual) {
       const seen = wasSeen();
       timers.current.push(
         setTimeout(() => {
@@ -102,7 +104,7 @@ export function HomeProposalVideo({
       clearTimers();
       video?.pause();
     };
-  }, [active, clearTimers, open, invalidate]);
+  }, [active, manual, clearTimers, open, invalidate]);
   useEffect(() => {
     if (phase === "closed" && restoreFocus.current) {
       restoreFocus.current = false;
@@ -123,30 +125,54 @@ export function HomeProposalVideo({
     });
     return () => clearTimeout(watchdog);
   }, [phase, active, close]);
-  const titleAccessory =
-    phase === "closed" && active ? (
-      <button
-        ref={replay}
-        type="button"
-        className="proposal-replay"
-        title="Rever nosso vídeo"
-        aria-label="Rever nosso vídeo"
-        onClick={open}
+  const control = active ? (
+    <button
+      ref={replay}
+      type="button"
+      className="proposal-replay"
+      title={manual ? "Assistir ao nosso vídeo" : "Rever nosso vídeo"}
+      aria-label={manual ? "Assistir ao nosso vídeo" : "Rever nosso vídeo"}
+      onClick={open}
+    >
+      <svg
+        aria-hidden="true"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
       >
-        <svg
-          aria-hidden="true"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-        >
-          <rect x="3" y="4" width="18" height="16" rx="4" />
-          <path d="m10 8 6 4-6 4Z" />
-        </svg>
-      </button>
-    ) : null;
+        <rect x="3" y="4" width="18" height="16" rx="4" />
+        <path d="m10 8 6 4-6 4Z" />
+      </svg>
+    </button>
+  ) : null;
+  const titleAccessory = phase === "closed" || manual ? control : null;
+  const headerAccessory = manual ? (
+    control
+  ) : active ? (
+    <button
+      type="button"
+      className="proposal-replay"
+      title="Assistir ao nosso vídeo"
+      aria-label="Assistir ao nosso vídeo"
+      onClick={open}
+    >
+      <svg
+        aria-hidden="true"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      >
+        <rect x="3" y="4" width="18" height="16" rx="4" />
+        <path d="m10 8 6 4-6 4Z" />
+      </svg>
+    </button>
+  ) : null;
   const video = active ? (
     <>
       <style>{`
@@ -215,5 +241,5 @@ export function HomeProposalVideo({
       </div>
     </>
   ) : null;
-  return children({ titleAccessory, video });
+  return children({ titleAccessory, video, headerAccessory });
 }

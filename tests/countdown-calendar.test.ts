@@ -5,6 +5,7 @@ import {
   WEDDING_START,
 } from "../src/features/countdown/domain";
 import {
+  calendarDescription,
   calendarEvent,
   calendarIcs,
   googleCalendarUrl,
@@ -57,10 +58,10 @@ it.each([0, 1, 86400000])(
     });
   },
 );
-it("Google Calendar uses the correct UTC instant, event timezone and encoded title/address without inventing an end", () => {
+it("Google Calendar uses the correct UTC instant, event timezone and encoded title/address with the approved next-day end", () => {
   const params = new URL(googleCalendarUrl(event)).searchParams;
   expect(params.get("text")).toBe("Casamento Felipe & Laís");
-  expect(params.get("dates")).toBe("20261215T190000Z/20261215T190000Z");
+  expect(params.get("dates")).toBe("20261215T190000Z/20261216T040000Z");
   expect(params.get("ctz")).toBe("America/Sao_Paulo");
   expect(params.get("location")).toBe(
     "Villarejo Eventos — Rua João, 10; Goiás",
@@ -108,4 +109,14 @@ it("older native iOS offers an alternative without requesting broad calendar acc
   await expect(openDeviceCalendar(event)).rejects.toThrow("use Google Agenda");
   expect(create).not.toHaveBeenCalled();
   platform.Version = 17;
+});
+
+it("Google template preserves paragraphs and never claims unsupported reminder configuration", () => {
+  const p = new URL(googleCalendarUrl(event)).searchParams;
+  expect(p.get("details")).toBe(calendarDescription);
+  expect(calendarDescription).toContain("\n\n");
+  expect(calendarDescription).not.toContain("**");
+  expect(p.has("reminders")).toBe(false);
+  expect(p.has("recur")).toBe(false);
+  expect(calendarEvent(event).end).toBe("2026-12-16T04:00:00.000Z");
 });

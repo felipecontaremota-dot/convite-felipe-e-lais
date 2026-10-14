@@ -1,5 +1,5 @@
+import { closeRsvpPresentation } from "./guest-presentation";
 import { test, expect } from "@playwright/test";
-import { readFile } from "node:fs/promises";
 
 test("countdown ticks, recalculates after suspension/reload and reaches zero across device timezones", async ({
   browser,
@@ -84,9 +84,10 @@ test("positive RSVP remains saved independently of calendar choices and returns 
   await card
     .getByRole("button", { name: "Pode reservar meu lugar! 🎉", exact: true })
     .click();
+  await closeRsvpPresentation(page);
   await expect(
     card.getByText("Sincronizado com sucesso.", { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(agenda).toBeVisible();
   const status = () =>
     page.evaluate(() => {
@@ -102,18 +103,9 @@ test("positive RSVP remains saved independently of calendar choices and returns 
   await page.reload();
   await expect(agenda).toBeVisible();
   await agenda.click();
-  const downloadPromise = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Baixar calendário (.ics)", exact: true })
-    .click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("casamento-felipe-e-lais.ics");
-  const content = await readFile((await download.path())!, "utf8");
-  expect(content).toContain("SUMMARY:Casamento Felipe & Laís");
-  expect(content).toContain("DTSTART:20261215T190000Z");
-  expect(content).not.toContain("DTEND");
-  expect(await status()).toBe("CONFIRMED");
-  await agenda.click();
+  await expect(
+    page.getByRole("button", { name: "Baixar calendário (.ics)", exact: true }),
+  ).toHaveCount(0);
   await page
     .context()
     .route("https://calendar.google.com/**", (route) =>
@@ -127,7 +119,7 @@ test("positive RSVP remains saved independently of calendar choices and returns 
   await popup.waitForLoadState();
   const params = new URL(popup.url()).searchParams;
   expect(params.get("text")).toBe("Casamento Felipe & Laís");
-  expect(params.get("dates")).toBe("20261215T190000Z/20261215T190000Z");
+  expect(params.get("dates")).toBe("20261215T190000Z/20261216T040000Z");
   expect(params.get("ctz")).toBe("America/Sao_Paulo");
   await popup.close();
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
@@ -140,6 +132,7 @@ test("positive RSVP remains saved independently of calendar choices and returns 
       .click();
     await card.getByRole("radio", { name: label, exact: true }).click();
     await card.getByRole("button", { name: submit, exact: true }).click();
+    await closeRsvpPresentation(page);
     await expect(
       card.getByRole("button", {
         name: "Editar minha confirmação",

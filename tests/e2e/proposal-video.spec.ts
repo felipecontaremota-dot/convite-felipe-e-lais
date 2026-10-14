@@ -233,5 +233,8 @@ test("reduced motion, controle por teclado e acesso dos noivos preservado", asyn
     .getByRole("link", { name: "Acesso dos noivos e cerimonial", exact: true })
     .click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.locator("video")).toHaveCount(0);
+  await expect(page.locator("video")).not.toHaveAttribute("src", /mp4/);
+  await expect(
+    page.getByRole("button", { name: "Assistir ao nosso vídeo", exact: true }),
+  ).toBeVisible();
 });

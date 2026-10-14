@@ -14,9 +14,9 @@ export function GiftsScreen() {
   return (
     <Screen section="guest" title="Presentes para o nosso próximo capítulo">
       <Text style={styles.text}>
-        Sua presença é o nosso maior presente. Preparamos nossas listas com
-        carinho. Escolha uma das opções abaixo; não há pagamento dentro do
-        aplicativo.
+        Sua presença é nosso maior presente... mas fique a vontade para acessar
+        nossas listas que preparamos com carinho. Ahhhh, e fica a vontade para
+        escolher presentes fora da lista, não tem problema!
       </Text>
       {lists.map((list) => (
         <Card key={list.id}>

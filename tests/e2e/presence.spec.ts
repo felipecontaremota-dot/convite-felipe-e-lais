@@ -1,3 +1,4 @@
+import { closeRsvpPresentation } from "./guest-presentation";
 import { test, expect } from "@playwright/test";
 import {
   confirmationLabels,
@@ -76,6 +77,7 @@ for (const width of [1280, 390]) {
       await expect(
         card.getByText(responseMessages[status], { exact: true }),
       ).toBeVisible();
+      await closeRsvpPresentation(page);
       await expect
         .poll(() =>
           page.evaluate(() => {

@@ -1,41 +1,13 @@
 import { theme } from "../theme/tokens";
-import React, { useEffect, useState } from "react";
-import {
-  AppState,
-  Platform,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import React from "react";
+import { Text, View, useWindowDimensions } from "react-native";
+import { useCountdownClock } from "../features/countdown/clock";
 import { countdownParts } from "../features/countdown/domain";
 import { styles } from "./ui";
 
 export function WeddingCountdown({ startsAt }: { startsAt: string }) {
-  const [now, setNow] = useState(() => Date.now());
+  const now = useCountdownClock();
   const { width } = useWindowDimensions();
-  useEffect(() => {
-    const update = () => setNow(Date.now());
-    update();
-    const timer = setInterval(update, 1000);
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") update();
-    });
-    const visible = () => {
-      if (!document.hidden) update();
-    };
-    if (Platform.OS === "web") {
-      document.addEventListener("visibilitychange", visible);
-      window.addEventListener("focus", update);
-    }
-    return () => {
-      clearInterval(timer);
-      subscription.remove();
-      if (Platform.OS === "web") {
-        document.removeEventListener("visibilitychange", visible);
-        window.removeEventListener("focus", update);
-      }
-    };
-  }, []);
   const parts = countdownParts(startsAt, now);
   if (parts.arrived)
     return (
@@ -90,5 +62,21 @@ export function WeddingCountdown({ startsAt }: { startsAt: string }) {
         </React.Fragment>
       ))}
     </View>
+  );
+}
+
+export function CompactCountdown({ startsAt }: { startsAt: string }) {
+  const parts = countdownParts(startsAt, useCountdownClock());
+  const text = [parts.days, parts.hours, parts.minutes, parts.seconds]
+    .map((v) => String(v).padStart(2, "0"))
+    .join(":");
+  return (
+    <Text
+      testID="compact-countdown"
+      accessibilityLiveRegion="none"
+      style={[styles.badge, { fontVariant: ["tabular-nums"] }]}
+    >
+      {text} ·{" "}
+    </Text>
   );
 }
