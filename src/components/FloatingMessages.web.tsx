@@ -78,20 +78,20 @@ export function FloatingMessages() {
         position: fixed; right: calc(22px + env(safe-area-inset-right, 0px));
         bottom: calc(28px + env(safe-area-inset-bottom, 0px)); z-index: 20;
         width: 56px; height: 56px; padding: 0; overflow: hidden; cursor: pointer;
-        border: 1px solid #A88A54; border-radius: 999px; color: #DEBE7D;
-        background: linear-gradient(115deg, ${theme.colors.ink}, #0A3022);
-        box-shadow: 0 8px 26px #183f3530, inset 0 0 8px #debe7d16;
+        border: 1px solid ${theme.colors.secondary}; border-radius: 999px; color: ${theme.colors.line};
+        background: linear-gradient(115deg, ${theme.colors.ink}, ${theme.colors.primaryActive});
+        box-shadow: 0 8px 26px ${theme.colors.shadow}30, inset 0 0 8px ${theme.colors.line}16;
         transition: width 1050ms cubic-bezier(.22,1,.36,1), transform 650ms ease, box-shadow 650ms ease;
         font-family: inherit;
       }
       .wedding-messages[data-phase="opening"], .wedding-messages[data-phase="reading"] {
         width: min(336px, calc(100vw - 44px - env(safe-area-inset-right, 0px) - env(safe-area-inset-left, 0px)));
       }
-      .wedding-messages[data-phase="opening"] { box-shadow: 0 8px 30px #183f3540, 0 0 18px #debe7d24, inset 0 0 8px #debe7d20; }
+      .wedding-messages[data-phase="opening"] { box-shadow: 0 8px 30px ${theme.colors.shadow}40, 0 0 18px ${theme.colors.line}24, inset 0 0 8px ${theme.colors.line}20; }
       .wedding-messages[data-phase="closing"] { transition-delay: 300ms, 0ms, 0ms; }
       .wedding-messages-label {
         position: absolute; right: 65px; top: 0; height: 54px; display: flex; align-items: center;
-        white-space: nowrap; font-size: 14px; color: #F8EBD2; opacity: 0; transform: translateX(9px);
+        white-space: nowrap; font-size: 14px; color: ${theme.colors.card}; opacity: 0; transform: translateX(9px);
         transition: opacity 240ms ease, transform 240ms ease; pointer-events: none;
       }
       .wedding-messages[data-phase="opening"] .wedding-messages-label,
@@ -100,11 +100,11 @@ export function FloatingMessages() {
       }
       .wedding-messages-icon { position: absolute; right: 15px; top: 15px; width: 24px; height: 24px; }
       .wedding-messages-shimmer { position: absolute; inset: 0; pointer-events: none; opacity: 0;
-        background: linear-gradient(110deg, transparent 25%, #debe7d24 50%, transparent 75%); }
+        background: linear-gradient(110deg, transparent 25%, ${theme.colors.line}24 50%, transparent 75%); }
       .wedding-messages[data-phase="opening"] .wedding-messages-shimmer, .wedding-messages[data-phase="reading"] .wedding-messages-shimmer { animation: wedding-shimmer 1450ms ease-out both; }
       @keyframes wedding-shimmer { 0% { transform: translateX(-100%); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateX(100%); opacity: 0; } }
-      @media (hover: hover) { .wedding-messages:hover { transform: translateY(-2px); box-shadow: 0 10px 30px #183f3540, inset 0 0 8px #debe7d20; } }
-      .wedding-messages:focus-visible { outline: 3px solid ${theme.colors.gold}; outline-offset: 4px; }
+      @media (hover: hover) { .wedding-messages:hover { transform: translateY(-2px); box-shadow: 0 10px 30px ${theme.colors.shadow}40, inset 0 0 8px ${theme.colors.line}20; } }
+      .wedding-messages:focus-visible { outline: 3px solid ${theme.colors.focus}; outline-offset: 4px; }
       @media (max-width: 359px) { .wedding-messages-label { font-size: 12px; right: 60px; } }
       @media (prefers-reduced-motion: reduce) { .wedding-messages, .wedding-messages-label { transition: none !important; } .wedding-messages-shimmer { animation: none !important; } }
     `}</style>

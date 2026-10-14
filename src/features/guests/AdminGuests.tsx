@@ -1,3 +1,4 @@
+import { theme } from "../../theme/tokens";
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
   Platform,
@@ -654,8 +655,8 @@ export function GuestsScreen() {
                     ? { title: "Possui observação" }
                     : {})}
                   style={{
-                    color: "#FFFFFF",
-                    backgroundColor: "#A2222C",
+                    color: theme.colors.card,
+                    backgroundColor: theme.colors.destructive,
                     borderRadius: 14,
                     minWidth: 28,
                     textAlign: "center",

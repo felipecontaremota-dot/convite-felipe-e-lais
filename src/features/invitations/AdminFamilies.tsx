@@ -1,3 +1,4 @@
+import { theme } from "../../theme/tokens";
 import { useState } from "react";
 import { Text, View, Pressable } from "react-native";
 import { router } from "expo-router";
@@ -174,7 +175,7 @@ function FamilyCard({ invitation: i }: { invitation: Invitation }) {
                     styles.row,
                     {
                       borderBottomWidth: 1,
-                      borderBottomColor: "#E6E0D5",
+                      borderBottomColor: theme.colors.line,
                       paddingVertical: 8,
                     },
                   ]}

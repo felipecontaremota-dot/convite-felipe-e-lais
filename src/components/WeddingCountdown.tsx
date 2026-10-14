@@ -1,3 +1,4 @@
+import { theme } from "../theme/tokens";
 import React, { useEffect, useState } from "react";
 import {
   AppState,
@@ -64,7 +65,12 @@ export function WeddingCountdown({ startsAt }: { startsAt: string }) {
       {units.map(([value, label], index) => (
         <React.Fragment key={label}>
           {index > 0 ? (
-            <Text style={{ fontSize: width < 420 ? 28 : 34, color: "#9A7835" }}>
+            <Text
+              style={{
+                fontSize: width < 420 ? 28 : 34,
+                color: theme.colors.secondary,
+              }}
+            >
               :
             </Text>
           ) : null}
@@ -72,7 +78,7 @@ export function WeddingCountdown({ startsAt }: { startsAt: string }) {
             <Text
               style={{
                 fontSize: width < 420 ? 28 : 34,
-                color: "#183F35",
+                color: theme.colors.ink,
                 fontWeight: "600",
                 fontVariant: ["tabular-nums"],
               }}

@@ -1,3 +1,4 @@
+import { theme } from "../theme/tokens";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Modal,
@@ -132,7 +133,7 @@ export function AdminModal({
       <View
         style={{
           flex: 1,
-          backgroundColor: "#0009",
+          backgroundColor: theme.colors.overlay,
           justifyContent: "center",
           alignItems: "center",
           padding: width < 600 ? 10 : 24,
@@ -238,11 +239,11 @@ export function ConfirmModal({
         }}
         style={[
           styles.button,
-          destructive && { backgroundColor: "#A2222C" },
+          destructive && { backgroundColor: theme.colors.destructive },
           busy && { opacity: 0.5 },
         ]}
       >
-        <Text style={{ color: "white", fontWeight: "600" }}>
+        <Text style={{ color: theme.colors.card, fontWeight: "600" }}>
           {busy ? "Aguarde…" : confirmLabel}
         </Text>
       </Pressable>

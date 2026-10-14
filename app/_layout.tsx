@@ -1,3 +1,4 @@
+import { ThemeStyles } from "../src/components/ThemeStyles";
 import React from "react";
 import { Stack } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ export default function Layout() {
   return (
     <QueryClientProvider client={query}>
       <AppProvider>
+        <ThemeStyles />
         <Stack screenOptions={{ headerShown: false }} />
         <FloatingMessages />
       </AppProvider>

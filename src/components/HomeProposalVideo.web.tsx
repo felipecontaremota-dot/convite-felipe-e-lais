@@ -158,12 +158,12 @@ export function HomeProposalVideo({
       .proposal-stage video { display: block; width: 100%; height: 100%; aspect-ratio: 16 / 9; object-fit: contain; }
       .proposal-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex; justify-content: space-between; gap: 8px; }
       .proposal-controls button { min-height: 44px; padding: 8px 12px; border: 1px solid ${theme.colors.line};
-        border-radius: 10px; background: #183f35d9; color: ${theme.colors.paper}; font: inherit; font-size: 13px; cursor: pointer; }
+        border-radius: 10px; background: ${theme.colors.ink}D9; color: ${theme.colors.paper}; font: inherit; font-size: 13px; cursor: pointer; }
       .proposal-replay { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
         width: 44px; height: 44px; padding: 0; margin: -10px 0 -10px 6px; border: 0;
-        border-radius: 10px; background: transparent; color: ${theme.colors.gold}; cursor: pointer; }
+        border-radius: 10px; background: transparent; color: ${theme.colors.secondary}; cursor: pointer; }
       .proposal-replay:hover { background: ${theme.colors.wash}; }
-      .proposal-replay:focus-visible, .proposal-controls button:focus-visible { outline: 3px solid ${theme.colors.gold}; outline-offset: 2px; }
+      .proposal-replay:focus-visible, .proposal-controls button:focus-visible { outline: 3px solid ${theme.colors.secondary}; outline-offset: 2px; }
       @media (prefers-reduced-motion: reduce) { .proposal-space { transition: none; } }
     `}</style>
       <div

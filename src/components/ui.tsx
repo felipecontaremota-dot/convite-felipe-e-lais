@@ -48,12 +48,12 @@ export const styles = StyleSheet.create({
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: theme.colors.line,
+    borderColor: theme.colors.inputBorder,
     borderRadius: 10,
     padding: 12,
     fontSize: 16,
     color: theme.colors.ink,
-    backgroundColor: "#FFF",
+    backgroundColor: theme.colors.card,
     width: "100%",
   },
   button: {
@@ -63,7 +63,7 @@ export const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: theme.colors.ink,
+    backgroundColor: theme.colors.primary,
   },
   nav: {
     padding: 12,
@@ -72,12 +72,20 @@ export const styles = StyleSheet.create({
     borderColor: theme.colors.line,
     borderWidth: 1,
   },
-  selected: { backgroundColor: "#F4EDDD", borderColor: theme.colors.gold },
+  selected: {
+    backgroundColor: theme.colors.wash,
+    borderColor: theme.colors.secondary,
+  },
   selectedText: { color: theme.colors.ink, fontWeight: "700" },
-  notice: { backgroundColor: theme.colors.wash, padding: 14, borderRadius: 10 },
+  notice: {
+    color: theme.colors.ink,
+    backgroundColor: theme.colors.wash,
+    padding: 14,
+    borderRadius: 10,
+  },
   error: { color: theme.colors.error, fontSize: 15 },
   badge: {
-    color: theme.colors.gold,
+    color: theme.colors.secondary,
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 1,
@@ -103,6 +111,9 @@ export function Button({
       aria-disabled={disabled || busy}
       aria-busy={busy}
       disabled={disabled || busy}
+      {...(Platform.OS === "web"
+        ? { dataSet: { themeButton: secondary ? "secondary" : "primary" } }
+        : {})}
       onPress={async () => {
         setBusy(true);
         try {
@@ -114,17 +125,28 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         secondary && { backgroundColor: theme.colors.wash },
-        (disabled || busy) && { opacity: 0.45 },
-        pressed && { opacity: 0.7 },
+        disabled && { backgroundColor: theme.colors.disabled },
+        pressed &&
+          !disabled && {
+            backgroundColor: secondary
+              ? theme.colors.line
+              : theme.colors.primaryActive,
+          },
       ]}
     >
       {busy ? (
-        <ActivityIndicator color={secondary ? theme.colors.ink : "#FFF"} />
+        <ActivityIndicator
+          color={secondary ? theme.colors.secondary : theme.colors.card}
+        />
       ) : (
         <Text
           style={{
             fontSize: 15,
-            color: secondary ? theme.colors.ink : "#FFF",
+            color: disabled
+              ? theme.colors.disabledText
+              : secondary
+                ? theme.colors.secondary
+                : theme.colors.card,
             fontWeight: "600",
           }}
         >
@@ -296,7 +318,7 @@ export function Screen({
     >
       <View style={styles.row}>
         <Text style={[styles.title, { flexGrow: 1 }]}>
-          Felipe <Text style={{ color: theme.colors.gold }}>&</Text> Laís
+          Felipe <Text style={{ color: theme.colors.ink }}>&</Text> Laís
         </Text>
         <Text style={styles.badge}>15 · 12 · 2026</Text>
       </View>
@@ -310,6 +332,9 @@ export function Screen({
           {nav[section].map(([label, path]) => (
             <Pressable
               key={path}
+              {...(Platform.OS === "web"
+                ? { dataSet: { themeNav: "true" } }
+                : {})}
               accessibilityRole="link"
               accessibilityState={{ selected: pathname === path }}
               aria-current={pathname === path ? "page" : undefined}
@@ -317,7 +342,11 @@ export function Screen({
               style={[styles.nav, pathname === path && styles.selected]}
             >
               <Text
-                style={[styles.small, pathname === path && styles.selectedText]}
+                style={[
+                  styles.small,
+                  { color: theme.colors.secondary },
+                  pathname === path && styles.selectedText,
+                ]}
               >
                 {label}
               </Text>
@@ -373,7 +402,10 @@ export function Screen({
         />
       ) : null}
       {app.loading && section ? (
-        <ActivityIndicator accessibilityLabel="Carregando convite" />
+        <ActivityIndicator
+          color={theme.colors.primary}
+          accessibilityLabel="Carregando convite"
+        />
       ) : null}
       {guard && !app.loading ? (
         <Card>

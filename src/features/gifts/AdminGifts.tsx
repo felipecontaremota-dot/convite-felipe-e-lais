@@ -1,3 +1,4 @@
+import { theme } from "../../theme/tokens";
 import { useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import {
@@ -130,7 +131,7 @@ function ListCard({
               overflowWrap: "anywhere",
               fontSize: 16,
               lineHeight: "25px",
-              color: "#183F35",
+              color: theme.colors.ink,
               textDecoration: "underline",
             }}
           >
@@ -185,7 +186,9 @@ export function AdminGifts() {
         onPress={() => setEditing("new")}
         style={[styles.button, { alignSelf: "flex-start" }]}
       >
-        <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>
+        <Text
+          style={{ color: theme.colors.card, fontSize: 16, fontWeight: "600" }}
+        >
           + Adicionar lista
         </Text>
       </Pressable>

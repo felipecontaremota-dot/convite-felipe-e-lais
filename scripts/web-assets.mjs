@@ -1,3 +1,4 @@
+import { colors } from "../src/theme/palette.ts";
 import { readFile, writeFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { getExportWebBasePath, webPath } from "../config/web-paths.cjs";
@@ -13,7 +14,7 @@ const legacyCompatibility = basePath
 const decorated = html
   .replace(
     "</head>",
-    `${legacyCompatibility}<link rel="manifest" href="${webPath("manifest.webmanifest", basePath)}"><meta name="theme-color" content="#183F35"></head>`,
+    `${legacyCompatibility}<link rel="manifest" href="${webPath("manifest.webmanifest", basePath)}"><meta name="theme-color" content="${colors.ink}"></head>`,
   )
   .replace(
     "</body>",
@@ -27,6 +28,8 @@ await writeFile("dist/.nojekyll", "");
 const manifest = JSON.parse(
   await readFile("dist/manifest.webmanifest", "utf8"),
 );
+manifest.background_color = colors.paper;
+manifest.theme_color = colors.ink;
 manifest.start_url = shell;
 manifest.scope = shell;
 manifest.icons = manifest.icons.map((icon) => ({

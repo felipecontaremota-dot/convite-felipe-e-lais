@@ -1,3 +1,4 @@
+import { theme } from "../../theme/tokens";
 import { router, useLocalSearchParams, usePathname } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text } from "react-native";
@@ -87,7 +88,15 @@ export function PublicHome() {
             onPress={() => router.push("/login")}
             style={{ alignSelf: "center", padding: 12, marginTop: 12 }}
           >
-            <Text style={[styles.small, { textDecorationLine: "underline" }]}>
+            <Text
+              style={[
+                styles.small,
+                {
+                  color: theme.colors.secondary,
+                  textDecorationLine: "underline",
+                },
+              ]}
+            >
               Acesso dos noivos e cerimonial
             </Text>
           </Pressable>

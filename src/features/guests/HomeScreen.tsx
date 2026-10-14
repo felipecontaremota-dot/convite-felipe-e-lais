@@ -1,3 +1,4 @@
+import { theme } from "../../theme/tokens";
 import { useState } from "react";
 import { router } from "expo-router";
 import { Image, Pressable, Text, View } from "react-native";
@@ -51,7 +52,8 @@ export function GuestHome() {
             minHeight: 48,
             justifyContent: "center",
             borderRadius: 8,
-            backgroundColor: highlight || pressed ? "#C6A85A22" : "transparent",
+            backgroundColor:
+              highlight || pressed ? theme.colors.wash : "transparent",
           })}
         >
           <WeddingDetail
@@ -109,7 +111,12 @@ function WeddingDetail({ icon, text }: { icon: string; text: string }) {
       }}
     >
       <Svg width={20} height={20} viewBox="0 0 24 24" aria-hidden={true}>
-        <Path d={icon} stroke="#9A7835" strokeWidth={1.5} fill="none" />
+        <Path
+          d={icon}
+          stroke={theme.colors.secondary}
+          strokeWidth={1.5}
+          fill="none"
+        />
       </Svg>
       <Text style={[styles.text, { textAlign: "center", flexShrink: 1 }]}>
         · {text}

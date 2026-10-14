@@ -1,3 +1,4 @@
+import { theme } from "../theme/tokens";
 import React, { useState } from "react";
 import {
   Modal,
@@ -38,7 +39,7 @@ export function IconButton({
         <Path
           d={paths[icon]}
           fill="none"
-          stroke="#183F35"
+          stroke={theme.colors.secondary}
           strokeWidth={1.6}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -69,14 +70,14 @@ export function SelectionCheckbox({
         <Path
           d="M4 4h16v16H4z"
           fill="none"
-          stroke="#183F35"
+          stroke={theme.colors.secondary}
           strokeWidth={1.5}
         />
         {value ? (
           <Path
             d="m7 12 3 3 7-7"
             fill="none"
-            stroke="#183F35"
+            stroke={theme.colors.secondary}
             strokeWidth={2}
           />
         ) : null}
@@ -109,11 +110,11 @@ export function Select({
               onChange(e.target.value),
             style: {
               minHeight: 48,
-              border: "1px solid #DDD7CB",
+              border: `1px solid ${theme.colors.inputBorder}`,
               borderRadius: 10,
               padding: 12,
-              color: "#183F35",
-              background: "white",
+              color: theme.colors.ink,
+              background: theme.colors.card,
               fontSize: 16,
               width: "100%",
             },
@@ -153,7 +154,7 @@ export function Select({
             flex: 1,
             justifyContent: "center",
             padding: 24,
-            backgroundColor: "#0006",
+            backgroundColor: theme.colors.overlaySoft,
           }}
         >
           <ScrollView
@@ -187,7 +188,7 @@ export function Tag({ children }: { children: React.ReactNode }) {
       style={[
         styles.small,
         {
-          backgroundColor: "#F4EDDD",
+          backgroundColor: theme.colors.wash,
           borderRadius: 6,
           paddingHorizontal: 8,
           paddingVertical: 3,

@@ -1,0 +1,22 @@
+// Small semantic palette shared by native/web components and the web export.
+export const colors = {
+  paper: "#F5F9FD",
+  card: "#FFFFFF",
+  wash: "#EAF2FA",
+  line: "#C6D9EC",
+  inputBorder: "#718FAE",
+  secondary: "#3E6B98",
+  primary: "#245D91",
+  primaryHover: "#1D4E7C",
+  primaryActive: "#163F66",
+  ink: "#18324F",
+  muted: "#596675",
+  focus: "#245D91",
+  disabled: "#CBD9E7",
+  disabledText: "#4C5D71",
+  error: "#A03632",
+  destructive: "#A2222C",
+  shadow: "#18212C",
+  overlay: "#18212C99",
+  overlaySoft: "#18212C66",
+} as const;

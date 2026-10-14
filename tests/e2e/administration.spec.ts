@@ -1,4 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { colors } from "../../src/theme/palette";
+const selectionBackground = `rgb(${colors.wash
+  .slice(1)
+  .match(/../g)!
+  .map((part) => parseInt(part, 16))
+  .join(", ")})`;
 async function admin(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Demo noivos", exact: true }).click();
@@ -48,7 +54,7 @@ test("navigation and Choice selection remain visible and accessible", async ({
       await page
         .getByRole("link", { name, exact: true })
         .evaluate((el) => getComputedStyle(el).backgroundColor),
-    ).toBe("rgb(244, 237, 221)");
+    ).toBe(selectionBackground);
   }
   await nav(page, "Mensagens");
   const option = page.getByRole("radio", { name: "Todos", exact: true });
@@ -56,7 +62,7 @@ test("navigation and Choice selection remain visible and accessible", async ({
   await expect(option).toHaveAttribute("aria-checked", "true");
   expect(
     await option.evaluate((el) => getComputedStyle(el).backgroundColor),
-  ).toBe("rgb(244, 237, 221)");
+  ).toBe(selectionBackground);
 });
 test("standalone creation, child/group, contact mask, email validation, detail and edit", async ({
   page,
