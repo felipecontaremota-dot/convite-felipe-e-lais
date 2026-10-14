@@ -3,6 +3,7 @@ import {
   presenceChoices,
   confirmationLabels,
   responseMessages,
+  responseContent,
 } from "../../src/features/rsvp/presenceContent";
 async function presence(page: Page) {
   await page.goto("/");
@@ -33,17 +34,17 @@ for (const status of ["CONFIRMED", "DECLINED", "PENDING"] as const) {
     await expect(fx).toBeVisible();
     expect(await fx.locator("span").count()).toBeLessThanOrEqual(20);
     const response = page.getByRole("dialog", {
-      name: "Sua resposta",
+      name: responseContent[status].title,
       exact: true,
     });
     await expect(response).toBeVisible();
     await expect(fx).toHaveCount(0);
     await expect(
-      response.getByText(responseMessages[status], { exact: true }),
+      response.getByText(responseContent[status].message, { exact: true }),
     ).toBeVisible();
     expect(
       await response
-        .getByText(responseMessages[status], { exact: true })
+        .getByText(responseContent[status].message, { exact: true })
         .evaluate((el) => getComputedStyle(el).textAlign),
     ).toBe("center");
     await expect(page.locator("[data-admin-modal]")).toHaveCount(1);
@@ -56,6 +57,15 @@ for (const status of ["CONFIRMED", "DECLINED", "PENDING"] as const) {
       exact: true,
     });
     await expect(compose).toBeVisible();
+    await expect(
+      compose.getByText("Mensagem aos noivos", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      compose.getByRole("textbox", {
+        name: "Mensagem aos noivos",
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(response).toHaveCount(0);
     await compose.getByRole("button", { name: "Fechar", exact: true }).click();
     await expect(compose).toHaveCount(0);
@@ -79,7 +89,7 @@ test("message is optional, validates trimmed length, retains text after failure 
     .getByRole("button", { name: confirmationLabels.PENDING, exact: true })
     .click();
   const response = page.getByRole("dialog", {
-    name: "Sua resposta",
+    name: responseContent.PENDING.title,
     exact: true,
   });
   await expect(response).toBeVisible();
@@ -190,6 +200,14 @@ for (const width of [320, 375, 390, 768, 1280])
     const countdown = page
       .getByTestId("compact-countdown")
       .filter({ visible: true });
+    await expect(countdown.getByTestId("compact-countdown-number")).toHaveCount(
+      4,
+    );
+    for (const number of await countdown
+      .getByTestId("compact-countdown-number")
+      .all())
+      await expect(number).toHaveCSS("color", "rgb(121, 87, 25)");
+    await expect(countdown).toHaveCSS("color", "rgb(62, 107, 152)");
     const before = await countdown.textContent();
     await expect.poll(() => countdown.textContent()).not.toBe(before);
   });
@@ -204,7 +222,7 @@ test("queued message retries its existing mutation without a second message", as
     .getByRole("button", { name: confirmationLabels.PENDING, exact: true })
     .click();
   const response = page.getByRole("dialog", {
-    name: "Sua resposta",
+    name: responseContent.PENDING.title,
     exact: true,
   });
   await expect(response).toBeVisible();
@@ -318,7 +336,7 @@ test("manual header player uses the existing sound, close and replay without nav
   await expect(page.locator("video")).not.toHaveAttribute("src", /mp4/);
 });
 
-test("family description stays conservative when only local identity is known", async ({
+test("ticket description is absent regardless of local family identity", async ({
   page,
 }) => {
   await page.goto("/");
@@ -335,7 +353,7 @@ test("family description stays conservative when only local identity is known", 
       "Um convite individual por pessoa confirmada, inclusive crianças. Abra os convites antes do Grande Dia.",
       { exact: true },
     ),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     page
       .getByRole("button", { name: "Emitir novo convite", exact: true })
@@ -352,7 +370,7 @@ test("message controls stay reachable in a short mobile viewport", async ({
     .getByRole("button", { name: confirmationLabels.PENDING, exact: true })
     .click();
   const response = page.getByRole("dialog", {
-    name: "Sua resposta",
+    name: responseContent.PENDING.title,
     exact: true,
   });
   await expect(response).toBeVisible();

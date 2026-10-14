@@ -47,6 +47,7 @@ export function AdminModal({
   dismissible = true,
   closeOnOutside = true,
   premium = false,
+  centerTitle = false,
   closing = false,
 }: {
   title: string;
@@ -55,6 +56,7 @@ export function AdminModal({
   dismissible?: boolean;
   closeOnOutside?: boolean;
   premium?: boolean;
+  centerTitle?: boolean;
   closing?: boolean;
 }) {
   const { width } = useWindowDimensions();
@@ -248,7 +250,11 @@ export function AdminModal({
               style={[
                 styles.heading,
                 { flex: 1 },
-                premium && { textAlign: "center" },
+                centerTitle && { fontWeight: "700" },
+                (premium || centerTitle) && {
+                  textAlign: "center",
+                  paddingHorizontal: 44,
+                },
               ]}
             >
               {title}
@@ -260,6 +266,15 @@ export function AdminModal({
               onPress={onClose}
               style={[
                 styles.nav,
+                (premium || centerTitle) && {
+                  position: "absolute",
+                  right: 0,
+                  top: 0,
+                  minWidth: 44,
+                  minHeight: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                },
                 premium && {
                   alignSelf: "flex-start",
                   borderWidth: 0,

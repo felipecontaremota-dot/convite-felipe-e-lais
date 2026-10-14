@@ -37,11 +37,11 @@ export function PublicHome() {
   }, [app.data?.role, pathname, entry.busy, entry.error]);
   return (
     <HomeProposalVideo active={pathname === "/" && !app.data?.role}>
-      {({ titleAccessory, video, headerAccessory }) => (
+      {({ titleAccessory, video }) => (
         <Screen
           title="Um novo capítulo, juntos."
           titleAccessory={titleAccessory}
-          videoSlots={{ titleAccessory, video, headerAccessory }}
+          videoSlots={{ titleAccessory: null, video }}
         >
           {video}
           <Card>
@@ -182,6 +182,7 @@ export function InvitationAccess() {
             <Text style={styles.text}>
               Este convite foi preparado especialmente para vocês.
             </Text>
+            <WeddingCountdown startsAt={WEDDING_START} />
             {error ? (
               <Text accessibilityRole="alert" style={styles.error}>
                 {error}
@@ -196,7 +197,7 @@ export function InvitationAccess() {
               secureTextEntry
             />
             <Button
-              title="Abrir nosso convite"
+              title="Abrir convite"
               disabled={entry.busy || !invitationPin.safeParse(pin).success}
               onPress={() => entry.run(() => app.enter(code, pin))}
             />

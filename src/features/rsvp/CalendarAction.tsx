@@ -33,17 +33,16 @@ export function CalendarAction({
         onPress={() => setOpen(true)}
       />
       {open ? (
-        <AdminModal title="Adicionar à agenda" onClose={() => setOpen(false)}>
-          <Text style={styles.text}>
-            🎉💍{" "}
-            <Text style={{ fontWeight: "700" }}>
-              A festa começa às 16h, hein, não atrasa!
-            </Text>{" "}
-            ⏰{"\n\n"}E pra terminar? Bom… essa parte a gente ainda não decidiu!
-            🥂
+        <AdminModal
+          title="🎉💍 A festa começa às 16h, hein, não atrasa! ⏰"
+          centerTitle
+          onClose={() => setOpen(false)}
+        >
+          <Text style={[styles.text, { textAlign: "center", lineHeight: 24 }]}>
+            E pra terminar? Bom… essa parte a gente ainda não decidiu! 🥂
           </Text>
           <Button
-            title="Google Agenda"
+            title="Adicionar à agenda"
             onPress={() => run(() => openExternal(googleCalendarUrl(event)))}
           />
           <Button secondary title="Fechar" onPress={() => setOpen(false)} />

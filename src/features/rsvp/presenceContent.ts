@@ -10,13 +10,28 @@ export const confirmationLabels: Record<RSVP, string> = {
   DECLINED: "Pode passar minha vez! 💔",
   PENDING: "Deixa eu fazer um suspense... 🕓",
 };
+export const responseContent: Record<RSVP, { title: string; message: string }> =
+  {
+    CONFIRMED: {
+      title: "Aeeee! 🎉",
+      message:
+        "Agora sim, a festa tá ficando completa! Já estamos contando com você pra celebrar, se divertir e fazer parte desse dia inesquecível. Só não vale furar, hein?! ❤️",
+    },
+    DECLINED: {
+      title: "Ahhh, que pena! 🥹💔",
+      message:
+        "Queríamos muito você com a gente! Mas tudo bem... vamos tentar nos divertir mesmo com essa ausência ilustre! ❤️",
+    },
+    PENDING: {
+      title: "Opa, temos um suspense no ar! 👀",
+      message:
+        "Mas não demora muito pra decidir, hein?! A gente tá torcendo pra você dizer SIM! ❤️🎉",
+    },
+  };
 export const responseMessages: Record<RSVP, string> = {
-  CONFIRMED:
-    "Aeeee! 🎉 Agora sim, a festa tá ficando completa! Já estamos contando com você pra celebrar, se divertir e fazer parte desse dia inesquecível. Só não vale furar, hein?! ❤️",
-  DECLINED:
-    "Ahhh, que pena! 🥹💔 A gente queria muito você com a gente! Mas tudo bem... vamos tentar nos divertir mesmo com essa ausência ilustre! ❤️",
-  PENDING:
-    "Opa, temos um suspense no ar! 👀 Mas não demora muito pra decidir, hein?! A gente tá torcendo pra você dizer SIM! ❤️🎉",
+  CONFIRMED: `${responseContent.CONFIRMED.title} ${responseContent.CONFIRMED.message}`,
+  DECLINED: `${responseContent.DECLINED.title} ${responseContent.DECLINED.message}`,
+  PENDING: `${responseContent.PENDING.title} ${responseContent.PENDING.message}`,
 };
 
 // The queue proves a local response; only the server supplies responded_at.

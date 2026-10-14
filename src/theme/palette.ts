@@ -6,6 +6,7 @@ export const colors = {
   line: "#C6D9EC",
   inputBorder: "#718FAE",
   secondary: "#3E6B98",
+  countdownAccent: "#795719",
   primary: "#245D91",
   primaryHover: "#1D4E7C",
   primaryActive: "#163F66",

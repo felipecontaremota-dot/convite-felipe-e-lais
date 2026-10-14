@@ -112,8 +112,18 @@ test("positive RSVP remains saved independently of calendar choices and returns 
       route.fulfill({ body: "fixture calendar" }),
     );
   const popupPromise = page.waitForEvent("popup");
-  await page
-    .getByRole("button", { name: "Google Agenda", exact: true })
+  const calendarDialog = page.getByRole("dialog", {
+    name: "🎉💍 A festa começa às 16h, hein, não atrasa! ⏰",
+    exact: true,
+  });
+  await expect(
+    calendarDialog.getByText(
+      "E pra terminar? Bom… essa parte a gente ainda não decidiu! 🥂",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await calendarDialog
+    .getByRole("button", { name: "Adicionar à agenda", exact: true })
     .click();
   const popup = await popupPromise;
   await popup.waitForLoadState();

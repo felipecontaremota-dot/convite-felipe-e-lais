@@ -98,10 +98,6 @@ export function TicketsScreen() {
     ) || [];
   return (
     <Screen section="guest" title="Meus convites">
-      <Text style={styles.text}>
-        Um convite individual por pessoa confirmada, inclusive crianças. Abra os
-        convites antes do Grande Dia.
-      </Text>
       {guests.map((g) => (
         <TicketCard key={g.id} guest={g} />
       ))}

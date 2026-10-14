@@ -12,11 +12,11 @@ export function GiftsScreen() {
     (g) => g.active && safeHttps(g.external_url),
   );
   return (
-    <Screen section="guest" title="Presentes para o nosso próximo capítulo">
+    <Screen section="guest" title="Sua presença é nosso maior presente!">
       <Text style={styles.text}>
-        Sua presença é nosso maior presente... mas fique a vontade para acessar
-        nossas listas que preparamos com carinho. Ahhhh, e fica a vontade para
-        escolher presentes fora da lista, não tem problema!
+        Mas fique a vontade para acessar nossas listas que preparamos com
+        carinho. Ahhhh, e fica a vontade para escolher presentes fora da lista,
+        não tem problema!
       </Text>
       {lists.map((list) => (
         <Card key={list.id}>

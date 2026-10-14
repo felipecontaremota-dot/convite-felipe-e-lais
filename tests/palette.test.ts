@@ -16,6 +16,9 @@ function contrast(a: string, b: string) {
 }
 describe("semantic palette accessibility", () => {
   it.each([
+    [colors.countdownAccent, colors.paper],
+    [colors.countdownAccent, colors.card],
+    [colors.countdownAccent, colors.wash],
     [colors.ink, colors.paper],
     [colors.ink, colors.card],
     [colors.muted, colors.card],

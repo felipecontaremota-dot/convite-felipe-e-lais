@@ -67,16 +67,27 @@ export function WeddingCountdown({ startsAt }: { startsAt: string }) {
 
 export function CompactCountdown({ startsAt }: { startsAt: string }) {
   const parts = countdownParts(startsAt, useCountdownClock());
-  const text = [parts.days, parts.hours, parts.minutes, parts.seconds]
-    .map((v) => String(v).padStart(2, "0"))
-    .join(":");
+  const units = [parts.days, parts.hours, parts.minutes, parts.seconds].map(
+    (v) => String(v).padStart(2, "0"),
+  );
   return (
     <Text
       testID="compact-countdown"
       accessibilityLiveRegion="none"
       style={[styles.badge, { fontVariant: ["tabular-nums"] }]}
     >
-      {text} ·{" "}
+      {units.map((value, index) => (
+        <React.Fragment key={index}>
+          {index ? ":" : null}
+          <Text
+            testID="compact-countdown-number"
+            style={{ color: theme.colors.countdownAccent }}
+          >
+            {value}
+          </Text>
+        </React.Fragment>
+      ))}{" "}
+      ·{" "}
     </Text>
   );
 }

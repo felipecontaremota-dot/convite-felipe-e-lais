@@ -160,10 +160,14 @@ export function Button({
     </Pressable>
   );
 }
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+export function Field({
+  label,
+  hideLabel = false,
+  ...props
+}: TextInputProps & { label: string; hideLabel?: boolean }) {
   return (
     <View style={{ gap: 6 }}>
-      <Text style={styles.small}>{label}</Text>
+      {!hideLabel ? <Text style={styles.small}>{label}</Text> : null}
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={theme.colors.muted}

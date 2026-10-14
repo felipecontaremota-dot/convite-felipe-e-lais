@@ -82,7 +82,7 @@ it("preserves the exact approved copy and the four o'clock emoji", async () => {
     CONFIRMED:
       "Aeeee! 🎉 Agora sim, a festa tá ficando completa! Já estamos contando com você pra celebrar, se divertir e fazer parte desse dia inesquecível. Só não vale furar, hein?! ❤️",
     DECLINED:
-      "Ahhh, que pena! 🥹💔 A gente queria muito você com a gente! Mas tudo bem... vamos tentar nos divertir mesmo com essa ausência ilustre! ❤️",
+      "Ahhh, que pena! 🥹💔 Queríamos muito você com a gente! Mas tudo bem... vamos tentar nos divertir mesmo com essa ausência ilustre! ❤️",
     PENDING:
       "Opa, temos um suspense no ar! 👀 Mas não demora muito pra decidir, hein?! A gente tá torcendo pra você dizer SIM! ❤️🎉",
   });

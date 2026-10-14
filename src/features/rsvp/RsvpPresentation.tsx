@@ -9,7 +9,7 @@ import { readCache, storage } from "../../storage/driver";
 import { MutationQueue } from "../../storage/queue";
 import { useFxToast } from "../../components/FxToastProvider";
 import type { RSVP } from "../../types/domain";
-import { responseMessages } from "./presenceContent";
+import { responseContent } from "./presenceContent";
 import { RsvpFx } from "./RsvpFx";
 function Compose({ onClose }: { onClose: () => void }) {
   const app = useApp();
@@ -114,6 +114,7 @@ function Compose({ onClose }: { onClose: () => void }) {
         <>
           <Field
             label="Mensagem aos noivos"
+            hideLabel
             placeholder="Deixe uma mensagem para os noivos (opcional)"
             value={content}
             onChangeText={setContent}
@@ -165,9 +166,12 @@ export function RsvpPresentation({
       {stage === "fx" ? (
         <RsvpFx status={status} onCancel={onDone} />
       ) : stage === "response" ? (
-        <GuestModal title="Sua resposta" onClose={() => setStage("compose")}>
-          <Text style={[styles.notice, { textAlign: "center" }]}>
-            {responseMessages[status]}
+        <GuestModal
+          title={responseContent[status].title}
+          onClose={() => setStage("compose")}
+        >
+          <Text style={[styles.text, { textAlign: "center", lineHeight: 24 }]}>
+            {responseContent[status].message}
           </Text>
         </GuestModal>
       ) : (

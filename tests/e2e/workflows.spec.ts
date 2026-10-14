@@ -33,14 +33,14 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
   await expect(page.getByText("Convidado Um", { exact: true })).toHaveCount(0);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("9999");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(
     page.getByText("Senha inválida.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(
     page.getByText("Bem-vindos, Convidado Um e família"),

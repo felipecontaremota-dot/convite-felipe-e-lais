@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 export async function closeRsvpPresentation(page: Page) {
   const response = page.getByRole("dialog", {
-    name: "Sua resposta",
+    name: /^(Aeeee! 🎉|Ahhh, que pena! 🥹💔|Opa, temos um suspense no ar! 👀)$/,
     exact: true,
   });
   await expect(response).toBeVisible();

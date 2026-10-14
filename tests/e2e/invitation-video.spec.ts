@@ -62,6 +62,17 @@ test("exclusive access shares the 1s intro, 850ms expansion and header origin wh
   const title = page.getByRole("heading", { name: "Seu convite", exact: true });
   const initial = (await title.boundingBox())!.y;
   const input = page.getByLabel("Senha de acesso", { exact: true });
+  const countdown = page.getByTestId("wedding-countdown");
+  await expect(countdown).toBeVisible();
+  expect((await countdown.boundingBox())!.y).toBeLessThan(
+    (await input.boundingBox())!.y,
+  );
+  await expect(
+    page.getByLabel("Nome do convidado", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Abrir convite", exact: true }),
+  ).toBeVisible();
   await input.fill("00");
   await input.focus();
   await page.clock.runFor(999);
@@ -178,7 +189,7 @@ test("legacy PIN access stays available while playing and releases the old playe
   const old = await page.locator("video").elementHandle();
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   expect(
@@ -224,7 +235,7 @@ for (const width of [320, 390, 768, 1280])
       page.getByLabel("Senha de acesso", { exact: true }),
     ).toHaveValue("9999");
     await page
-      .getByRole("button", { name: "Abrir nosso convite", exact: true })
+      .getByRole("button", { name: "Abrir convite", exact: true })
       .click();
     await expect(
       page.getByText("Senha inválida.", { exact: true }),
@@ -255,7 +266,7 @@ test("reduced motion retains intro and form; autoplay failure still leaves usabl
   ).toBeVisible();
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
 });

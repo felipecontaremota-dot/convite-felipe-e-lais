@@ -241,7 +241,7 @@ test("family identification never activates; PIN 0047 activates once, session re
   ).toHaveCount(0);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   expect(state.activations).toBe(1);
@@ -305,7 +305,7 @@ test("revocation refresh removes cached family; new PIN is required for reactiva
   await page.goto(`/c/${code}`);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   state.bound = false;
@@ -315,14 +315,14 @@ test("revocation refresh removes cached family; new PIN is required for reactiva
   await page.goto(`/c/${code}`);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(
     page.getByText("Senha inválida.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Senha de acesso", { exact: true }).fill("3478");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
 });
@@ -335,7 +335,7 @@ test("a new browser device needs PIN even after another device activates", async
   await page.goto(`/c/${code}`);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   expect(first.activations).toBe(1);
@@ -732,7 +732,7 @@ test("already deployed legacy Function and snapshot keep individual links workin
   await page.goto(`/c/${code}`);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   await expect(page.getByText("Alteração salva.", { exact: true })).toHaveCount(

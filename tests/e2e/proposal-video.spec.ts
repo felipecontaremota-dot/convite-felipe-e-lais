@@ -45,6 +45,9 @@ test("home original, espera de 1s, expansão física de 850ms e som sem reiníci
   await page.goto("/");
   const space = page.locator(".proposal-space");
   await expect(space).toHaveAttribute("data-phase", "waiting");
+  await expect(
+    page.getByRole("button", { name: "Assistir ao nosso vídeo", exact: true }),
+  ).toHaveCount(0);
   const initial = await space.boundingBox();
   expect(initial!.height).toBe(0);
   const video = page.locator("video");
@@ -97,6 +100,10 @@ test("fechar, foco, replay a partir de zero e muted, sem repetição após refre
     exact: true,
   });
   await expect(replay).toBeVisible();
+  await expect(replay).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Assistir ao nosso vídeo", exact: true }),
+  ).toHaveCount(0);
   await expect(replay).toBeFocused();
   await replay.press("Enter");
   const video = page.locator("video");

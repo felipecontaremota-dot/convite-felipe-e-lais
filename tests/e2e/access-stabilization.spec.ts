@@ -206,14 +206,14 @@ test("ADMIN copies links without invoking access; new anonymous browser passes r
     await expect(guest.getByRole("alert")).toHaveCount(0);
     await guest.getByLabel("Senha de acesso", { exact: true }).fill("9999");
     await guest
-      .getByRole("button", { name: "Abrir nosso convite", exact: true })
+      .getByRole("button", { name: "Abrir convite", exact: true })
       .click();
     await expect(
       guest.getByText("Senha inválida.", { exact: true }),
     ).toBeVisible();
     await guest.getByLabel("Senha de acesso", { exact: true }).fill(pin);
     await guest
-      .getByRole("button", { name: "Abrir nosso convite", exact: true })
+      .getByRole("button", { name: "Abrir convite", exact: true })
       .click();
     await expect(guest).toHaveURL(/\/inicio$/);
     await context.close();
@@ -357,7 +357,7 @@ test("Profile real database: offline revocation, reload and reactivation preserv
   await page.goto(`/c/${code}`);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   await page.getByRole("link", { name: "Convites", exact: true }).click();
@@ -444,7 +444,7 @@ test("Profile real database: offline revocation, reload and reactivation preserv
     await guest.goto(`/c/${code}`);
     await guest.getByLabel("Senha de acesso", { exact: true }).fill("0047");
     await guest
-      .getByRole("button", { name: "Abrir nosso convite", exact: true })
+      .getByRole("button", { name: "Abrir convite", exact: true })
       .click();
     await expect(guest).toHaveURL(/\/inicio$/);
     await guest.getByRole("link", { name: "Perfil", exact: true }).click();
@@ -568,7 +568,7 @@ test("Profile persistence failure never presents an effective remote revocation,
   await page.goto(`/c/${code}`);
   await page.getByLabel("Senha de acesso", { exact: true }).fill("0047");
   await page
-    .getByRole("button", { name: "Abrir nosso convite", exact: true })
+    .getByRole("button", { name: "Abrir convite", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inicio$/);
   await page.getByRole("link", { name: "Perfil", exact: true }).click();
