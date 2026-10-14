@@ -19,7 +19,8 @@
     "format": "prettier --write app src tests scripts docs *.json *.ts *.js README.md .github/workflows/*.yml",
     "test:functions": "deno test --config supabase/functions/deno.json --allow-env supabase/functions/_shared/providers.test.ts supabase/functions/redeem-invitation/handler.test.ts supabase/functions/dispatch-notifications/handler.test.ts supabase/functions/send-invitations/handler.test.ts supabase/functions/_shared/cors.test.ts",
     "serve:web": "node scripts/serve-web.mjs",
-    "test:export": "node scripts/test-export.mjs"
+    "test:export": "node scripts/test-export.mjs",
+    "test:pwa": "node scripts/test-installability.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",

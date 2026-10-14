@@ -183,3 +183,71 @@ for (const apple of [false, true]) {
     ).toBeVisible();
   });
 }
+
+test("evento antecipado antes do React é preservado até login e clique", async ({
+  page,
+}) => {
+  // Expo dev does not decorate HTML. Inject the exact production bootstrap in
+  // the response head and dispatch between that script and the application bundle.
+  const { installBootstrapScript } =
+    await import("../../src/features/install/installBootstrap");
+  await page.route("http://127.0.0.1:8081/", async (route) => {
+    const response = await route.fetch();
+    const html = await response.text();
+    const earlyEvent = `
+      window.__earlyPromptCalls=0;
+      const early=new Event('beforeinstallprompt',{cancelable:true});
+      Object.assign(early,{prompt:()=>{window.__earlyPromptCalls++;return Promise.resolve();},userChoice:Promise.resolve({outcome:'dismissed'})});
+      window.dispatchEvent(early);
+      window.__earlyPrevented=early.defaultPrevented;
+    `;
+    await route.fulfill({
+      response,
+      body: html.replace(
+        "<head>",
+        `<head><script>${installBootstrapScript()}${earlyEvent}</script>`,
+      ),
+    });
+  });
+  await page.goto("/");
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __earlyPrevented: boolean }).__earlyPrevented,
+    ),
+  ).toBe(true);
+  expect(
+    await page.evaluate(
+      () => window.__weddingPwaInstall!.getSnapshot().capturePhase,
+    ),
+  ).toBe("early");
+  await page
+    .getByRole("button", { name: "Demo convidado", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await page.getByRole("button", { name: "Baixar app", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __earlyPromptCalls: number })
+          .__earlyPromptCalls,
+    ),
+  ).toBe(1);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__weddingPwaInstall!.getSnapshot().status),
+    )
+    .toBe("dismissed");
+  await page.getByRole("button", { name: "Baixar app", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Instale este convite como app" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __earlyPromptCalls: number })
+          .__earlyPromptCalls,
+    ),
+  ).toBe(1);
+});

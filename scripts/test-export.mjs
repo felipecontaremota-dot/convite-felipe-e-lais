@@ -1,3 +1,4 @@
+import { verifyNativeInstallCapture } from "./test-installability.mjs";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
 import { readFile, access } from "node:fs/promises";
@@ -365,6 +366,7 @@ try {
     ),
     false,
   );
+  await verifyNativeInstallCapture(origin, basePath);
   console.log(
     `Export ${shell}: home/JS/manifest/SW/icons, 404 + invitation path, private-cache isolation, offline shell and 390×844 passed.`,
   );

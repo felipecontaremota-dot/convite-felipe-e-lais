@@ -1,3 +1,4 @@
+import { installBootstrapScript } from "../src/features/install/installBootstrap.ts";
 import { colors } from "../src/theme/palette.ts";
 import { readFile, writeFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -11,7 +12,13 @@ const html = await readFile("dist/index.html", "utf8");
 const legacyCompatibility = basePath
   ? ""
   : `<script>(function(){var p="/convite-felipe-e-lais",u=new URL(window.location.href);if(u.pathname===p||u.pathname.startsWith(p+"/")){u.pathname=u.pathname.slice(p.length)||"/";history.replaceState(history.state,"",u.href);}})();</script>`;
+if (!html.includes("<head>"))
+  throw new Error("Export HTML must contain a head for early PWA capture");
 const decorated = html
+  .replace(
+    "<head>",
+    `<head><script data-pwa-install-bootstrap>${installBootstrapScript()}</script>`,
+  )
   .replace(
     "</head>",
     `${legacyCompatibility}<link rel="manifest" href="${webPath("manifest.webmanifest", basePath)}"><meta name="theme-color" content="${colors.ink}"></head>`,
