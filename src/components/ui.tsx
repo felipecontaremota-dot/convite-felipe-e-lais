@@ -19,6 +19,7 @@ import { theme } from "../theme/tokens";
 import { useApp } from "../lib/AppProvider";
 import { canAccess } from "../utils/security";
 import { Confirmation } from "./adminUi";
+import { useMessageCenter } from "../features/messages/MessageCenterContext";
 import { UnreadBadge } from "./UnreadBadge";
 import { unreadMessages } from "../features/messages/conversations";
 import { mutationAction } from "../storage/syncLabels";
@@ -324,6 +325,7 @@ export function Screen({
   const app = useApp();
   const pathname = usePathname();
   const focused = useIsFocused();
+  const messageCenter = useMessageCenter();
   const feedback = useFeedback();
   const [discardFailed, setDiscardFailed] = useState<string | null>(null);
   const visiblePending = app.pending.filter(
@@ -378,7 +380,27 @@ export function Screen({
               {...(Platform.OS === "web"
                 ? { dataSet: { themeNav: "true" } }
                 : {})}
-              accessibilityRole="link"
+              accessibilityRole={
+                Platform.OS === "web" &&
+                section === "admin" &&
+                path === "/gestao-mensagens"
+                  ? "button"
+                  : "link"
+              }
+              aria-haspopup={
+                Platform.OS === "web" &&
+                section === "admin" &&
+                path === "/gestao-mensagens"
+                  ? "dialog"
+                  : undefined
+              }
+              aria-expanded={
+                Platform.OS === "web" &&
+                section === "admin" &&
+                path === "/gestao-mensagens"
+                  ? messageCenter.open
+                  : undefined
+              }
               accessibilityLabel={
                 section === "admin" &&
                 path === "/gestao-mensagens" &&
@@ -388,7 +410,15 @@ export function Screen({
               }
               accessibilityState={{ selected: pathname === path }}
               aria-current={pathname === path ? "page" : undefined}
-              onPress={() => router.push(path as never)}
+              onPress={() => {
+                if (
+                  Platform.OS === "web" &&
+                  section === "admin" &&
+                  path === "/gestao-mensagens"
+                )
+                  messageCenter.show();
+                else router.push(path as never);
+              }}
               style={[styles.nav, pathname === path && styles.selected]}
             >
               <Text

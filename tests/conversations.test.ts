@@ -6,6 +6,9 @@ import {
   unreadMessages,
   unitMessages,
   scheduleState,
+  messageDate,
+  senderCaption,
+  conversationList,
 } from "../src/features/messages/conversations";
 import {
   scheduledInstant,
@@ -202,4 +205,77 @@ it("chronology compares actual instants across timezone offsets", () => {
       message("b", { created_at: "2026-01-01T12:00:00Z" }),
     ]).map((m) => m.id),
   ).toEqual(["b", "a"]);
+});
+
+describe("unified conversation presentation", () => {
+  it("formats event local time without seconds or technical timezone", () =>
+    expect(messageDate("2026-10-14T21:35:49Z")).toBe("14/10/2026, 18:35"));
+  it.each([
+    ["GENERAL", "Felipe & Laís para todos"],
+    ["FAMILY", "Felipe & Laís para sua família"],
+    ["INDIVIDUAL", "Felipe & Laís para você"],
+    ["PRIVATE", "Felipe & Laís para você"],
+    ["LEGACY", "Felipe & Laís"],
+  ] as const)(
+    "labels %s without changing its stored audience",
+    (audience, label) => {
+      const m = message("a", { audience });
+      expect(senderCaption(m)).toBe(label);
+      expect(m.audience).toBe(audience);
+    },
+  );
+  it("orders access units by real activity and counts incoming unread only", () => {
+    const data = {
+      ...snapshot("ADMIN", [
+        message("in-a", {
+          from_admin: false,
+          invitation_id: "a",
+          created_at: "2026-01-01T12:00:00Z",
+        }),
+        message("in-b", {
+          from_admin: false,
+          invitation_id: "b",
+          created_at: "2026-01-01T13:00:00Z",
+        }),
+        message("out-a", {
+          audience: "FAMILY",
+          invitation_id: "a",
+          created_at: "2026-01-01T14:00:00Z",
+        }),
+        message("general", {
+          audience: "GENERAL",
+          created_at: "2026-01-01T15:00:00Z",
+        }),
+      ]),
+      invitations: [
+        { id: "a", name: "Unidade A" },
+        { id: "b", name: "Unidade B" },
+      ],
+    } as Snapshot;
+    const result = conversationList(data);
+    expect(result.map((c) => c.unit.id)).toEqual(["a", "b"]);
+    expect(result.map((c) => c.unread)).toEqual([1, 1]);
+    expect(result[0].anchor?.id).toBe("in-a");
+    expect(
+      result.flatMap((c) => c.messages).some((m) => m.id === "general"),
+    ).toBe(false);
+  });
+});
+
+it("keeps active units without activity available with stable ordering", () => {
+  const data = {
+    ...snapshot("ADMIN", []),
+    invitations: [
+      { id: "b", name: "B", active: true },
+      { id: "a", name: "A", active: true },
+    ],
+    guests: [
+      { id: "g-a", invitation_id: "a" },
+      { id: "g-b", invitation_id: "b" },
+    ],
+  } as Snapshot;
+  expect(conversationList(data).map((c) => c.unit.id)).toEqual(["a", "b"]);
+  expect(conversationList(data).every((c) => !c.latest && c.unread === 0)).toBe(
+    true,
+  );
 });

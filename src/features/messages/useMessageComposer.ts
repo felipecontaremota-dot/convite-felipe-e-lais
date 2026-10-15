@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { useApp } from "../../lib/AppProvider";
 import { useFeedback } from "../../components/ui";
 import type { MutationType } from "../../types/domain";
-export function useMessageComposer() {
+export function useMessageComposer({
+  quietSuccess = false,
+}: { quietSuccess?: boolean } = {}) {
   const app = useApp(),
     feedback = useFeedback(),
     lock = useRef(false);
@@ -17,21 +19,27 @@ export function useMessageComposer() {
     setBusy(true);
     try {
       await feedback.run(async () => {
+        const key = (value: Record<string, unknown>) => {
+          if (type !== "MESSAGE_SEND" || app.data?.role !== "GUEST")
+            return JSON.stringify(value);
+          const { sender_guest_id: _sender, ...message } = value;
+          return JSON.stringify(message);
+        };
         const existing = app.pending.find(
-          (m) =>
-            m.type === type &&
-            JSON.stringify(m.payload) === JSON.stringify(payload),
+          (m) => m.type === type && key(m.payload) === key(payload),
         );
         if (existing) {
           if (!app.online)
             return "Esta mensagem já está pendente neste dispositivo. Será sincronizada ao reconectar.";
-          await app.syncNow();
+          await app.syncNow(existing.mutationId);
           done();
-          return "Mensagem registrada.";
+          return quietSuccess ? "" : "Mensagem registrada.";
         }
         const result = await app.send(type, payload);
         done();
-        return result;
+        return quietSuccess && result === "Sincronizado com sucesso."
+          ? ""
+          : result;
       });
     } finally {
       lock.current = false;

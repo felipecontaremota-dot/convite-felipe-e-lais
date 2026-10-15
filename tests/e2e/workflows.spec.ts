@@ -105,15 +105,9 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
       exact: true,
     })
     .click();
-  await expect
-    .poll(() =>
-      page
-        .getByRole("combobox", { name: "Quem está enviando", exact: true })
-        .evaluate(
-          (select: HTMLSelectElement) => select.selectedOptions[0]?.textContent,
-        ),
-    )
-    .toBe("Convidada Dois");
+  await expect(
+    page.getByRole("combobox", { name: "Quem está enviando", exact: true }),
+  ).toHaveCount(0);
   await page
     .getByLabel("Mensagem aos noivos", { exact: true })
     .fill("Que alegria participar!");

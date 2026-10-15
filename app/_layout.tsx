@@ -6,6 +6,8 @@ import { Stack } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider } from "../src/lib/AppProvider";
 import { FloatingMessages } from "../src/components/FloatingMessages";
+import { MessageCenterProvider } from "../src/features/messages/MessageCenterContext";
+import { FloatingAdminMessages } from "../src/components/FloatingAdminMessages";
 const query = new QueryClient({
   defaultOptions: { queries: { staleTime: 30000 } },
 });
@@ -16,8 +18,11 @@ export default function Layout() {
         <InstallProvider>
           <FxToastProvider>
             <ThemeStyles />
-            <Stack screenOptions={{ headerShown: false }} />
-            <FloatingMessages />
+            <MessageCenterProvider>
+              <Stack screenOptions={{ headerShown: false }} />
+              <FloatingMessages />
+              <FloatingAdminMessages />
+            </MessageCenterProvider>
           </FxToastProvider>
         </InstallProvider>
       </AppProvider>

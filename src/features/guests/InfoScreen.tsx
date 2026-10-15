@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link, type Href } from "expo-router";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Card, Screen, styles } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { theme } from "../../theme/tokens";
@@ -72,7 +72,6 @@ function Topic({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 export function InfoScreen() {
-  const [privacyOpen, setPrivacyOpen] = useState(false);
   return (
     <Screen section="guest" title="Informações">
       {Platform.OS === "web" ? (
@@ -80,7 +79,6 @@ export function InfoScreen() {
         [data-testid="wedding-information"] a { transition: color 180ms ease; }
         [data-testid="wedding-information"] a:hover { color: ${theme.colors.primaryHover}; }
         [data-testid="wedding-information"] a:focus-visible { outline: 3px solid ${theme.colors.focus}; outline-offset: 3px; border-radius: 3px; }
-        [data-testid="information-privacy-toggle"]:focus-visible { outline: 3px solid ${theme.colors.focus}; outline-offset: 3px; }
         @media (prefers-reduced-motion: reduce) { [data-testid="wedding-information"] a { transition: none; } }
       `}</style>
       ) : null}
@@ -244,42 +242,6 @@ export function InfoScreen() {
           </View>
         </View>
       </Card>
-      <Pressable
-        testID="information-privacy-toggle"
-        accessibilityRole="button"
-        accessibilityState={{ expanded: privacyOpen }}
-        aria-expanded={privacyOpen}
-        aria-controls="information-privacy-details"
-        onPress={() => setPrivacyOpen((v) => !v)}
-        style={[styles.nav, { backgroundColor: theme.colors.card }]}
-      >
-        <Text style={[styles.text, { color: theme.colors.secondary }]}>
-          Privacidade e seus dados
-        </Text>
-      </Pressable>
-      {privacyOpen ? (
-        <Card>
-          <View
-            nativeID="information-privacy-details"
-            testID="information-privacy-details"
-            style={infoStyles.reading}
-          >
-            <Paragraph>
-              Usamos nome, resposta de presença, contato opcional, restrições
-              informadas e registro de entrada para organizar a celebração.
-              Contatos não integram o QR. Mensagens privadas são acessíveis
-              somente à família e aos noivos.
-            </Paragraph>
-            <Paragraph>
-              Você pode revogar consentimentos no Perfil e pedir correção ou
-              exclusão aos noivos pela área Mensagens. No aparelho, Sair remove
-              a sessão, convites e cache da conta. Uma política completa,
-              responsável e prazo de retenção devem ser definidos antes do
-              lançamento público.
-            </Paragraph>
-          </View>
-        </Card>
-      ) : null}
     </Screen>
   );
 }

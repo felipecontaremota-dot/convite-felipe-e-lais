@@ -59,6 +59,9 @@ export function scheduleState(s: NotificationSchedule, jobs: DeliveryJob[]) {
         ? "Agendada"
         : "Pausada";
   const deliveries = jobs.filter((j) => j.message_id === s.id);
+  return deliveryState(deliveries);
+}
+export function deliveryState(deliveries: DeliveryJob[]) {
   if (!deliveries.length) return "Sem destinatários ativos";
   if (deliveries.some((j) => j.status === "processing"))
     return "Em processamento";
@@ -71,4 +74,51 @@ export function scheduleState(s: NotificationSchedule, jobs: DeliveryJob[]) {
     return "Resultado não confirmado";
   if (deliveries.some((j) => j.status === "failed")) return "Falha de entrega";
   return "Não enviada — consentimento ou disponibilidade";
+}
+
+export function messageDate(value: string) {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const get = (key: string) => parts.find((p) => p.type === key)?.value || "";
+  return `${get("day")}/${get("month")}/${get("year")}, ${get("hour")}:${get("minute")}`;
+}
+export function senderCaption(message: Message) {
+  if (!message.from_admin) return null;
+  if (message.audience === "GENERAL") return "Felipe & Laís para todos";
+  if (message.audience === "FAMILY") return "Felipe & Laís para sua família";
+  if (message.audience === "INDIVIDUAL" || message.audience === "PRIVATE")
+    return "Felipe & Laís para você";
+  return "Felipe & Laís";
+}
+export function conversationList(data: Snapshot) {
+  return data.invitations
+    .map((unit) => {
+      const messages = unitMessages(data, unit.id);
+      const latest = messages.at(-1);
+      const anchor = [...messages]
+        .reverse()
+        .find((m) => !m.from_admin && m.invitation_id === unit.id);
+      const unread = messages.filter((m) => isUnread(m, data)).length;
+      return { unit, messages, latest, anchor, unread };
+    })
+    .filter(
+      (c) =>
+        !!c.latest ||
+        (c.unit.active &&
+          !c.unit.archived_at &&
+          data.guests.some((g) => g.invitation_id === c.unit.id)),
+    )
+    .sort(
+      (a, b) =>
+        (b.latest ? new Date(b.latest.created_at).getTime() : 0) -
+          (a.latest ? new Date(a.latest.created_at).getTime() : 0) ||
+        a.unit.id.localeCompare(b.unit.id),
+    );
 }

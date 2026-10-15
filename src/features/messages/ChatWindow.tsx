@@ -6,11 +6,13 @@ export function ChatWindow({
   title,
   children,
   footer,
+  toolbar,
   onClose,
 }: {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  toolbar?: ReactNode;
   onClose: () => void;
 }) {
   const [closing, setClosing] = useState(false),
@@ -66,6 +68,8 @@ export function ChatWindow({
  padding-bottom:max(var(--chat-bottom,90px),env(safe-area-inset-bottom,0px))!important;
  padding-right:max(16px,env(safe-area-inset-right,0px))!important;padding-left:max(16px,env(safe-area-inset-left,0px))!important;background:${theme.colors.overlaySoft}!important;}
  [data-chat-dialog]{height:min(640px,calc(var(--chat-height,100dvh) - var(--chat-bottom,90px) - 20px));transform-origin:bottom right;box-shadow:0 16px 44px ${theme.colors.shadow}26;animation:wedding-chat-open 300ms cubic-bezier(.22,1,.36,1) both;max-height:calc(var(--chat-height,100dvh) - var(--chat-bottom,90px) - 20px)!important;}
+ [data-chat-close="true"]:hover{background:${theme.colors.wash}!important;}
+ [data-chat-close="true"]:focus-visible{outline:3px solid ${theme.colors.focus};outline-offset:2px;}
  [data-chat-dialog] h1{font-size:18px!important;line-height:24px!important;}
  [data-chat-dialog="closing"]{animation:wedding-chat-close 200ms ease-in both;pointer-events:none;}
  @keyframes wedding-chat-open{from{opacity:0;transform:translateY(12px) scale(.94)}to{opacity:1;transform:none}}
@@ -80,6 +84,7 @@ export function ChatWindow({
         centerTitle
         onClose={close}
         footer={footer}
+        toolbar={toolbar}
       >
         {children}
       </AdminModal>

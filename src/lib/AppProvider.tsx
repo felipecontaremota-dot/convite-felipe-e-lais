@@ -52,7 +52,7 @@ interface ContextValue {
   ) => Promise<Record<string, unknown>>;
   ticket: (guest: string, regenerate?: boolean) => Promise<Ticket>;
   sync: () => Promise<SyncResult>;
-  syncNow: () => Promise<string>;
+  syncNow: (messageMutationId?: string) => Promise<string>;
   discardFailed: (id: string) => Promise<void>;
   sendInvitations: (
     request: string,
@@ -385,8 +385,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isDemo: !!demoRole,
     refresh: async () => (user || demoRole ? query.refetch() : null),
     sync,
-    syncNow: async () => {
+    syncNow: async (messageMutationId) => {
       const result = await sync();
+      if (messageMutationId) {
+        const left = await queue.list();
+        if (left.some((m) => m.mutationId === messageMutationId))
+          throw new SyncError("A mensagem continua pendente. Tente novamente.");
+        return "Mensagem registrada.";
+      }
       if (result.remaining)
         throw new SyncError(
           `${result.message} ${result.firstFailure?.lastError || "Tente novamente."}`,

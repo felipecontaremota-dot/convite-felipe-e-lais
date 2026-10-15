@@ -5,7 +5,13 @@ import { Button, Empty, styles } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { theme } from "../../theme/tokens";
 import type { Message } from "../../types/domain";
-import { chronological, isUnread } from "./conversations";
+import {
+  chronological,
+  isUnread,
+  messageDate,
+  senderCaption,
+  deliveryState,
+} from "./conversations";
 function Bubble({
   message: m,
   onDelete,
@@ -24,7 +30,7 @@ function Bubble({
       (Platform.OS === "web" && document.visibilityState !== "visible") ||
       !app.online ||
       !unread ||
-      !app.data?.capabilities?.messaging_v2
+      (!app.data?.capabilities?.messaging_v2 && app.data?.role !== "ADMIN")
     )
       return;
     lock.current = true;
@@ -87,13 +93,12 @@ function Bubble({
     >
       <Text style={styles.badge}>
         {m.from_admin
-          ? "Felipe & Laís"
+          ? app.data?.role === "ADMIN"
+            ? "Felipe & Laís"
+            : senderCaption(m)
           : app.data?.guests.find((g) => g.id === m.sender_guest_id)?.name ||
             "Sua família"}
       </Text>
-      {m.audience === "FAMILY" ? (
-        <Text style={styles.small}>Recado para a família</Text>
-      ) : null}
       {m.notification_title ? (
         <Text style={styles.heading}>{m.notification_title}</Text>
       ) : null}
@@ -103,21 +108,9 @@ function Bubble({
           ? m.content.slice(m.notification_title.length + 1)
           : m.content}
       </Text>
-      <Text style={styles.small}>
-        {new Date(m.created_at).toLocaleString("pt-BR", {
-          timeZone: "America/Sao_Paulo",
-        })}
-        {unread
-          ? " · Não lida"
-          : m.viewer_read_at
-            ? app.data?.role === "GUEST"
-              ? " · Visualizada na sua unidade"
-              : " · Lida por você"
-            : app.data?.role === "ADMIN" && m.legacy_admin_read_at
-              ? " · Leitura histórica compartilhada"
-              : ""}
-      </Text>
-      {unread && app.data?.capabilities?.messaging_v2 ? (
+      <Text style={styles.small}>{messageDate(m.created_at)}</Text>
+      {unread &&
+      (app.data?.capabilities?.messaging_v2 || app.data?.role === "ADMIN") ? (
         <Button
           secondary
           title="Marcar como lida"
@@ -128,6 +121,17 @@ function Bubble({
       {readError ? (
         <Text accessibilityRole="alert" style={styles.error}>
           Não foi possível confirmar a leitura. Tente novamente.
+        </Text>
+      ) : null}
+      {m.from_admin &&
+      app.data?.role === "ADMIN" &&
+      (app.data.notification_jobs || []).some((j) => j.message_id === m.id) ? (
+        <Text style={styles.small}>
+          {deliveryState(
+            (app.data.notification_jobs || []).filter(
+              (j) => j.message_id === m.id,
+            ),
+          )}
         </Text>
       ) : null}
       {onDelete && m.from_admin ? (
@@ -148,8 +152,43 @@ export function MessageHistory({
   onDelete?: (m: Message) => void;
 }) {
   const ordered = chronological(messages);
+  const app = useApp(),
+    root = useRef<View>(null),
+    previous = useRef<string | null>(null),
+    nearEnd = useRef(true);
+  const latest = ordered.at(-1);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const element = root.current as unknown as HTMLElement;
+    const scroll = element?.closest<HTMLElement>('[data-chat-history="true"]');
+    if (!scroll) return;
+    const track = () => {
+      nearEnd.current =
+        scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 100;
+    };
+    scroll.addEventListener("scroll", track);
+    return () => scroll.removeEventListener("scroll", track);
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== "web" || latest?.id === previous.current) return;
+    const first = previous.current === null;
+    previous.current = latest?.id || null;
+    if (
+      !first &&
+      !nearEnd.current &&
+      latest?.from_admin !== (app.data?.role === "ADMIN")
+    )
+      return;
+    const scroll = (
+      root.current as unknown as HTMLElement
+    )?.closest<HTMLElement>('[data-chat-history="true"]');
+    const frame = requestAnimationFrame(() => {
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [latest?.id, latest?.from_admin, app.data?.role]);
   return (
-    <View style={{ gap: 12 }}>
+    <View ref={root} style={{ gap: 12 }}>
       {Platform.OS === "web" ? (
         <style>{`
         [data-testid="conversation-message"] { animation: wedding-message-enter 220ms ease-out both; }

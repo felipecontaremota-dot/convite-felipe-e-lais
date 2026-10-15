@@ -11,7 +11,16 @@ async function admin(page: Page) {
   await expect(page).toHaveURL(/\/painel$/);
 }
 async function nav(page: Page, name: string) {
-  await page.getByRole("link", { name, exact: true }).click();
+  await page
+    .getByRole(name === "Mensagens" ? "button" : "link", { name, exact: true })
+    .click();
+  if (name === "Mensagens")
+    await page
+      .getByRole("button", {
+        name: "Envio para família ou pessoa",
+        exact: true,
+      })
+      .click();
 }
 async function create(page: Page, name: string, phone = "") {
   await page
@@ -46,13 +55,18 @@ test("navigation and Choice selection remain visible and accessible", async ({
   ]) {
     await nav(page, name!);
     await expect(page).toHaveURL(new RegExp(`${path}$`));
-    await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(
+      page.getByRole(name === "Mensagens" ? "button" : "link", {
+        name,
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-current", "page");
     expect(
       await page
-        .getByRole("link", { name, exact: true })
+        .getByRole(name === "Mensagens" ? "button" : "link", {
+          name,
+          exact: true,
+        })
         .evaluate((el) => getComputedStyle(el).backgroundColor),
     ).toBe(selectionBackground);
   }

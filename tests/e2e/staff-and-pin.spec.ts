@@ -756,7 +756,10 @@ test("legacy backend blocks new messaging dependencies and normal sending hides 
   await expect(
     page.getByText(/Novos agendamentos estarão disponíveis/),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Mensagens", exact: true }).click();
+  await page.getByRole("button", { name: "Mensagens", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Envio para família ou pessoa", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Excluir mensagem", exact: true }),
   ).toHaveCount(0);
@@ -801,4 +804,61 @@ test("legacy backend blocks new messaging dependencies and normal sending hides 
   await expect(
     page.getByRole("button", { name: "Enviar recado", exact: true }),
   ).toBeVisible();
+});
+
+test("missing messaging capability shows the dependency and never submits a private reply or new general send", async ({
+  page,
+}) => {
+  await backend(page);
+  await login(page);
+  let mutations = 0;
+  await page.route(
+    "http://127.0.0.1:54321/rest/v1/rpc/app_mutate",
+    async (route) => {
+      mutations++;
+      await route.fulfill({
+        status: 400,
+        json: { message: "unexpected mutation" },
+      });
+    },
+  );
+  await page.getByRole("button", { name: "Mensagens", exact: true }).click();
+  const list = page.getByRole("dialog", {
+    name: "Mensagens dos convidados",
+    exact: true,
+  });
+  await expect(list.getByText(/Respostas e exclusão ainda não/)).toBeVisible();
+  await list
+    .getByRole("button", { name: "Família Teste", exact: true })
+    .click();
+  const chat = page.getByRole("dialog", { name: "Família Teste", exact: true });
+  await chat
+    .getByLabel("Resposta dos noivos", { exact: true })
+    .fill("Não simular uma resposta");
+  await expect(
+    chat.getByRole("button", { name: "Enviar resposta", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    chat.getByRole("button", { name: "Excluir mensagem", exact: true }),
+  ).toHaveCount(0);
+  await chat
+    .getByRole("button", { name: "Voltar às conversas", exact: true })
+    .click();
+  await list
+    .getByRole("button", { name: "Enviar mensagem para todos", exact: true })
+    .click();
+  const general = page.getByRole("dialog", {
+    name: "Mensagens para todos",
+    exact: true,
+  });
+  await general
+    .getByLabel("Mensagem para todos", { exact: true })
+    .fill("Não simular classificação geral");
+  await expect(
+    general.getByRole("button", {
+      name: "Enviar mensagem para todos",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  expect(mutations).toBe(0);
 });

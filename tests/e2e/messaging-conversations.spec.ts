@@ -47,7 +47,7 @@ async function seed(page: Page) {
   await page.reload();
 }
 for (const width of [320, 375, 390, 768, 1280])
-  test(`guest chat preserves route, categories and viewport at ${width}px`, async ({
+  test(`guest unified chat preserves route, receipts and viewport at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 844 });
@@ -71,24 +71,20 @@ for (const width of [320, 375, 390, 768, 1280])
     ).toBeVisible();
     await expect(
       dialog.getByText("General wedding notice", { exact: true }),
-    ).toHaveCount(0);
-    await expect
-      .poll(async () =>
-        page.evaluate(() => {
-          const db = JSON.parse(localStorage.getItem("demo-db")!);
-          return Object.keys(db.reads || {}).length;
-        }),
-      )
-      .toBe(1);
-    await dialog.getByRole("radio", { name: /Mensagens gerais/ }).click();
-    await expect(
-      dialog.getByText("General wedding notice", { exact: true }),
     ).toBeVisible();
     await expect(
-      dialog.getByText("Private wedding answer", { exact: true }),
+      dialog.getByText("Felipe & Laís para todos", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText("Felipe & Laís para você", { exact: true }),
+    ).toBeVisible();
+    await expect(dialog.getByRole("radio")).toHaveCount(0);
+    await expect(dialog.getByRole("combobox")).toHaveCount(0);
+    await expect(
+      dialog.getByText(/Conversa privada da sua unidade/),
     ).toHaveCount(0);
     await expect
-      .poll(async () =>
+      .poll(() =>
         page.evaluate(
           () =>
             Object.keys(
@@ -97,7 +93,6 @@ for (const width of [320, 375, 390, 768, 1280])
         ),
       )
       .toBe(2);
-    await dialog.getByRole("radio", { name: /Nossa conversa/ }).click();
     await dialog
       .getByLabel("Mensagem aos noivos", { exact: true })
       .fill("Hello through our floating conversation");
@@ -151,13 +146,25 @@ test("admin unread badge, private answer and destructive deletion preserve the c
     .click();
   await demo(page);
   await expect(
-    page.getByRole("link", { name: "Mensagens, 1 não lidas.", exact: true }),
+    page.getByRole("button", { name: "Mensagens, 1 não lidas.", exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: /^Mensagens/ }).click();
-  await page
-    .getByRole("button", { name: "Responder à família", exact: true })
+  const url = page.url();
+  await page.getByRole("button", { name: /^Mensagens,/ }).click();
+  await expect(page).toHaveURL(url);
+  const list = page.getByRole("dialog", {
+    name: "Mensagens dos convidados",
+    exact: true,
+  });
+  await expect(
+    list.getByRole("button", {
+      name: "Família Demo, 1 não lidas",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await list
+    .getByRole("button", { name: "Família Demo, 1 não lidas", exact: true })
     .click();
-  const chat = page.getByRole("dialog", { name: /Conversa com/ });
+  const chat = page.getByRole("dialog", { name: "Família Demo", exact: true });
   await expect(
     chat.getByText("Guest private question", { exact: true }),
   ).toBeVisible();
@@ -357,7 +364,7 @@ test("offline guest send remains pending, reconnects once and never increments o
   ).toBeVisible();
 });
 
-test("keyboard viewport keeps the composer reachable and general notices never expose a public reply box", async ({
+test("keyboard viewport keeps the unified private composer reachable", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -380,11 +387,10 @@ test("keyboard viewport keeps the composer reachable and general notices never e
     name: "Mensagens com Felipe & Laís",
     exact: true,
   });
-  await dialog.getByRole("radio", { name: /Mensagens gerais/ }).click();
+  await expect(dialog.getByRole("radio")).toHaveCount(0);
   await expect(
     dialog.getByLabel("Mensagem aos noivos", { exact: true }),
-  ).toHaveCount(0);
-  await dialog.getByRole("radio", { name: /Nossa conversa/ }).click();
+  ).toBeVisible();
   await page.evaluate(() => {
     const viewport = window.visualViewport as unknown as {
       height: number;
@@ -415,5 +421,323 @@ test("keyboard viewport keeps the composer reachable and general notices never e
   await send.click();
   await expect(
     dialog.getByText("Typing while the keyboard is open", { exact: true }),
+  ).toBeVisible();
+});
+
+for (const width of [320, 1280])
+  test(`administrative floating center preserves route and sends a general message at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await demo(page);
+    const url = page.url();
+    const balloon = page.getByRole("button", {
+      name: "Mensagens dos convidados",
+      exact: true,
+    });
+    await balloon.click();
+    const list = page.getByRole("dialog", {
+      name: "Mensagens dos convidados",
+      exact: true,
+    });
+    await expect(list).toBeVisible();
+    const openGeneral = list.getByRole("button", {
+      name: "Enviar mensagem para todos",
+      exact: true,
+    });
+    await openGeneral.focus();
+    await expect(
+      list.getByRole("tooltip", {
+        name: "Enviar mensagem para todos",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await openGeneral.click();
+    const general = page.getByRole("dialog", {
+      name: "Mensagens para todos",
+      exact: true,
+    });
+    await expect(page.locator('[data-admin-modal="true"]')).toHaveCount(1);
+    await expect(page).toHaveURL(url);
+    await expect(
+      general.getByText(
+        "Por aqui vocês poderão enviar mensagem para todos os convidados",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(general.getByRole("checkbox")).toHaveCount(4);
+    await general
+      .getByLabel("Mensagem para todos", { exact: true })
+      .fill("Recado geral do novo balão");
+    await general
+      .getByRole("button", { name: "Enviar mensagem para todos", exact: true })
+      .click();
+    await expect(
+      general.getByText("Recado geral do novo balão", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      general.getByText("Sincronizado com sucesso.", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      general.getByRole("button", { name: "Fechar modal", exact: true }),
+    ).toHaveCSS("border-top-width", "0px");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`admin-general-${width}.png`),
+    });
+    await general
+      .getByRole("button", { name: "Voltar às conversas", exact: true })
+      .click();
+    await expect(list).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(balloon).toBeFocused();
+  });
+
+test("opening the unified chat acknowledges only messages actually visible, never the entire history", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await demo(page, "convidado");
+  await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("demo-db")!);
+    const unit = db.snapshot.invitations[0].id;
+    db.snapshot.messages = Array.from({ length: 16 }, (_, n) => ({
+      id: `visible-message-${n}`,
+      event_id: db.snapshot.event.id,
+      invitation_id: unit,
+      recipient_guest_id: null,
+      sender_guest_id: null,
+      sender_user_id: "demo",
+      from_admin: true,
+      audience: "PRIVATE",
+      content: `Recado ${n}. ` + "Texto da conversa. ".repeat(12),
+      created_at: new Date(Date.UTC(2026, 9, 14, 12, n)).toISOString(),
+      read_at: null,
+      channels: ["IN_APP"],
+    }));
+    db.reads = {};
+    localStorage.setItem("demo-db", JSON.stringify(db));
+  });
+  await page.reload();
+  await page
+    .getByRole("button", { name: /Deixe uma mensagem para o casal/ })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          Object.keys(JSON.parse(localStorage.getItem("demo-db")!).reads)
+            .length,
+      ),
+    )
+    .toBeGreaterThan(0);
+  expect(
+    await page.evaluate(
+      () =>
+        Object.keys(JSON.parse(localStorage.getItem("demo-db")!).reads).length,
+    ),
+  ).toBeLessThan(16);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: /Deixe uma mensagem para o casal/ }),
+  ).toHaveAccessibleName(/não lidas/);
+});
+
+test("message retry stays idempotent when an unrelated queued operation still fails", async ({
+  page,
+}) => {
+  await demo(page, "convidado");
+  await page
+    .getByRole("button", { name: /Deixe uma mensagem para o casal/ })
+    .click();
+  const chat = page.getByRole("dialog", {
+    name: "Mensagens com Felipe & Laís",
+    exact: true,
+  });
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    let first = true;
+    Storage.prototype.setItem = function (key, value) {
+      if (
+        first &&
+        key === "demo-db" &&
+        value.includes("Mensagem com retry isolado")
+      ) {
+        first = false;
+        throw Error("Fixture failed first message write");
+      }
+      return original.call(this, key, value);
+    };
+  });
+  const field = chat.getByLabel("Mensagem aos noivos", { exact: true });
+  await field.fill("Mensagem com retry isolado");
+  await chat
+    .getByRole("button", { name: "Enviar mensagem", exact: true })
+    .click();
+  await expect(field).toHaveValue("Mensagem com retry isolado");
+  await expect(
+    chat.getByText(/Falha de sincronização — mensagem pendente/),
+  ).toBeVisible();
+  const queued = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find(
+      (k) =>
+        k.startsWith("queue:") &&
+        localStorage.getItem(k)!.includes("Mensagem com retry isolado"),
+    )!;
+    const rows = JSON.parse(localStorage.getItem(key)!);
+    rows.push({
+      mutationId: "fixture-unrelated-denied",
+      type: "CHECKIN_CREATE",
+      payload: { guest_id: "other" },
+      createdAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: null,
+    });
+    localStorage.setItem(key, JSON.stringify(rows));
+    return rows[0].mutationId;
+  });
+  await chat
+    .getByRole("button", { name: "Enviar mensagem", exact: true })
+    .click();
+  await expect(field).toHaveValue("");
+  await expect(
+    chat.getByText("Mensagem com retry isolado", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("demo-db")!).snapshot.messages.filter(
+          (m: { content: string }) =>
+            m.content === "Mensagem com retry isolado",
+        ).length,
+    ),
+  ).toBe(1);
+  expect(
+    await page.evaluate(
+      (id) =>
+        JSON.parse(localStorage.getItem("demo-db")!).applied.filter(
+          (value: string) => value === id,
+        ).length,
+      queued,
+    ),
+  ).toBe(1);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByText(/1 alteração aguardando sincronização/),
+  ).toBeVisible();
+});
+
+test("legacy Responder keeps the selected historical message as the reply anchor", async ({
+  page,
+}) => {
+  await demo(page);
+  const expected = await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("demo-db")!);
+    const unit = db.snapshot.invitations[0].id;
+    const members = db.snapshot.guests.filter(
+      (g: { invitation_id: string }) => g.invitation_id === unit,
+    );
+    db.snapshot.messages = members
+      .slice(0, 2)
+      .map((g: { id: string }, n: number) => ({
+        id: `anchor-${n}`,
+        event_id: db.snapshot.event.id,
+        invitation_id: unit,
+        sender_guest_id: g.id,
+        sender_user_id: "demo",
+        recipient_guest_id: null,
+        from_admin: false,
+        audience: "PRIVATE",
+        content: n ? "Pergunta mais recente" : "Pergunta histórica selecionada",
+        created_at: new Date(Date.UTC(2026, 9, 14, 12, n)).toISOString(),
+        read_at: null,
+        channels: ["IN_APP"],
+      }));
+    localStorage.setItem("demo-db", JSON.stringify(db));
+    return members[0].id;
+  });
+  await page.goto("/gestao-mensagens");
+  await page
+    .getByText("Pergunta histórica selecionada", { exact: true })
+    .locator("..")
+    .getByRole("button", { name: "Responder", exact: true })
+    .click();
+  const chat = page.getByRole("dialog", { name: "Família Demo", exact: true });
+  await chat
+    .getByLabel("Resposta dos noivos", { exact: true })
+    .fill("Resposta da mensagem selecionada");
+  await chat
+    .getByRole("button", { name: "Enviar resposta", exact: true })
+    .click();
+  await expect(
+    chat.getByText("Resposta da mensagem selecionada", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("demo-db")!).snapshot.messages.find(
+          (m: { content: string }) =>
+            m.content === "Resposta da mensagem selecionada",
+        ).recipient_guest_id,
+    ),
+  ).toBe(expected);
+});
+
+test("administrative keyboard viewport keeps reply and persistent back control reachable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: Object.assign(new EventTarget(), { height: 844, offsetTop: 0 }),
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await demo(page);
+  await page
+    .getByRole("button", { name: "Mensagens dos convidados", exact: true })
+    .click();
+  const list = page.getByRole("dialog", {
+    name: "Mensagens dos convidados",
+    exact: true,
+  });
+  await list.getByRole("button", { name: "Família Demo", exact: true }).click();
+  const chat = page.getByRole("dialog", { name: "Família Demo", exact: true });
+  await page.evaluate(() => {
+    const v = window.visualViewport as unknown as {
+      height: number;
+      dispatchEvent: (event: Event) => void;
+    };
+    v.height = 420;
+    v.dispatchEvent(new Event("resize"));
+  });
+  await expect
+    .poll(async () => {
+      const b = (await chat.boundingBox())!;
+      return b.y + b.height;
+    })
+    .toBeLessThanOrEqual(420);
+  await expect(
+    chat.getByRole("button", { name: "Voltar às conversas", exact: true }),
+  ).toBeVisible();
+  const field = chat.getByLabel("Resposta dos noivos", { exact: true });
+  await field.scrollIntoViewIfNeeded();
+  await field.fill("Recado com teclado aberto");
+  const send = chat.getByRole("button", {
+    name: "Enviar resposta",
+    exact: true,
+  });
+  await send.scrollIntoViewIfNeeded();
+  const b = (await send.boundingBox())!;
+  expect(b.y + b.height).toBeLessThanOrEqual(420);
+  await send.click();
+  await expect(
+    chat.getByText("Recado com teclado aberto", { exact: true }),
   ).toBeVisible();
 });

@@ -1,14 +1,20 @@
 import { Text } from "react-native";
 import { theme } from "../theme/tokens";
-export function UnreadBadge({ count }: { count: number }) {
+export function UnreadBadge({
+  count,
+  inset = false,
+}: {
+  count: number;
+  inset?: boolean;
+}) {
   return count > 0 ? (
     <Text
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={{
         position: "absolute",
-        right: -5,
-        top: -7,
+        right: inset ? 8 : -5,
+        top: inset ? 8 : -7,
         minWidth: 20,
         height: 20,
         borderRadius: 10,

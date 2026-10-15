@@ -168,27 +168,18 @@ test("inline guest links preserve routes and the site link opens the specified H
   await site.press("Enter");
   await expect(page).toHaveURL("https://felipeelais2026.com.br/");
 });
-test("privacy disclosure remains accessible separately and logout still ends the guest session", async ({
+test("requested privacy block is absent and logout still ends the guest session", async ({
   page,
 }) => {
   await openInformation(page);
-  const toggle = page.getByRole("button", {
-    name: "Privacidade e seus dados",
-    exact: true,
-  });
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByTestId("information-privacy-details")).toHaveCount(0);
-  await toggle.focus();
-  await page.keyboard.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByTestId("information-privacy-details")).toContainText(
-    "pedir correção ou exclusão aos noivos pela área Mensagens",
-  );
-  await expect(page.getByTestId("information-privacy-details")).toContainText(
-    "Contatos não integram o QR",
-  );
-  await toggle.press("Space");
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(
+    page.getByRole("button", { name: "Privacidade e seus dados", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(
+      /Usamos nome, resposta de presença|Você pode revogar consentimentos no Perfil/,
+    ),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Sair deste dispositivo", exact: true })
     .click();

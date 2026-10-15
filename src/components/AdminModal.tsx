@@ -51,6 +51,7 @@ export function AdminModal({
   closing = false,
   chat = false,
   footer,
+  toolbar,
 }: {
   title: string;
   children: React.ReactNode;
@@ -62,6 +63,7 @@ export function AdminModal({
   closing?: boolean;
   chat?: boolean;
   footer?: React.ReactNode;
+  toolbar?: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -277,6 +279,9 @@ export function AdminModal({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Fechar modal"
+              {...(chat && Platform.OS === "web"
+                ? { dataSet: { chatClose: "true" } }
+                : {})}
               disabled={!dismissible}
               onPress={onClose}
               style={[
@@ -290,6 +295,7 @@ export function AdminModal({
                   alignItems: "center",
                   justifyContent: "center",
                 },
+                chat && { borderWidth: 0, backgroundColor: "transparent" },
                 premium && {
                   alignSelf: "flex-start",
                   borderWidth: 0,
@@ -304,9 +310,13 @@ export function AdminModal({
               <Text style={styles.text}>×</Text>
             </Pressable>
           </View>
+          {toolbar}
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ gap: 12 }}
+            {...(chat && Platform.OS === "web"
+              ? { dataSet: { chatHistory: "true" } }
+              : {})}
             style={{ flexShrink: 1 }}
           >
             {children}

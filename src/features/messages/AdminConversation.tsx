@@ -1,12 +1,105 @@
 import { useState } from "react";
 import { View, Text } from "react-native";
-import { Button, Field, styles } from "../../components/ui";
+import { Field, styles } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import type { Message } from "../../types/domain";
 import { ChatWindow } from "./ChatWindow";
 import { MessageHistory } from "./MessageHistory";
 import { unitMessages } from "./conversations";
 import { useMessageComposer } from "./useMessageComposer";
+import { SendMessageButton } from "./SendMessageButton";
+export function AdminReplyComposer({
+  invitation,
+  anchor,
+  blocked = false,
+}: {
+  invitation: string;
+  anchor?: Message;
+  blocked?: boolean;
+}) {
+  const app = useApp(),
+    composer = useMessageComposer({ quietSuccess: true });
+  const [content, setContent] = useState("");
+  const unit = app.data?.invitations.find((i) => i.id === invitation);
+  const enabled = !!app.data?.capabilities?.messaging_v2;
+  const recipients = (app.data?.guests || [])
+    .filter((g) => g.invitation_id === invitation)
+    .map((g) => g.id);
+  return (
+    <View style={{ gap: 8 }}>
+      {blocked ? (
+        <Text style={styles.error}>
+          A mensagem selecionada não está mais disponível.
+        </Text>
+      ) : null}
+      {!enabled ? (
+        <Text accessibilityRole="alert" style={styles.small}>
+          Respostas e exclusão ainda não estão disponíveis neste ambiente. O
+          backend de mensagens precisa ser atualizado.
+        </Text>
+      ) : null}
+      <Field
+        label="Resposta dos noivos"
+        hideLabel
+        placeholder="Escreva uma resposta"
+        multiline
+        maxLength={4000}
+        value={content}
+        onChangeText={setContent}
+        style={[
+          styles.input,
+          { minHeight: 90, maxHeight: 120, textAlignVertical: "top" },
+        ]}
+      />
+      <SendMessageButton
+        label="Enviar resposta"
+        busy={composer.busy}
+        disabled={
+          blocked ||
+          !enabled ||
+          !content.trim() ||
+          !unit?.active ||
+          !!unit.archived_at ||
+          !recipients.length ||
+          recipients.length > 500
+        }
+        onPress={() =>
+          void composer.send(
+            anchor ? "MESSAGE_REPLY" : "MESSAGE_SEND_TO_GUESTS",
+            anchor
+              ? {
+                  message_id: anchor.id,
+                  content: content.trim(),
+                  channels: ["IN_APP"],
+                }
+              : {
+                  content: content.trim(),
+                  recipient_guest_ids: recipients,
+                  channels: ["IN_APP"],
+                  audience: "FAMILY",
+                  create_announcement: false,
+                },
+            () => setContent(""),
+          )
+        }
+      />
+      {composer.node}
+      {app.pending
+        .filter(
+          (m) =>
+            m.type === "MESSAGE_REPLY" && m.payload.message_id === anchor?.id,
+        )
+        .map((m) => (
+          <Text key={m.mutationId} style={styles.small}>
+            {String(m.payload.content)} ·{" "}
+            {m.lastError
+              ? "Falha de sincronização — resposta pendente"
+              : "Pendente de sincronização"}
+          </Text>
+        ))}
+    </View>
+  );
+}
 export function AdminConversation({
   anchor,
   onClose,
@@ -14,53 +107,20 @@ export function AdminConversation({
 }: {
   anchor: Message;
   onClose: () => void;
-  onDelete: (message: Message) => void;
+  onDelete: (m: Message) => void;
 }) {
-  const app = useApp(),
-    composer = useMessageComposer(),
-    [content, setContent] = useState("");
+  const app = useApp();
   const unit = app.data?.invitations.find((i) => i.id === anchor.invitation_id);
-  const footer = (
-    <View style={{ gap: 8 }}>
-      <Field
-        label="Resposta dos noivos"
-        multiline
-        maxLength={4000}
-        value={content}
-        onChangeText={setContent}
-      />
-      <Button
-        title={composer.busy ? "Enviando…" : "Enviar resposta"}
-        disabled={
-          composer.busy ||
-          !content.trim() ||
-          !unit?.active ||
-          !!unit.archived_at
-        }
-        onPress={() =>
-          void composer.send(
-            "MESSAGE_REPLY",
-            {
-              message_id: anchor.id,
-              content: content.trim(),
-              channels: ["IN_APP"],
-            },
-            () => setContent(""),
-          )
-        }
-      />
-      {composer.node}
-      <Text style={styles.small}>
-        A resposta é privada para a unidade autorizada; não será publicada para
-        todos.
-      </Text>
-    </View>
-  );
   return (
     <ChatWindow
-      title={`Conversa com ${unit?.name || "convidado"}`}
+      title={unit?.name || "Conversa"}
       onClose={onClose}
-      footer={footer}
+      footer={
+        <AdminReplyComposer
+          invitation={anchor.invitation_id || ""}
+          anchor={anchor}
+        />
+      }
     >
       <MessageHistory
         messages={

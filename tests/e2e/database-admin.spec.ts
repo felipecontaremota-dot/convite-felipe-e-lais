@@ -11,16 +11,16 @@ test.beforeAll(async () => {
   );
 });
 test.afterAll(() => db.stop());
-async function backend(page: Page) {
+async function backend(page: Page, actor = uid) {
   const exp = Math.floor(Date.now() / 1000) + 3600;
   const encode = (v: unknown) =>
     Buffer.from(JSON.stringify(v)).toString("base64url");
   const user = {
-    id: uid,
+    id: actor,
     aud: "authenticated",
     role: "authenticated",
     email: "fixture@example.test",
-    is_anonymous: false,
+    is_anonymous: actor !== uid,
   };
   const calls: { action: string; payload: Record<string, unknown> }[] = [];
   await page.route("http://127.0.0.1:54321/**", async (route) => {
@@ -30,7 +30,7 @@ async function backend(page: Page) {
       status = 200;
     if (url.pathname === "/auth/v1/token")
       data = {
-        access_token: `${encode({ alg: "HS256" })}.${encode({ sub: uid, exp, role: "authenticated" })}.fixture`,
+        access_token: `${encode({ alg: "HS256" })}.${encode({ sub: actor, exp, role: "authenticated" })}.fixture`,
         refresh_token: "fixture-refresh",
         token_type: "bearer",
         expires_in: 3600,
@@ -41,7 +41,7 @@ async function backend(page: Page) {
       try {
         if (args.p_action)
           calls.push({ action: args.p_action, payload: args.p_payload });
-        data = db.rpc(uid, url.pathname.split("/").at(-1)!, args);
+        data = db.rpc(actor, url.pathname.split("/").at(-1)!, args);
       } catch (error) {
         status = 400;
         const stderr = String((error as { stderr?: string }).stderr || "");
@@ -268,7 +268,10 @@ test("real RPC: Pessoa selects across access units and stores only selected reci
   await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page).toHaveURL(/\/painel$/);
-  await page.getByRole("link", { name: "Mensagens", exact: true }).click();
+  await page.getByRole("button", { name: "Mensagens", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Envio para família ou pessoa", exact: true })
+    .click();
   await page.getByRole("radio", { name: "Pessoa", exact: true }).click();
   await expect(
     page.getByLabel("Selecionar família", { exact: true }),
@@ -1238,4 +1241,282 @@ test("inline email waits for provider result, blocks double send and permits ret
   expect(count).toBe(2);
   await expect(page.locator(".fx-toast")).toHaveCount(0);
   await expect(send).toBeEnabled();
+});
+
+test("real persisted chat: automatic unit identity, private replies, general send and scoped deletion survive reload", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120000);
+  const guestA = "abababab-3000-4000-8000-000000000001",
+    guestB = "abababab-3000-4000-8000-000000000002";
+  const create = (name: string) =>
+    db.rpc(uid, "admin_action", {
+      p_event: event,
+      p_action: "GUEST_CREATE",
+      p_payload: { name },
+    });
+  const a = create("Unidade conversa persistente"),
+    b = create("Outra unidade privada");
+  db.sql(
+    `insert into auth.users(id,is_anonymous) values('${guestA}',true),('${guestB}',true);insert into invitation_sessions(event_id,user_id,invitation_id,pin_verified_at) values('${event}','${guestA}','${a.invitation_id}',now()),('${event}','${guestB}','${b.invitation_id}',now());`,
+  );
+  db.rpc(guestB, "app_mutate", {
+    p_event: event,
+    p_mutation: "abababab-4000-4000-8000-000000000001",
+    p_type: "MESSAGE_SEND",
+    p_payload: { content: "Segredo da outra unidade" },
+  });
+  const guestContext = await browser.newContext({
+      baseURL: "http://127.0.0.1:8083",
+    }),
+    guest = await guestContext.newPage();
+  await backend(guest, guestA);
+  await guest.addInitScript((actor) => {
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    const enc = (v: unknown) =>
+      btoa(JSON.stringify(v))
+        .replace(/=/g, "")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_");
+    localStorage.setItem(
+      "sb-127-auth-token",
+      JSON.stringify({
+        access_token: `${enc({ alg: "HS256" })}.${enc({ sub: actor, role: "authenticated", exp })}.fixture`,
+        refresh_token: "fixture-refresh",
+        expires_at: exp,
+        expires_in: 3600,
+        token_type: "bearer",
+        user: {
+          id: actor,
+          aud: "authenticated",
+          role: "authenticated",
+          is_anonymous: true,
+        },
+      }),
+    );
+  }, guestA);
+  await guest.goto("/inicio");
+  await guest
+    .getByRole("button", { name: /Deixe uma mensagem para o casal/ })
+    .click();
+  const guestChat = guest.getByRole("dialog", {
+    name: "Mensagens com Felipe & Laís",
+    exact: true,
+  });
+  await guestChat
+    .getByLabel("Mensagem aos noivos", { exact: true })
+    .fill("Pergunta realmente persistida");
+  await guestChat
+    .getByRole("button", { name: "Enviar mensagem", exact: true })
+    .click();
+  await expect(
+    guestChat.getByText("Pergunta realmente persistida", { exact: true }),
+  ).toBeVisible();
+  const inbound = JSON.parse(
+    db
+      .sql(
+        "select row_to_json(m) from messages m where content='Pergunta realmente persistida';",
+      )
+      .trim(),
+  );
+  expect(inbound.invitation_id).toBe(a.invitation_id);
+  expect(inbound.sender_guest_id).toBeNull();
+  await backend(page);
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page).toHaveURL(/\/painel$/);
+  const initialUrl = page.url();
+  await page.getByRole("button", { name: /^Mensagens dos convidados/ }).click();
+  const center = page.getByRole("dialog", {
+    name: "Mensagens dos convidados",
+    exact: true,
+  });
+  await expect(
+    center.getByRole("button", { name: /^Unidade conversa persistente/ }),
+  ).toBeVisible();
+  expect(
+    db
+      .sql(
+        `select count(*) from message_reads where message_id='${inbound.id}';`,
+      )
+      .trim(),
+  ).toBe("0");
+  await center
+    .getByRole("button", { name: /^Unidade conversa persistente/ })
+    .click();
+  const chat = page.getByRole("dialog", {
+    name: "Unidade conversa persistente",
+    exact: true,
+  });
+  await chat
+    .getByLabel("Resposta dos noivos", { exact: true })
+    .fill("Resposta realmente persistida");
+  await chat
+    .getByRole("button", { name: "Enviar resposta", exact: true })
+    .click();
+  await expect(
+    chat.getByText("Resposta realmente persistida", { exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(initialUrl);
+  const reply = JSON.parse(
+    db
+      .sql(
+        "select row_to_json(m) from messages m where content='Resposta realmente persistida';",
+      )
+      .trim(),
+  );
+  expect(reply.invitation_id).toBe(a.invitation_id);
+  expect(reply.audience).toBe("PRIVATE");
+  expect(
+    JSON.stringify(db.rpc(guestB, "app_snapshot", { p_event: event })),
+  ).not.toContain("Resposta realmente persistida");
+  await guest.reload();
+  await guest
+    .getByRole("button", { name: /Deixe uma mensagem para o casal/ })
+    .click();
+  await expect(
+    guestChat.getByText("Resposta realmente persistida", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    guestChat.getByText("Segredo da outra unidade", { exact: true }),
+  ).toHaveCount(0);
+  await chat
+    .getByRole("button", { name: "Voltar às conversas", exact: true })
+    .click();
+  await center
+    .getByRole("button", { name: "Enviar mensagem para todos", exact: true })
+    .click();
+  const general = page.getByRole("dialog", {
+    name: "Mensagens para todos",
+    exact: true,
+  });
+  await general
+    .getByLabel("Mensagem para todos", { exact: true })
+    .fill("Aviso geral persistido");
+  await general
+    .getByRole("button", { name: "Enviar mensagem para todos", exact: true })
+    .click();
+  await expect(
+    general.getByText("Aviso geral persistido", { exact: true }),
+  ).toBeVisible();
+  const broadcast = JSON.parse(
+    db
+      .sql(
+        "select row_to_json(m) from messages m where content='Aviso geral persistido';",
+      )
+      .trim(),
+  );
+  expect(broadcast.audience).toBe("GENERAL");
+  await guest.reload();
+  await guest
+    .getByRole("button", { name: /Deixe uma mensagem para o casal/ })
+    .click();
+  await expect(
+    guestChat.getByText("Aviso geral persistido", { exact: true }),
+  ).toBeVisible();
+  await guestChat
+    .getByLabel("Mensagem aos noivos", { exact: true })
+    .fill("Resposta particular ao aviso geral");
+  await guestChat
+    .getByRole("button", { name: "Enviar mensagem", exact: true })
+    .click();
+  await expect(
+    guestChat.getByText("Resposta particular ao aviso geral", { exact: true }),
+  ).toBeVisible();
+  expect(
+    JSON.stringify(db.rpc(guestB, "app_snapshot", { p_event: event })),
+  ).not.toContain("Resposta particular ao aviso geral");
+  const deleteEndpoint = "http://127.0.0.1:54321/rest/v1/rpc/admin_action";
+  await page.route(deleteEndpoint, async (route) => {
+    const args = route.request().postDataJSON();
+    if (args.p_action === "MESSAGE_DELETE")
+      await route.fulfill({
+        status: 400,
+        json: {
+          code: "P0001",
+          message: "legacy announcement needs association",
+        },
+      });
+    else await route.fallback();
+  });
+  await general
+    .getByText("Aviso geral persistido", { exact: true })
+    .locator("..")
+    .getByRole("button", { name: "Excluir mensagem", exact: true })
+    .click();
+  const rejected = page.getByRole("dialog", {
+    name: "Excluir mensagem?",
+    exact: true,
+  });
+  await rejected.getByRole("button", { name: "Excluir", exact: true }).click();
+  await expect(
+    rejected.getByText(
+      /exclusão foi bloqueada para preservar outras mensagens/,
+    ),
+  ).toBeVisible();
+  expect(
+    db
+      .sql(
+        `select deleted_at is null from messages where id='${broadcast.id}';`,
+      )
+      .trim(),
+  ).toBe("t");
+  await rejected.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.unroute(deleteEndpoint);
+  await general
+    .getByText("Aviso geral persistido", { exact: true })
+    .locator("..")
+    .getByRole("button", { name: "Excluir mensagem", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Excluir mensagem?", exact: true })
+    .getByRole("button", { name: "Excluir", exact: true })
+    .click();
+  await expect(
+    general.getByText("Aviso geral persistido", { exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: /^Mensagens dos convidados/ }).click();
+  await center
+    .getByRole("button", { name: /^Unidade conversa persistente/ })
+    .click();
+  await expect(
+    chat.getByText("Resposta realmente persistida", { exact: true }),
+  ).toBeVisible();
+  await chat
+    .getByText("Resposta realmente persistida", { exact: true })
+    .locator("..")
+    .getByRole("button", { name: "Excluir mensagem", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Excluir mensagem?", exact: true })
+    .getByRole("button", { name: "Excluir", exact: true })
+    .click();
+  await expect(
+    chat.getByText("Resposta realmente persistida", { exact: true }),
+  ).toHaveCount(0);
+  await guest.reload();
+  await guest
+    .getByRole("button", { name: /Deixe uma mensagem para o casal/ })
+    .click();
+  await expect(
+    guestChat.getByText("Resposta realmente persistida", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    guestChat.getByText("Aviso geral persistido", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    guestChat.getByText("Pergunta realmente persistida", { exact: true }),
+  ).toBeVisible();
+  expect(
+    db
+      .sql(
+        `select deleted_at is not null from messages where id='${reply.id}';`,
+      )
+      .trim(),
+  ).toBe("t");
+  await guestContext.close();
 });

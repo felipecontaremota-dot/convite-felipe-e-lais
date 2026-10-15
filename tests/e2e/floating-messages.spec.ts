@@ -112,7 +112,7 @@ test("admin mantém menu e não recebe botão dos convidados", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "Demo noivos", exact: true }).click();
   await expect(
-    page.getByRole("link", { name: "Mensagens", exact: true }),
+    page.getByRole("button", { name: "Mensagens", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: label })).toHaveCount(0);
 });

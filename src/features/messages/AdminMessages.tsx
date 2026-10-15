@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text } from "react-native";
+import { Platform, Text } from "react-native";
 import {
   Button,
   Card,
@@ -13,13 +13,11 @@ import {
 } from "../../components/ui";
 import { AdminConversation } from "./AdminConversation";
 import { useMessageComposer } from "./useMessageComposer";
-import { chronological } from "./conversations";
+import { chronological, messageDate } from "./conversations";
+import { useMessageCenter } from "./MessageCenterContext";
+import { MessageDeletion } from "./MessageDeletion";
 import { IconButton, Select } from "../../components/adminUi";
-import {
-  AdminModal,
-  SelectedChips,
-  ConfirmModal,
-} from "../../components/AdminModal";
+import { AdminModal, SelectedChips } from "../../components/AdminModal";
 import { useApp } from "../../lib/AppProvider";
 import type { Channel, Message } from "../../types/domain";
 import { effectiveRecipients, recipientError } from "./recipients";
@@ -27,7 +25,8 @@ import { ChannelChoices } from "../notifications/ChannelChoices";
 export function AdminMessages() {
   const app = useApp(),
     feedback = useFeedback();
-  const composer = useMessageComposer();
+  const center = useMessageCenter();
+  const composer = useMessageComposer({ quietSuccess: true });
   const [conversation, setConversation] = useState<Message | null>(null),
     [deleting, setDeleting] = useState<Message | null>(null);
   const enhanced = !!app.data?.capabilities?.messaging_v2;
@@ -201,11 +200,7 @@ export function AdminMessages() {
                     ?.name || "Convidado"}
             </Text>
             <Text style={styles.text}>{m.content}</Text>
-            <Text style={styles.small}>
-              {new Date(m.created_at).toLocaleString("pt-BR", {
-                timeZone: "America/Sao_Paulo",
-              })}
-            </Text>
+            <Text style={styles.small}>{messageDate(m.created_at)}</Text>
             {enhanced && m.from_admin ? (
               <IconButton
                 icon="delete"
@@ -217,13 +212,12 @@ export function AdminMessages() {
               <>
                 <Button
                   secondary
-                  title="Responder à família"
+                  title="Responder"
+                  disabled={!m.invitation_id}
                   onPress={() => {
-                    if (enhanced) setConversation(m);
-                    else {
-                      setTarget("FAMILY");
-                      setFamily(m.invitation_id || "");
-                    }
+                    if (Platform.OS === "web")
+                      center.show(m.invitation_id || undefined, m.id);
+                    else setConversation(m);
                   }}
                 />
                 <Button
@@ -245,7 +239,7 @@ export function AdminMessages() {
       {!app.data?.messages.length ? (
         <Empty text="As conversas aparecerão aqui." />
       ) : null}
-      {conversation && enhanced ? (
+      {conversation ? (
         <AdminConversation
           anchor={conversation}
           onClose={() => setConversation(null)}
@@ -253,17 +247,7 @@ export function AdminMessages() {
         />
       ) : null}
       {deleting && enhanced ? (
-        <ConfirmModal
-          title="Excluir mensagem?"
-          premium
-          text="Tem certeza que deseja excluir esta mensagem? Esta ação não poderá ser desfeita pela interface."
-          confirmLabel="Excluir"
-          onCancel={() => setDeleting(null)}
-          onConfirm={async () => {
-            await app.admin("MESSAGE_DELETE", { id: deleting.id });
-            setDeleting(null);
-          }}
-        />
+        <MessageDeletion message={deleting} onClose={() => setDeleting(null)} />
       ) : null}
       <Text style={styles.small}>
         Excluir no aplicativo não recupera e-mails ou mensagens já entregues por

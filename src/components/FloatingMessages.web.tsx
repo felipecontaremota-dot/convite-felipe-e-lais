@@ -26,7 +26,6 @@ export function FloatingMessages() {
   const eligible = app.data?.role === "GUEST" && guestPaths.has(pathname);
   const [phase, setPhase] = useState("idle");
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState("private");
   const unread = unreadMessages(app.data);
   useEffect(() => {
     if (!eligible) return;
@@ -122,7 +121,6 @@ export function FloatingMessages() {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => {
-          setTab("private");
           setOpen(true);
         }}
       >
@@ -175,9 +173,9 @@ export function FloatingMessages() {
         <ChatWindow
           title="Mensagens com Felipe & Laís"
           onClose={() => setOpen(false)}
-          footer={<GuestMessages footerOnly tab={tab} onTabChange={setTab} />}
+          footer={<GuestMessages footerOnly />}
         >
-          <GuestMessages hideComposer tab={tab} onTabChange={setTab} />
+          <GuestMessages hideComposer />
         </ChatWindow>
       ) : null}
     </>
