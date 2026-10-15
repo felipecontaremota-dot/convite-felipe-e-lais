@@ -29,6 +29,8 @@ export class SyncError extends AppError {
   }
 }
 export function administrativeError(message: string): string | null {
+  if (message.includes("profile login conflict"))
+    return "Não foi possível confirmar esse nome com o acesso atual. Confira os dados ou peça ajuda aos noivos.";
   if (message.includes("notification scheduling not enabled"))
     return "O agendamento ainda não foi ativado para este evento.";
   if (message.includes("content too long"))

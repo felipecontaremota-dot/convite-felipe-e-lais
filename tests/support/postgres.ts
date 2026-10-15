@@ -47,7 +47,7 @@ export class TestPostgres {
           source,
         );
   }
-  async start(baseline: "main" | "prod-profile" = "main") {
+  async start(baseline: "main" | "prod-profile" | "pre-confirmation" = "main") {
     if (this.ci) {
       this.run("sudo", ["systemctl", "start", "postgresql.service"]);
       this.run("sudo", ["-u", "postgres", "createdb", this.name]);
@@ -85,7 +85,11 @@ export class TestPostgres {
       for (const file of readdirSync("supabase/migrations")
         .filter(
           (f) =>
-            f.endsWith(".sql") && (baseline === "main" || f < "20261013204105"),
+            f.endsWith(".sql") &&
+            (baseline === "main" ||
+              (baseline === "prod-profile"
+                ? f < "20261013204105"
+                : f < "20261015033043")),
         )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));

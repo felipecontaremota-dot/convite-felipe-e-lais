@@ -1,3 +1,4 @@
+import { ProfileConfirmationGate } from "../src/features/guests/ProfileConfirmationGate";
 import { FxToastProvider } from "../src/components/FxToastProvider";
 import { InstallProvider } from "../src/features/install/InstallProvider";
 import { ThemeStyles } from "../src/components/ThemeStyles";
@@ -22,6 +23,7 @@ export default function Layout() {
               <Stack screenOptions={{ headerShown: false }} />
               <FloatingMessages />
               <FloatingAdminMessages />
+              <ProfileConfirmationGate />
             </MessageCenterProvider>
           </FxToastProvider>
         </InstallProvider>

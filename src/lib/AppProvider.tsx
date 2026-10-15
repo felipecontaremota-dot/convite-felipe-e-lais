@@ -53,6 +53,11 @@ interface ContextValue {
   ticket: (guest: string, regenerate?: boolean) => Promise<Ticket>;
   sync: () => Promise<SyncResult>;
   syncNow: (messageMutationId?: string) => Promise<string>;
+  profileMutation: (
+    type: "PROFILE_IDENTIFY" | "PROFILE_CONFIRM",
+    payload: Record<string, unknown>,
+    mutationId: string,
+  ) => Promise<void>;
   discardFailed: (id: string) => Promise<void>;
   sendInvitations: (
     request: string,
@@ -399,6 +404,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
       return result.message;
     },
+    profileMutation: async (type, payload, mutationId) => {
+      if (!online)
+        throw new AppError("Conecte-se à internet para confirmar seus dados.");
+      if (
+        entryBusy.current ||
+        (query.data || cached)?.role !== "GUEST" ||
+        !(query.data || cached)?.profile_confirmation?.supported
+      )
+        throw new AppError(
+          "A confirmação cadastral ainda não está disponível.",
+        );
+      await queue.idle();
+      if (
+        type === "PROFILE_CONFIRM" &&
+        (await queue.list()).some(
+          (m) =>
+            m.type === "CONTACT_UPDATE" &&
+            m.payload.guest_id === payload.guest_id,
+        )
+      )
+        throw new AppError(
+          "Há uma alteração de contato pendente. Sincronize as alterações e carregue os dados novamente.",
+        );
+      const epoch = entryEpoch.current;
+      // Online-only: no optimistic confirmation, no personal draft in the offline queue.
+      const result = (await api.profileMutation(type, mutationId, payload)) as {
+        ok?: boolean;
+        guest_id?: string;
+        profile_action?: string;
+      };
+      if (
+        result?.ok !== true ||
+        result.guest_id !== payload.guest_id ||
+        result.profile_action !== type ||
+        epoch !== entryEpoch.current
+      )
+        throw new AppError(
+          "Não foi possível confirmar seus dados. Tente novamente.",
+        );
+      const refreshed = await query.refetch({ throwOnError: true });
+      if (
+        refreshed.data?.profile_confirmation?.guest_id !== payload.guest_id ||
+        (type === "PROFILE_CONFIRM" &&
+          !refreshed.data?.guests.find((g) => g.id === payload.guest_id)
+            ?.profile_confirmed_at)
+      )
+        throw new AppError(
+          "Não foi possível verificar a confirmação. Carregue os dados novamente.",
+        );
+    },
     discardFailed: async (id) => {
       await queue.discardFailed(id);
       setPending(await queue.list());
@@ -465,6 +520,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     },
     logout: async () => {
+      entryEpoch.current++;
+      await client.cancelQueries({ queryKey: ["snapshot"] });
       setEntryBlocked(false);
       entryTarget.current = null;
       legacyEntryCode.current = null;

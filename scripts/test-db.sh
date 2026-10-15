@@ -113,3 +113,10 @@ run_sql < tests/messaging-conversations.sql
 
 # Manual PROD compatibility is validated in independent pre-name/PIN and current baselines.
 bash scripts/test-messaging-prod.sh
+
+# First-login confirmation is also exercised with the latest public wrappers.
+run_sql < tests/profile-confirmation.sql
+run_sql < scripts/profile-confirmation-postflight.sql
+
+# Dedicated upgrade with a guest and a verified session created BEFORE the new schema.
+npx --no-install tsx scripts/test-profile-confirmation.ts

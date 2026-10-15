@@ -152,7 +152,7 @@ BEGIN
  end loop;
  if has_function_privilege('authenticated','public.authorize_notification_attempt(uuid,uuid,uuid,public.delivery_channel,integer,timestamptz,boolean)','EXECUTE') or not has_function_privilege('service_role','public.authorize_notification_attempt(uuid,uuid,uuid,public.delivery_channel,integer,timestamptz,boolean)','EXECUTE') then raise exception 'STOP: worker admission ACL';end if;
  -- Canonical recipient pipeline and consent gates are real dependencies, unlike a name/PIN marker.
- if position('MESSAGE_SEND_TO_GUESTS' in pg_get_functiondef('public.internal_mutation_core(uuid,uuid,text,jsonb)'::regprocedure))=0
+ if position('MESSAGE_SEND_TO_GUESTS' in pg_get_functiondef(coalesce(to_regprocedure('public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)'), 'public.internal_mutation_core(uuid,uuid,text,jsonb)'::regprocedure)))=0
  or position('internal_mutation_core' in pg_get_functiondef('public.app_mutate(uuid,uuid,text,jsonb)'::regprocedure))=0
  or position('CONTACT_UPDATE' in pg_get_functiondef('public.app_mutate(uuid,uuid,text,jsonb)'::regprocedure))=0
  or position('PUSH_REGISTER' in pg_get_functiondef('public.app_mutate(uuid,uuid,text,jsonb)'::regprocedure))=0
@@ -170,8 +170,8 @@ BEGIN
  if not exists(select 1 from pg_proc where oid=to_regprocedure('public.can_receive_announcements(uuid)') and md5(replace(prosrc,E'\r','')) in ('c4b50a6e8f679389adbce820ac2fa94c')) then raise exception 'STOP: unreviewed baseline function can_receive_announcements';end if;
  if not exists(select 1 from pg_proc where oid=to_regprocedure('public.authorize_notification_attempt(uuid,uuid,uuid,public.delivery_channel,integer,timestamptz,boolean)') and md5(replace(prosrc,E'\r','')) in ('a5e37efb8c052d65780c45893fafe9a7')) then raise exception 'STOP: unreviewed baseline function authorize_notification_attempt';end if;
  if not exists(select 1 from pg_proc where oid=to_regprocedure('public.schedule_notifications()') and md5(replace(prosrc,E'\r','')) in ('9d4af1f83f368de944eba311b6d96762')) then raise exception 'STOP: unreviewed baseline function schedule_notifications';end if;
- if not exists(select 1 from pg_proc where oid=to_regprocedure('public.internal_mutation_core(uuid,uuid,text,jsonb)') and md5(replace(prosrc,E'\r','')) in ('ef2fd1b7f6dd0dd55090b4fa8336d227')) then raise exception 'STOP: unreviewed baseline function internal_mutation_core';end if;
- if not exists(select 1 from pg_proc where oid=to_regprocedure('public.internal_snapshot_core(uuid)') and md5(replace(prosrc,E'\r','')) in ('20c1ef3917626d85a5a0da71c8365172')) then raise exception 'STOP: unreviewed baseline function internal_snapshot_core';end if;
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public.internal_mutation_core(uuid,uuid,text,jsonb)') and md5(replace(prosrc,E'\r','')) in ('ef2fd1b7f6dd0dd55090b4fa8336d227','e9bc0ea771d51c698fa40891551c4851')) then raise exception 'STOP: unreviewed baseline function internal_mutation_core';end if;
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public.internal_snapshot_core(uuid)') and md5(replace(prosrc,E'\r','')) in ('20c1ef3917626d85a5a0da71c8365172','744b2edbae77c47ba1cfba72371914ad')) then raise exception 'STOP: unreviewed baseline function internal_snapshot_core';end if;
 
  -- Receipt/recipient uniqueness is required by the canonical idempotent pipeline.
  for r in select * from (values ('mutation_receipts','PRIMARY KEY (event_id, user_id, mutation_id)'),('notification_jobs','UNIQUE (idempotency_key)'),('notification_jobs','UNIQUE (event_id, id)'),('guests','UNIQUE (event_id, id)'),('invitations','UNIQUE (event_id, id)')) expected(tbl,def) loop
@@ -193,6 +193,14 @@ BEGIN
  if (select count(*) from pg_policies where schemaname='public' and tablename in ('messages','announcements','notification_jobs','message_recipients'))<>7 then raise exception 'STOP: unknown baseline policy';end if;
  if exists(select 1 from pg_roles where rolname in ('anon','authenticated') and (rolbypassrls or rolsuper)) or exists(select 1 from pg_class where oid in ('public.messages'::regclass,'public.announcements'::regclass,'public.notification_jobs'::regclass,'public.message_recipients'::regclass) and relowner in ('anon'::regrole,'authenticated'::regrole)) then raise exception 'STOP: client role bypasses table RLS';end if;
  -- Existing Supabase default DML grants are harmless only with the exact SELECT-only policies above.
+
+
+ -- Optional profile-confirmation layer preserves the same canonical pipelines.
+ if to_regprocedure('public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)') is not null and not exists(select 1 from pg_proc where oid=to_regprocedure('public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)') and md5(replace(prosrc,E'\r','')) in ('ef2fd1b7f6dd0dd55090b4fa8336d227') and proowner='postgres'::regrole and prosecdef) then raise exception 'STOP: profile preserved mutation drift';end if;
+ if to_regprocedure('public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)') is not null and (has_function_privilege('anon','public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)','EXECUTE') or has_function_privilege('authenticated','public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)','EXECUTE') or has_function_privilege('service_role','public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)','EXECUTE')) then raise exception 'STOP: profile core exposed';end if;
+ if to_regprocedure('public.profile_confirmation_snapshot_core(uuid)') is not null and not exists(select 1 from pg_proc where oid=to_regprocedure('public.profile_confirmation_snapshot_core(uuid)') and md5(replace(prosrc,E'\r','')) in ('20c1ef3917626d85a5a0da71c8365172') and proowner='postgres'::regrole and prosecdef) then raise exception 'STOP: profile preserved snapshot drift';end if;
+ if to_regprocedure('public.profile_confirmation_snapshot_core(uuid)') is not null and (has_function_privilege('anon','public.profile_confirmation_snapshot_core(uuid)','EXECUTE') or has_function_privilege('authenticated','public.profile_confirmation_snapshot_core(uuid)','EXECUTE') or has_function_privilege('service_role','public.profile_confirmation_snapshot_core(uuid)','EXECUTE')) then raise exception 'STOP: profile core exposed';end if;
+ if (to_regprocedure('public.profile_confirmation_mutation_core(uuid,uuid,text,jsonb)') is null) is distinct from (to_regprocedure('public.profile_confirmation_snapshot_core(uuid)') is null) then raise exception 'STOP: partial profile layer';end if;
 
 END $preflight$;
 

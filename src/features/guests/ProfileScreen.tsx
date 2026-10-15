@@ -1,3 +1,4 @@
+import * as Crypto from "expo-crypto";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { useEffect, useState } from "react";
@@ -196,11 +197,28 @@ export function ProfileScreen() {
     <Screen section="guest" title="Quem está usando este dispositivo?">
       <Card>
         <Text style={styles.text}>
-          Selecione seu nome para identificar os próximos recados.
+          {app.data?.profile_confirmation?.supported
+            ? "Selecione seu nome para conferir seus dados. O acesso continua compartilhado pela unidade."
+            : "Selecione seu nome para identificar os próximos recados."}
         </Text>
         <Choice
-          value={who}
+          value={
+            app.data?.profile_confirmation?.supported
+              ? app.data.profile_confirmation.guest_id || ""
+              : who
+          }
           onChange={(v) => {
+            if (app.data?.profile_confirmation?.supported) {
+              void feedback.run(async () => {
+                await app.profileMutation(
+                  "PROFILE_IDENTIFY",
+                  { guest_id: v },
+                  Crypto.randomUUID(),
+                );
+                return "Integrante selecionado.";
+              });
+              return;
+            }
             setWho(v);
             void feedback.run(async () => {
               const { writeCache } = await import("../../storage/driver");

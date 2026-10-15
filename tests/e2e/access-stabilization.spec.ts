@@ -12,7 +12,8 @@ let code = "",
   familyId = "";
 test.beforeAll(async () => {
   test.setTimeout(120000);
-  await db.start();
+  // Published-backend compatibility; the new first-login contract has its own real-DB suite.
+  await db.start("pre-confirmation");
   db.sql(
     `insert into auth.users(id) values('${admin}');insert into user_roles(event_id,user_id,role) values('${event}','${admin}','ADMIN');`,
   );

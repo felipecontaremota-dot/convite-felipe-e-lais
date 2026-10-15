@@ -52,6 +52,9 @@ export function AdminModal({
   chat = false,
   footer,
   toolbar,
+  hideClose = false,
+  contentWidth,
+  registration = false,
 }: {
   title: string;
   children: React.ReactNode;
@@ -64,6 +67,9 @@ export function AdminModal({
   chat?: boolean;
   footer?: React.ReactNode;
   toolbar?: React.ReactNode;
+  hideClose?: boolean;
+  contentWidth?: number;
+  registration?: boolean;
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -222,6 +228,7 @@ export function AdminModal({
             ? {
                 dataSet: {
                   adminModal: "true",
+                  registration: registration ? "true" : undefined,
                   chatDialog: chat ? (closing ? "closing" : "open") : undefined,
                   premiumModal: premium
                     ? closing
@@ -250,7 +257,7 @@ export function AdminModal({
               : undefined,
             {
               width: "100%",
-              maxWidth: chat ? 420 : 760,
+              maxWidth: contentWidth ?? (chat ? 420 : 760),
               maxHeight: "94%",
               padding: width < 600 ? 16 : 24,
             },
@@ -276,39 +283,41 @@ export function AdminModal({
             >
               {title}
             </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Fechar modal"
-              {...(chat && Platform.OS === "web"
-                ? { dataSet: { chatClose: "true" } }
-                : {})}
-              disabled={!dismissible}
-              onPress={onClose}
-              style={[
-                styles.nav,
-                (premium || centerTitle) && {
-                  position: "absolute",
-                  right: 0,
-                  top: 0,
-                  minWidth: 44,
-                  minHeight: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                },
-                chat && { borderWidth: 0, backgroundColor: "transparent" },
-                premium && {
-                  alignSelf: "flex-start",
-                  borderWidth: 0,
-                  backgroundColor: "transparent",
-                  minWidth: 44,
-                  minHeight: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                },
-              ]}
-            >
-              <Text style={styles.text}>×</Text>
-            </Pressable>
+            {!hideClose ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Fechar modal"
+                {...(chat && Platform.OS === "web"
+                  ? { dataSet: { chatClose: "true" } }
+                  : {})}
+                disabled={!dismissible}
+                onPress={onClose}
+                style={[
+                  styles.nav,
+                  (premium || centerTitle) && {
+                    position: "absolute",
+                    right: 0,
+                    top: 0,
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  },
+                  chat && { borderWidth: 0, backgroundColor: "transparent" },
+                  premium && {
+                    alignSelf: "flex-start",
+                    borderWidth: 0,
+                    backgroundColor: "transparent",
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  },
+                ]}
+              >
+                <Text style={styles.text}>×</Text>
+              </Pressable>
+            ) : null}
           </View>
           {toolbar}
           <ScrollView

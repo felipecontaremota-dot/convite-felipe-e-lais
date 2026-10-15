@@ -7,7 +7,12 @@ import {
   AuthError,
   NetworkError,
 } from "../lib/errors";
-import type { OfflineMutation, Snapshot, Ticket } from "../types/domain";
+import type {
+  OfflineMutation,
+  Snapshot,
+  Ticket,
+  ProfileMutationType,
+} from "../types/domain";
 import { invitationCode, invitationPin } from "../utils/security";
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (!supabase)
@@ -43,6 +48,18 @@ export const mutate = (item: OfflineMutation) =>
     p_mutation: item.mutationId,
     p_type: item.type,
     p_payload: item.payload,
+  });
+// Same authenticated RPC, online-only so no draft is mistaken for server confirmation.
+export const profileMutation = (
+  type: ProfileMutationType,
+  mutationId: string,
+  payload: Record<string, unknown>,
+) =>
+  rpc("app_mutate", {
+    p_event: eventId,
+    p_mutation: mutationId,
+    p_type: type,
+    p_payload: payload,
   });
 export const adminAction = (action: string, payload: Record<string, unknown>) =>
   rpc<Record<string, unknown>>("admin_action", {

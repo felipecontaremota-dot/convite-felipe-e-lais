@@ -33,6 +33,7 @@ export interface Invitation {
   version: number;
 }
 export interface Guest {
+  profile_confirmed_at?: string | null;
   greeting_form?: "MASCULINE" | "FEMININE" | null;
   is_child?: boolean;
   is_adolescent?: boolean;
@@ -55,6 +56,7 @@ export interface RsvpRecord {
   source: string;
 }
 export interface Contact {
+  updated_at?: string;
   communications_revoked?: boolean;
   guest_id: string;
   email: string;
@@ -172,6 +174,11 @@ export interface SheetJob {
   version: number;
 }
 export interface Snapshot {
+  profile_confirmation?: {
+    supported: boolean;
+    guest_id?: string | null;
+    confirmed_at?: string | null;
+  };
   capabilities?: { messaging_v2?: boolean; notification_schedules?: boolean };
   notification_schedules?: NotificationSchedule[];
   current_invitation_id?: string | null;
@@ -224,3 +231,5 @@ export interface OfflineMutation {
   attempts: number;
   lastError: string | null;
 }
+
+export type ProfileMutationType = "PROFILE_IDENTIFY" | "PROFILE_CONFIRM";

@@ -141,3 +141,7 @@ A consulta somente de leitura aos Security Advisors retornou avisos existentes: 
 - Lint, TypeScript, build web e exportação passaram. Exportação confirmou manifest/worker/assets/offline/isolamento de cache e evento PWA nativo capturado antecipadamente (`defaultPrevented=true`). Aviso preexistente MODULE_TYPELESS_PACKAGE_JSON no build permanece; não representa falha do build.
 
 Não foram executados testes funcionais de escrita em produção, restauração de um backup integral real, entrega por providers remotos ou testes em aparelhos físicos. A implantação remota e seus testes autorizados permanecem pendentes. Nenhum resultado local é apresentado como confirmação de Responder/Excluir já habilitados no PROD.
+
+## Camada de confirmação cadastral
+
+A evolução de primeiro acesso está em [profile-confirmation.md](profile-confirmation.md). O instalador de mensagens também reconhece essa camada opcional, verificando fontes e cores preservados; o payload v2 e sua prova de equivalência não mudam. O harness agora inclui um terceiro baseline com confirmação instalada antes de mensagens. Nenhuma atualização remota está implícita nessa compatibilidade.

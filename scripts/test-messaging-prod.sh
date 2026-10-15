@@ -14,11 +14,12 @@ else
  sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -d "$database" -v ON_ERROR_STOP=1; }
 fi
 trap cleanup EXIT
-for baseline in profile name; do
+for baseline in profile name confirmation; do
  if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then sudo -u postgres createdb "$database"; else docker exec "$container" createdb -h 127.0.0.1 -U postgres "$database"; fi
  sed -E 's/create role ([a-z_]+) ([^;]+);/DO $$BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=\x27\1\x27) THEN CREATE ROLE \1 \2; END IF; END$$;/' tests/db-bootstrap.sql | sql
  for migration in supabase/migrations/20261009000*.sql supabase/migrations/202610110007_home_greeting.sql supabase/migrations/202610110008_profile_consent.sql supabase/migrations/202610120009_password_entry.sql; do sql < "$migration"; done
- if [[ "$baseline" == name ]]; then sql < supabase/migrations/20261013204105_name_pin_access.sql; fi
+ if [[ "$baseline" != profile ]]; then sql < supabase/migrations/20261013204105_name_pin_access.sql; fi
+ if [[ "$baseline" == confirmation ]]; then sql < supabase/migrations/20261015033043_profile_confirmation.sql; fi
  sql < supabase/seed.sql
  sql <<'SQL'
 create schema supabase_migrations;
