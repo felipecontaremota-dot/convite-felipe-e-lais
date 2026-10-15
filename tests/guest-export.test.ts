@@ -84,13 +84,13 @@ describe("guest Excel export", () => {
     expect(guestExportRows(s, "", "ALL")).toHaveLength(1200);
   });
   it("retains text contacts, empty fields, actual RSVP and existing age indicators only", () => {
-    const rows = guestExportRows(snapshot(), "", "ALL");
+    const rows = guestExportRows(snapshot(), "", "ALL", "https://example.test");
     expect(rows[0]).toEqual([
       1,
       "Ágata",
       "001234567890",
       "Convidado(a) da noiva",
-      "",
+      "https://example.test/c/0123456789abcdef0123456789abcdef01234567",
       "0047",
       "Família teste",
       "a@example.test",
