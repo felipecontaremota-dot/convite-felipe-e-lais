@@ -67,3 +67,7 @@ A suíte SQL anterior mantém upgrade, RLS, isolamento entre eventos/unidades, l
 - 59 testes de Edge Functions e verificação Deno passaram; seu código permaneceu intacto.
 - Lint, TypeScript, build/export e validação nativa PWA/worker/assets/caches privados passaram.
 - Inspeção visual em 320, 375, 390, 768 e 1280 px: chat único, lista administrativa, conversa e envio geral; Informações validada com o bloco solicitado ausente.
+
+## Implantação no baseline efetivo de PROD
+
+A aplicação direta da migration original não é o roteiro autorizado para o baseline remoto divergente. Consulte [Compatibilização de produção](messaging-production-compatibility.md): instalador incremental completo, pré/pós-validação, prova de equivalência, ledger específico e contingência. Nenhum desses passos remotos foi executado por este trabalho.

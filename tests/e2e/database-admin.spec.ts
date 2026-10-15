@@ -5,7 +5,9 @@ const event = "00000000-0000-4000-8000-000000000001";
 const uid = "abababab-0000-4000-8000-000000000001";
 test.beforeAll(async () => {
   test.setTimeout(120000);
-  await db.start();
+  await db.start(
+    process.env.MESSAGING_TEST_BASELINE === "profile" ? "prod-profile" : "main",
+  );
   db.sql(
     `insert into auth.users(id) values('${uid}'); insert into user_roles(event_id,user_id,role) values('${event}','${uid}','ADMIN');`,
   );

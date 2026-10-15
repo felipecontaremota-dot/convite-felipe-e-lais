@@ -47,7 +47,7 @@ export class TestPostgres {
           source,
         );
   }
-  async start() {
+  async start(baseline: "main" | "prod-profile" = "main") {
     if (this.ci) {
       this.run("sudo", ["systemctl", "start", "postgresql.service"]);
       this.run("sudo", ["-u", "postgres", "createdb", this.name]);
@@ -83,10 +83,22 @@ export class TestPostgres {
       );
       this.sql(bootstrap);
       for (const file of readdirSync("supabase/migrations")
-        .filter((f) => f.endsWith(".sql"))
+        .filter(
+          (f) =>
+            f.endsWith(".sql") && (baseline === "main" || f < "20261013204105"),
+        )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));
       this.sql(readFileSync("supabase/seed.sql", "utf8"));
+      if (baseline === "prod-profile") {
+        this.sql(
+          "create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);",
+        );
+        this.sql(readFileSync("scripts/messaging-prod/install.sql", "utf8"));
+        this.sql(
+          readFileSync("scripts/messaging-prod/verify-readonly.sql", "utf8"),
+        );
+      }
     } catch (error) {
       this.stop();
       throw error;

@@ -110,3 +110,6 @@ run_sql < tests/messaging-upgrade-prepare.sql
 run_sql < supabase/migrations/20261014171048_messaging_conversations.sql
 run_sql < tests/messaging-upgrade-verify.sql
 run_sql < tests/messaging-conversations.sql
+
+# Manual PROD compatibility is validated in independent pre-name/PIN and current baselines.
+bash scripts/test-messaging-prod.sh

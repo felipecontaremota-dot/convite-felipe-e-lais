@@ -98,3 +98,7 @@ Não foram alterados manifest, service worker, captura de instalação PWA, pale
 - Inspeção visual: chat em 320, 375, 390, 768 e 1280 px; criação/calendário de notificações em desktop e mobile; conversa administrativa e confirmação destrutiva em desktop/mobile.
 
 A suíte PostgreSQL inclui os testes históricos preservados e testes de upgrade/segurança novos. Os ajustes finais passaram novamente por 18 testes E2E focados e pela suíte PostgreSQL, incluindo exclusão e bloqueio de readmissão do aviso legado sem `message_id`. Avisos preexistentes do ambiente Expo/SVG no desenvolvimento e o aviso de tipo de módulo do bootstrap PWA no build não foram transformados em mudanças fora do escopo.
+
+## Implantação no baseline efetivo de PROD
+
+A aplicação direta da migration original não é o roteiro autorizado para o baseline remoto divergente. Consulte [Compatibilização de produção](messaging-production-compatibility.md): instalador incremental completo, pré/pós-validação, prova de equivalência, ledger específico e contingência. Nenhum desses passos remotos foi executado por este trabalho.

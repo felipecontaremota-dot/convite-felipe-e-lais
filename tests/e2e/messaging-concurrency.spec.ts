@@ -52,7 +52,7 @@ const json = (s: string) =>
   JSON.parse(s.split("\n").find((line) => line.startsWith("{"))!);
 test("messaging SQL security matrix on a clean database", async () => {
   const db = new TestPostgres();
-  await db.start();
+  await db.start("prod-profile");
   try {
     expect(
       db.sql(readFileSync("tests/messaging-conversations.sql", "utf8")),
@@ -63,7 +63,7 @@ test("messaging SQL security matrix on a clean database", async () => {
 });
 test("concurrent sends, replies, shared reads and scheduling remain unique", async () => {
   const db = new TestPostgres();
-  await db.start();
+  await db.start("prod-profile");
   try {
     db.sql(
       `update events set notification_scheduling_enabled=true where id='${event}';insert into auth.users(id) values('${admin}'),('${device}'),('${device2}');insert into user_roles(event_id,user_id,role) values('${event}','${admin}','ADMIN');`,
@@ -200,6 +200,82 @@ test("concurrent sends, replies, shared reads and scheduling remain unique", asy
         )
         .trim(),
     ).toBe("1");
+
+    const deletion = auth(
+      admin,
+      `select admin_action('${event}','MESSAGE_DELETE','{"id":"${answer}"}')`,
+    );
+    await Promise.all([execute(db, deletion), execute(db, deletion)]);
+    expect(
+      db
+        .sql(
+          `select count(*) from audit_logs where entity_id='${answer}' and action='MESSAGE_DELETE';`,
+        )
+        .trim(),
+    ).toBe("1");
+    expect(
+      db
+        .sql(
+          `select count(*) from notification_jobs where message_id='${answer}' and status='skipped';`,
+        )
+        .trim(),
+    ).toBe("2");
+    expect(
+      db
+        .rpc(device, "app_snapshot", { p_event: event })
+        .messages.some((m: { id: string }) => m.id === answer),
+    ).toBe(false);
+
+    // Final provider admission and deletion race across two real transactions.
+    // No external provider is called; either winner must preserve the admission boundary.
+    const race = db.rpc(admin, "app_mutate", {
+      p_event: event,
+      p_mutation: "cacacaca-1000-4000-8000-000000000005",
+      p_type: "MESSAGE_REPLY",
+      p_payload: {
+        message_id: inbound,
+        content: "Admission race",
+        channels: ["IN_APP"],
+      },
+    });
+    const job = JSON.parse(
+      db
+        .sql(
+          `with claimed as(update notification_jobs set status='processing',attempts=1,locked_at=clock_timestamp() where message_id='${race.id}' returning *) select json_build_object('id',id,'guest',guest_id,'lease',locked_at) from claimed;`,
+        )
+        .trim(),
+    );
+    const admit = `begin;set local role service_role;select authorize_notification_attempt('${event}','${job.id}','${job.guest}','IN_APP',1,'${job.lease}'::timestamptz,true);select pg_sleep(0.15);commit;`;
+    const remove = auth(
+      admin,
+      `select admin_action('${event}','MESSAGE_DELETE','{"id":"${race.id}"}')`,
+    );
+    const [admitted] = await Promise.all([
+      execute(db, admit),
+      execute(db, remove),
+    ]);
+    const started = json(admitted).authorized;
+    expect([true, false]).toContain(started);
+    expect(
+      db
+        .sql(
+          `select delivery_started_at is not null from notification_jobs where id='${job.id}';`,
+        )
+        .trim(),
+    ).toBe(started ? "t" : "f");
+    expect(
+      db
+        .sql(`select status from notification_jobs where id='${job.id}';`)
+        .trim(),
+    ).toBe(started ? "processing" : "skipped");
+    const denied = JSON.parse(
+      db
+        .sql(
+          `begin;set local role service_role;select authorize_notification_attempt('${event}','${job.id}','${job.guest}','IN_APP',1,'${job.lease}'::timestamptz,true);commit;`,
+        )
+        .trim(),
+    );
+    expect(denied.authorized).toBe(false);
   } finally {
     db.stop();
   }
