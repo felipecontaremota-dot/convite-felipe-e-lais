@@ -49,6 +49,7 @@
     "react-native-url-polyfill": "^4.0.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "^0.10.1",
+    "write-excel-file": "^4.1.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -58,7 +59,9 @@
     "deno": "^2.9.6",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
+    "fflate": "^0.8.2",
     "prettier": "^3.9.9",
+    "read-excel-file": "^9.3.12",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.3"

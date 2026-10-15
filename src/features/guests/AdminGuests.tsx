@@ -1,3 +1,4 @@
+import { GuestExportButton } from "./GuestExportButton";
 import { ActionFeedbackButton } from "../../components/ActionFeedbackButton";
 import { rsvpTone } from "../../theme/feedback";
 import { invitationActionOutcome } from "./invitationActionOutcome";
@@ -370,6 +371,7 @@ export function GuestsScreen() {
           closeDetail();
         }}
       />
+      <GuestExportButton search={search} filter={filter} />
       <Button
         secondary
         title="Enviar todos os convites"
