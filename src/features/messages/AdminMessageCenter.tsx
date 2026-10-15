@@ -1,7 +1,8 @@
+import { MessageComposerInput } from "./MessageComposerInput";
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import { Platform, Pressable, Text, View } from "react-native";
-import { Button, Field, styles } from "../../components/ui";
+import { Button, styles } from "../../components/ui";
 import { UnreadBadge } from "../../components/UnreadBadge";
 import { useApp } from "../../lib/AppProvider";
 import { theme } from "../../theme/tokens";
@@ -36,43 +37,38 @@ function GeneralComposer() {
         </Text>
       ) : null}
       <ChannelChoices value={channels} onChange={setChannels} />
-      <Field
+      <MessageComposerInput
         label="Mensagem para todos"
         hideLabel
-        multiline
         placeholder="Escreva uma mensagem para todos"
-        maxLength={4000}
         value={content}
         onChangeText={setContent}
-        style={[
-          styles.input,
-          { minHeight: 90, maxHeight: 120, textAlignVertical: "top" },
-        ]}
-      />
-      <SendMessageButton
-        label="Enviar mensagem para todos"
-        busy={composer.busy}
-        disabled={
-          !app.data?.capabilities?.messaging_v2 ||
-          !content.trim() ||
-          !channels.length ||
-          !ids.length ||
-          ids.length > 500
-        }
-        onPress={() =>
-          void composer.send(
-            "MESSAGE_SEND_TO_GUESTS",
-            {
-              content: content.trim(),
-              recipient_guest_ids: ids,
-              create_announcement: channels.includes("IN_APP"),
-              audience: "GENERAL",
-              channels,
-            },
-            () => setContent(""),
-          )
-        }
-      />
+      >
+        <SendMessageButton
+          label="Enviar mensagem para todos"
+          busy={composer.busy}
+          disabled={
+            !app.data?.capabilities?.messaging_v2 ||
+            !content.trim() ||
+            !channels.length ||
+            !ids.length ||
+            ids.length > 500
+          }
+          onPress={() =>
+            void composer.send(
+              "MESSAGE_SEND_TO_GUESTS",
+              {
+                content: content.trim(),
+                recipient_guest_ids: ids,
+                create_announcement: channels.includes("IN_APP"),
+                audience: "GENERAL",
+                channels,
+              },
+              () => setContent(""),
+            )
+          }
+        />
+      </MessageComposerInput>
       {composer.node}
       {app.pending
         .filter((m) => m.type === "MESSAGE_SEND_TO_GUESTS")

@@ -1,6 +1,7 @@
+import { MessageComposerInput } from "./MessageComposerInput";
 import { useState } from "react";
 import { View, Text } from "react-native";
-import { Field, styles } from "../../components/ui";
+import { styles } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import type { Message } from "../../types/domain";
 import { ChatWindow } from "./ChatWindow";
@@ -38,51 +39,46 @@ export function AdminReplyComposer({
           backend de mensagens precisa ser atualizado.
         </Text>
       ) : null}
-      <Field
+      <MessageComposerInput
         label="Resposta dos noivos"
         hideLabel
         placeholder="Escreva uma resposta"
-        multiline
-        maxLength={4000}
         value={content}
         onChangeText={setContent}
-        style={[
-          styles.input,
-          { minHeight: 90, maxHeight: 120, textAlignVertical: "top" },
-        ]}
-      />
-      <SendMessageButton
-        label="Enviar resposta"
-        busy={composer.busy}
-        disabled={
-          blocked ||
-          !enabled ||
-          !content.trim() ||
-          !unit?.active ||
-          !!unit.archived_at ||
-          !recipients.length ||
-          recipients.length > 500
-        }
-        onPress={() =>
-          void composer.send(
-            anchor ? "MESSAGE_REPLY" : "MESSAGE_SEND_TO_GUESTS",
-            anchor
-              ? {
-                  message_id: anchor.id,
-                  content: content.trim(),
-                  channels: ["IN_APP"],
-                }
-              : {
-                  content: content.trim(),
-                  recipient_guest_ids: recipients,
-                  channels: ["IN_APP"],
-                  audience: "FAMILY",
-                  create_announcement: false,
-                },
-            () => setContent(""),
-          )
-        }
-      />
+      >
+        <SendMessageButton
+          label="Enviar resposta"
+          busy={composer.busy}
+          disabled={
+            blocked ||
+            !enabled ||
+            !content.trim() ||
+            !unit?.active ||
+            !!unit.archived_at ||
+            !recipients.length ||
+            recipients.length > 500
+          }
+          onPress={() =>
+            void composer.send(
+              anchor ? "MESSAGE_REPLY" : "MESSAGE_SEND_TO_GUESTS",
+              anchor
+                ? {
+                    message_id: anchor.id,
+                    content: content.trim(),
+                    channels: ["IN_APP"],
+                  }
+                : {
+                    content: content.trim(),
+                    recipient_guest_ids: recipients,
+                    channels: ["IN_APP"],
+                    audience: "FAMILY",
+                    create_announcement: false,
+                  },
+              () => setContent(""),
+            )
+          }
+        />
+      </MessageComposerInput>
       {composer.node}
       {app.pending
         .filter(

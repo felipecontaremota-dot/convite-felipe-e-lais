@@ -65,9 +65,10 @@ export function ChatWindow({
       {Platform.OS === "web" ? (
         <style>{`
  [data-chat-viewport="true"]{position:fixed!important;left:0!important;right:0!important;width:100%!important;top:var(--chat-top,0px)!important;height:var(--chat-height,100dvh)!important;
- padding-bottom:max(var(--chat-bottom,90px),env(safe-area-inset-bottom,0px))!important;
+ --chat-reserved-bottom:max(var(--chat-bottom,90px),env(safe-area-inset-bottom,0px));--chat-reserved-top:max(20px,env(safe-area-inset-top,0px));
+ padding-top:var(--chat-reserved-top)!important;padding-bottom:var(--chat-reserved-bottom)!important;
  padding-right:max(16px,env(safe-area-inset-right,0px))!important;padding-left:max(16px,env(safe-area-inset-left,0px))!important;background:${theme.colors.overlaySoft}!important;}
- [data-chat-dialog]{height:min(640px,calc(var(--chat-height,100dvh) - var(--chat-bottom,90px) - 20px));transform-origin:bottom right;box-shadow:0 16px 44px ${theme.colors.shadow}26;animation:wedding-chat-open 300ms cubic-bezier(.22,1,.36,1) both;max-height:calc(var(--chat-height,100dvh) - var(--chat-bottom,90px) - 20px)!important;}
+ [data-chat-dialog]{min-height:0;overflow:hidden;height:min(640px,calc(var(--chat-height,100dvh) - var(--chat-reserved-bottom) - var(--chat-reserved-top)));transform-origin:bottom right;box-shadow:0 16px 44px ${theme.colors.shadow}26;animation:wedding-chat-open 300ms cubic-bezier(.22,1,.36,1) both;max-height:calc(var(--chat-height,100dvh) - var(--chat-reserved-bottom) - var(--chat-reserved-top))!important;}
  [data-chat-close="true"]:hover{background:${theme.colors.wash}!important;}
  [data-chat-close="true"]:focus-visible{outline:3px solid ${theme.colors.focus};outline-offset:2px;}
  [data-chat-dialog] h1{font-size:18px!important;line-height:24px!important;}

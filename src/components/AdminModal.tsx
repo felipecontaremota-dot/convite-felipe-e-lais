@@ -266,7 +266,12 @@ export function AdminModal({
           <View
             style={[
               styles.row,
-              chat && { minHeight: 44, alignItems: "center" },
+              chat && {
+                minHeight: 44,
+                flexShrink: 0,
+                flexWrap: "nowrap",
+                alignItems: "center",
+              },
             ]}
           >
             <Text
@@ -303,7 +308,13 @@ export function AdminModal({
                     alignItems: "center",
                     justifyContent: "center",
                   },
-                  chat && { borderWidth: 0, backgroundColor: "transparent" },
+                  chat && {
+                    position: "absolute",
+                    right: -8,
+                    top: -8,
+                    borderWidth: 0,
+                    backgroundColor: "transparent",
+                  },
                   premium && {
                     alignSelf: "flex-start",
                     borderWidth: 0,
@@ -319,30 +330,41 @@ export function AdminModal({
               </Pressable>
             ) : null}
           </View>
-          {toolbar}
+          {chat && toolbar ? (
+            <View style={{ flexShrink: 0 }}>{toolbar}</View>
+          ) : (
+            toolbar
+          )}
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ gap: 12 }}
             {...(chat && Platform.OS === "web"
               ? { dataSet: { chatHistory: "true" } }
               : {})}
-            style={{ flexShrink: 1 }}
+            style={chat ? { flex: 1, minHeight: 0 } : { flexShrink: 1 }}
           >
             {children}
           </ScrollView>
           {footer ? (
             <View
+              {...(chat && Platform.OS === "web"
+                ? { dataSet: { chatFooter: "true" } }
+                : {})}
               style={{
-                flexShrink: 1,
-                maxHeight: "60%",
+                flexShrink: chat ? 0 : 1,
+                ...(!chat ? { maxHeight: "60%" as const } : {}),
                 borderTopWidth: 1,
                 borderTopColor: theme.colors.line,
                 paddingTop: 10,
               }}
             >
-              <ScrollView keyboardShouldPersistTaps="handled">
-                {footer}
-              </ScrollView>
+              {chat ? (
+                footer
+              ) : (
+                <ScrollView keyboardShouldPersistTaps="handled">
+                  {footer}
+                </ScrollView>
+              )}
             </View>
           ) : null}
         </Animated.View>

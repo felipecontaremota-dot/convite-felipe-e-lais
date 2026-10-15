@@ -741,3 +741,151 @@ test("administrative keyboard viewport keeps reply and persistent back control r
     chat.getByText("Recado com teclado aberto", { exact: true }),
   ).toBeVisible();
 });
+
+for (const [width, height] of [
+  [320, 568],
+  [375, 667],
+  [390, 520],
+  [768, 600],
+  [1280, 720],
+])
+  test(`chat layout reserves controls outside long histories at ${width}x${height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await demo(page, "convidado");
+    await page
+      .getByRole("button", { name: /Deixe uma mensagem para o casal/ })
+      .click();
+    const guest = page.getByRole("dialog", {
+      name: "Mensagens com Felipe & Laís",
+      exact: true,
+    });
+    const field = guest.getByLabel("Mensagem aos noivos", { exact: true });
+    await field.fill("Uma mensagem longa sem perder o botão. ".repeat(70));
+    const input = (await field.boundingBox())!;
+    const send = (await guest
+      .getByRole("button", { name: "Enviar mensagem", exact: true })
+      .boundingBox())!;
+    expect(send.x).toBeGreaterThan(input.x);
+    expect(send.y).toBeGreaterThan(input.y);
+    expect(send.x + send.width).toBeLessThanOrEqual(input.x + input.width);
+    expect(send.y + send.height).toBeLessThanOrEqual(input.y + input.height);
+    expect(
+      Number.parseFloat(
+        await field.evaluate((n) => getComputedStyle(n).paddingRight),
+      ),
+    ).toBeGreaterThanOrEqual(send.width + 16);
+    await expect(field).toHaveValue(
+      "Uma mensagem longa sem perder o botão. ".repeat(70),
+    );
+    await guest
+      .getByRole("button", { name: "Enviar mensagem", exact: true })
+      .click();
+    await expect(field).toHaveValue("");
+    await page.screenshot({
+      path: test.info().outputPath(`guest-layout-${width}.png`),
+    });
+    await guest
+      .getByRole("button", { name: "Fechar modal", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Sair deste dispositivo", exact: true })
+      .click();
+    await demo(page);
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      const unit = db.snapshot.invitations[0],
+        guest = db.snapshot.guests[0];
+      for (let n = 1; n <= 45; n++) {
+        db.snapshot.invitations.push({
+          ...unit,
+          id: `layout-unit-${n}`,
+          name: `Família layout ${n}`,
+        });
+        db.snapshot.guests.push({
+          ...guest,
+          id: `layout-guest-${n}`,
+          invitation_id: `layout-unit-${n}`,
+        });
+      }
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    });
+    await page.reload();
+    await page
+      .getByRole("button", { name: /^Mensagens dos convidados/ })
+      .click();
+    const list = page.getByRole("dialog", {
+      name: "Mensagens dos convidados",
+      exact: true,
+    });
+    const history = list.locator('[data-chat-history="true"]');
+    const footer = list.locator('[data-chat-footer="true"]');
+    const all = list.getByRole("button", {
+      name: "Enviar mensagem para todos",
+      exact: true,
+    });
+    const close = list.getByRole("button", {
+      name: "Fechar modal",
+      exact: true,
+    });
+    const before = (await all.boundingBox())!;
+    const bounds = (await list.boundingBox())!;
+    const closeBox = (await close.boundingBox())!;
+    expect(before.y + before.height).toBeLessThan(bounds.y + bounds.height);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(height);
+    expect(closeBox.y - bounds.y).toBeLessThanOrEqual(20);
+    expect(closeBox.width).toBeGreaterThanOrEqual(44);
+    expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(
+      bounds.x + bounds.width,
+    );
+    expect(await history.evaluate((n) => n.scrollHeight > n.clientHeight)).toBe(
+      true,
+    );
+    await history.evaluate((n) => {
+      n.scrollTop = n.scrollHeight;
+    });
+    expect((await all.boundingBox())!.y).toBeCloseTo(before.y, 1);
+    expect((await footer.boundingBox())!.y).toBeGreaterThanOrEqual(
+      (await history.boundingBox())!.y +
+        (await history.boundingBox())!.height -
+        1,
+    );
+    expect(
+      await footer.evaluate((n) => n.scrollHeight <= n.clientHeight + 1),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`admin-layout-${width}.png`),
+    });
+    await all.hover();
+    await expect(
+      list.getByRole("tooltip", {
+        name: "Enviar mensagem para todos",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await all.click();
+    const general = page.getByRole("dialog", {
+      name: "Mensagens para todos",
+      exact: true,
+    });
+    await expect(general).toBeVisible();
+    const generalBounds = (await general.boundingBox())!;
+    const generalSend = (await general
+      .getByRole("button", { name: "Enviar mensagem para todos", exact: true })
+      .boundingBox())!;
+    expect(generalBounds.y).toBeGreaterThanOrEqual(0);
+    expect(generalSend.y + generalSend.height).toBeLessThan(
+      generalBounds.y + generalBounds.height,
+    );
+    await page
+      .getByRole("button", { name: "Fechar modal", exact: true })
+      .click();
+    await expect(list).toHaveCount(0);
+  });

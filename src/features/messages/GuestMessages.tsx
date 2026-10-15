@@ -1,6 +1,7 @@
+import { MessageComposerInput } from "./MessageComposerInput";
 import { useState } from "react";
 import { Text, View } from "react-native";
-import { Field, styles } from "../../components/ui";
+import { styles } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { MessageHistory } from "./MessageHistory";
 import { useMessageComposer } from "./useMessageComposer";
@@ -17,30 +18,25 @@ export function GuestMessages({
   const [content, setContent] = useState("");
   const form = (
     <View style={{ gap: 8 }}>
-      <Field
+      <MessageComposerInput
         label="Mensagem aos noivos"
         hideLabel={footerOnly}
         placeholder="Escreva uma mensagem para os noivos"
         value={content}
         onChangeText={setContent}
-        multiline
-        maxLength={4000}
-        style={[
-          styles.input,
-          { minHeight: 90, maxHeight: 120, textAlignVertical: "top" },
-        ]}
-      />
-      <SendMessageButton
-        busy={composer.busy}
-        disabled={!content.trim()}
-        onPress={() =>
-          void composer.send(
-            "MESSAGE_SEND",
-            { content: content.trim(), sender_guest_id: null },
-            () => setContent(""),
-          )
-        }
-      />
+      >
+        <SendMessageButton
+          busy={composer.busy}
+          disabled={!content.trim()}
+          onPress={() =>
+            void composer.send(
+              "MESSAGE_SEND",
+              { content: content.trim(), sender_guest_id: null },
+              () => setContent(""),
+            )
+          }
+        />
+      </MessageComposerInput>
       {composer.node}
       {app.pending
         .filter((m) => m.type === "MESSAGE_SEND")
