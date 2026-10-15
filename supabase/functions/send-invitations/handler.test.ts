@@ -313,7 +313,7 @@ Deno.test("real Resend abstraction mocked at HTTP boundary records accepted invi
         );
         const body = JSON.parse(String(init?.body));
         assert(
-          body.html.includes("https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email.jpeg") &&
+          body.html.includes("https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email_v2.jpeg") &&
             body.html.includes('href="https://example.test/convite-felipe-e-lais/c/CodeSeguroNaoEnumeravelCom32Chars"') &&
             body.text.includes("Senha de acesso: 0047"),
           "centralized template sent",
@@ -703,7 +703,7 @@ Deno.test(
     const fragments = [
       "Olá, Ana &amp; João,",
       "Temos um convite especial para você!",
-      `<a href="${url}" style="display:block;text-decoration:none;"><img src="https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email.jpeg"`,
+      `<a href="${url}" style="display:block;text-decoration:none;"><img src="https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email_v2.jpeg"`,
       "A sua senha de acesso é: <strong>0047</strong>",
       "Você também pode acessar o seu convite através desse link:",
       `>${url}</a>`,

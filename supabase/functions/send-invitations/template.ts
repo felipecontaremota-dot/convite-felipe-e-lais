@@ -1,6 +1,6 @@
 // Centralized invitation artwork and HTML; sending and credentials stay in the handler.
 const artworkUrl =
-  "https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email.jpeg";
+  "https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email_v2.jpeg";
 const escape = (value: string) =>
   value.replace(
     /[&<>"']/g,
