@@ -196,6 +196,24 @@ for (const width of [320, 375, 390, 768, 1280])
     await page.setViewportSize({ width, height: 844 });
     await loginName(page, g.name);
     await expect(modal(page)).toBeVisible();
+    await expect(
+      modal(page).getByText(
+        "Queremos garantir que todos os recados importantes cheguem até você! Confira seus dados abaixo e confirme para continuar. 💌",
+        { exact: true },
+      ),
+    ).toHaveCSS("text-align", "center");
+    await expect(
+      modal(page).getByText(
+        "Informar seus contatos não modifica suas permissões de comunicação.",
+        { exact: true },
+      ),
+    ).toHaveCount(0);
+    await expect(
+      modal(page).getByRole("button", {
+        name: "Preciso de ajuda",
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await expect(modal(page).getByLabel("Nome completo")).toHaveValue(g.name);
     await expect(
       modal(page).getByLabel("WhatsApp", { exact: true }),
@@ -425,7 +443,7 @@ test("family asks explicitly, confirms one member and persists the declared sele
   ).toBeVisible();
   await another.close();
 });
-test("legacy backend never loops and pending confirmation has help and real logout", async ({
+test("legacy backend never loops and pending confirmation preserves recovery and real logout", async ({
   page,
 }) => {
   const g = individual("Pessoa legado confirmação"),
@@ -437,11 +455,11 @@ test("legacy backend never loops and pending confirmation has help and real logo
   await backend(page, uid);
   await page.reload();
   await expect(modal(page)).toBeVisible();
-  await modal(page)
-    .getByRole("button", { name: "Preciso de ajuda", exact: true })
-    .click();
   await expect(
-    modal(page).getByText(/contato usado para receber/),
+    modal(page).getByRole("button", {
+      name: "Carregar dados novamente",
+      exact: true,
+    }),
   ).toBeVisible();
   await modal(page)
     .getByRole("button", { name: "Sair deste convite", exact: true })

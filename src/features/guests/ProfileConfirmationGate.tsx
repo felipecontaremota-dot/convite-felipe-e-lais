@@ -36,7 +36,6 @@ function ConfirmationSession() {
   const pending = profileConfirmationPending(app.data);
   const [visible, setVisible] = useState(pending);
   const [closing, setClosing] = useState(false);
-  const [help, setHelp] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [revision, setRevision] = useState(0);
   const { reducedMotion } = useFxToast();
@@ -195,18 +194,6 @@ function ConfirmationSession() {
           }}
         />
         <Button
-          title="Preciso de ajuda"
-          secondary
-          onPress={() => setHelp((h) => !h)}
-        />
-        {help ? (
-          <Text style={styles.small}>
-            Se não conseguir confirmar ou seu nome não estiver na lista, fale
-            com Felipe e Laís pelo contato usado para receber este convite. Você
-            pode sair e acessar novamente.
-          </Text>
-        ) : null}
-        <Button
           title="Sair deste convite"
           secondary
           onPress={() => {
@@ -310,8 +297,8 @@ function ConfirmationForm({
   };
   return (
     <View style={{ gap: 14 }}>
-      <Text style={styles.text}>
-        Queremos garantir que todos os recadinhos importantes cheguem até você!
+      <Text style={[styles.text, { textAlign: "center" }]}>
+        Queremos garantir que todos os recados importantes cheguem até você!
         Confira seus dados abaixo e confirme para continuar. 💌
       </Text>
       <Field
@@ -386,9 +373,6 @@ function ConfirmationForm({
           {errors.email}
         </Text>
       ) : null}
-      <Text style={styles.small}>
-        Informar seus contatos não modifica suas permissões de comunicação.
-      </Text>
       <Button
         title={busy ? "Confirmando…" : "Confirmar"}
         disabled={busy || !app.online}
