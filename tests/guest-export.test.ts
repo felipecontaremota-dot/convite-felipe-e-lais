@@ -6,6 +6,7 @@ import {
   guestExportRows,
   guestExportFilename,
   guestExportHeaders,
+  exportWhatsApp,
 } from "../src/features/guests/guestExport";
 import { guestWorkbook } from "../src/features/guests/guestWorkbook";
 function snapshot() {
@@ -44,8 +45,8 @@ function snapshot() {
         id: "f",
         event_id: "e",
         name: "Família teste",
-        pin: "SECRET_PIN",
-        sharing_code: "SECRET_LINK",
+        pin: "0047",
+        sharing_code: "0123456789abcdef0123456789abcdef01234567",
       },
       { id: "i", event_id: "e", name: "Carla" },
     ],
@@ -87,18 +88,22 @@ describe("guest Excel export", () => {
     expect(rows[0]).toEqual([
       1,
       "Ágata",
-      "Família teste",
-      "Convidado(a) da noiva",
       "001234567890",
+      "Convidado(a) da noiva",
+      "",
+      "0047",
+      "Família teste",
       "a@example.test",
       "Confirmado",
       "Criança",
     ]);
-    expect(rows[1].slice(4)).toEqual(["", "", "Pendente", "Adulto"]);
-    expect(rows[2].slice(6)).toEqual(["Não irá", "Adolescente"]);
+    expect(rows[1].slice(7)).toEqual(["", "Pendente", "Adulto"]);
+    expect(rows[2].slice(8)).toEqual(["Não irá", "Adolescente"]);
+    expect(rows[2][4]).toBe("");
+    expect(rows[2][5]).toBe("");
     const s = snapshot();
     delete s.guests[0].is_child;
-    expect(guestExportRows(s, "Bruno", "ALL")[0][7]).toBe("");
+    expect(guestExportRows(s, "Bruno", "ALL")[0][9]).toBe("");
   });
   it.each([null, "GUEST", "CEREMONIALIST"])(
     "rejects role %s without new permissions",
@@ -108,12 +113,12 @@ describe("guest Excel export", () => {
       expect(() => guestExportRows(s, "", "ALL")).toThrow("não autorizada");
     },
   );
-  it("isolates event data and allowlists eight columns without credentials", () => {
+  it("isolates event data and allowlists ten columns without credentials", () => {
     const s = snapshot();
     s.guests.push({ ...s.guests[0], id: "foreign", event_id: "other" });
     const rows = guestExportRows(s, "", "ALL");
     expect(rows).toHaveLength(3);
-    expect(rows.every((r) => r.length === 8)).toBe(true);
+    expect(rows.every((r) => r.length === 10)).toBe(true);
     expect(JSON.stringify(rows)).not.toMatch(/SECRET_/);
   });
   it("uses the generation date in São Paulo for safe filenames", () => {
@@ -132,6 +137,8 @@ describe("guest Excel export", () => {
       "@SUM(A1)",
       "",
       "",
+      "",
+      "",
     ]);
     const bytes = new Uint8Array(
       await (
@@ -141,7 +148,7 @@ describe("guest Excel export", () => {
     expect(Array.from(bytes.slice(0, 2))).toEqual([80, 75]);
     const zip = unzipSync(bytes),
       xml = strFromU8(zip["xl/worksheets/sheet1.xml"]);
-    expect(xml).toContain('ref="A5:H9"');
+    expect(xml).toContain('ref="A5:J9"');
     expect(xml).toContain('ySplit="5"');
     expect(xml).not.toMatch(/<f[ >]/);
     expect(Object.keys(zip).join()).not.toMatch(/externalLink|vbaProject/);
@@ -153,8 +160,77 @@ describe("guest Excel export", () => {
     // Independent reader confirms the file and text values can be opened.
     const sheet = result;
     expect(sheet[4]).toEqual(guestExportHeaders);
-    expect(sheet[5][4]).toBe("001234567890");
+    expect(sheet[5][2]).toBe("001234567890");
     expect(sheet[8][1]).toBe('=HYPERLINK("https://invalid.test")');
+  });
+  it.each([
+    "62998784778",
+    "(62) 9 9878-4778",
+    "+55 (62) 9 9878-4778",
+    "5562998784778",
+  ])("masks %s only for export", (value) => {
+    expect(exportWhatsApp(value)).toBe("(62) 9 9878-4778");
+  });
+  it("preserves local DDD 55, missing and legacy phones without inventing digits", () => {
+    expect(exportWhatsApp("55998784778")).toBe("(55) 9 9878-4778");
+    expect(exportWhatsApp("")).toBe("");
+    expect(exportWhatsApp("123")).toBe("123");
+    expect(exportWhatsApp("556233334778")).toBe("(62) 3333-4778");
+  });
+  it("maps each person to the actual unit link/PIN, leaves unavailable links empty and never exports auth credentials", async () => {
+    const s = snapshot();
+    s.invitations[1].sharing_code = "abcdef0123456789abcdef0123456789abcdef01";
+    s.invitations[1].pin = "0001";
+    const unchanged = JSON.stringify(s);
+    const rows = guestExportRows(s, "", "ALL", "https://example.test/wedding/");
+    expect(JSON.stringify(s)).toBe(unchanged);
+    expect(guestExportHeaders).toEqual([
+      "Nº",
+      "Nome",
+      "WhatsApp",
+      "Tag",
+      "Convite",
+      "Senha",
+      "Família",
+      "E-mail",
+      "Presença",
+      "Tipo",
+    ]);
+    expect(rows[0].slice(4, 7)).toEqual([
+      "https://example.test/wedding/c/" + s.invitations[0].sharing_code,
+      "0047",
+      "Família teste",
+    ]);
+    expect(rows[1].slice(4, 7)).toEqual(rows[0].slice(4, 7));
+    expect(rows[2].slice(4, 7)).toEqual([
+      "https://example.test/wedding/c/" + s.invitations[1].sharing_code,
+      "0001",
+      "Carla",
+    ]);
+    const sheet = await readSheet(
+      Buffer.from(await (await guestWorkbook(rows, new Date())).arrayBuffer()),
+      "Convidados",
+    );
+    expect(sheet[4]).toEqual(guestExportHeaders);
+    expect(sheet[5]).toEqual([
+      1,
+      "Ágata",
+      "001234567890",
+      "Convidado(a) da noiva",
+      rows[0][4],
+      "0047",
+      "Família teste",
+      "a@example.test",
+      "Confirmado",
+      "Criança",
+    ]);
+    expect(sheet[7][5]).toBe("0001");
+    s.invitations[0].link_active = false;
+    expect(guestExportRows(s, "", "ALL", "https://example.test")[0][4]).toBe(
+      "",
+    );
+    expect(guestExportRows(s, "", "ALL", "http://unsafe.test")[2][4]).toBe("");
+    expect(JSON.stringify(rows)).not.toContain("SECRET_TOKEN");
   });
   it("rejects empty workbooks", async () => {
     await expect(guestWorkbook([], new Date())).rejects.toThrow(

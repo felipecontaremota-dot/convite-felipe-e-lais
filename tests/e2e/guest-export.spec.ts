@@ -43,7 +43,7 @@ async function open(page: Page, extra = 0) {
       {
         guest_id: "export-a",
         email: "agata@example.test",
-        whatsapp: "001234567890",
+        whatsapp: "5562998784778",
       },
     ];
     s.rsvps = [
@@ -132,9 +132,18 @@ for (const width of [320, 375, 390, 768, 1280])
       "Bruno Alencar",
       "Carla Silva",
     ]);
-    expect(rows[5][4]).toBe("001234567890");
-    expect(rows[6][4]).toBeNull();
-    expect(rows[7][6]).toBe("Pendente");
+    expect(rows[5][2]).toBe("(62) 9 9878-4778");
+    const stored = await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("demo-db")!).snapshot.invitations[0],
+    );
+    expect(rows[5][4]).toBe(
+      `https://example.test/convite-felipe-e-lais/c/${stored.sharing_code}`,
+    );
+    expect(rows[5][5]).toBe(stored.pin);
+    expect(rows[5][6]).toBe("Família Silva");
+    expect(rows[6][2]).toBeNull();
+    expect(rows[7][8]).toBe("Pendente");
     await expect(
       page.getByText("Arquivo Excel gerado. Download iniciado.", {
         exact: true,

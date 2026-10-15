@@ -19,7 +19,7 @@ export const excelText = (text: string) =>
   text
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
     .slice(0, 32767);
-const columnWidths = [7, 42, 38, 29, 23, 38, 19, 18];
+const columnWidths = [7, 42, 23, 29, 65, 12, 38, 38, 19, 18];
 export async function guestWorkbook(
   rows: GuestExportRow[],
   generatedAt: Date,
@@ -29,13 +29,13 @@ export async function guestWorkbook(
     {
       value,
       type: String,
-      columnSpan: 8,
+      columnSpan: 10,
       fontWeight: "bold",
       fontSize: size,
       textColor: colors.ink,
       height: 26,
     },
-    ...Array(7).fill(null),
+    ...Array(9).fill(null),
   ];
   const data: SheetData = [
     heading("Felipe & Laís — Lista de Convidados", 18),
@@ -55,7 +55,7 @@ export async function guestWorkbook(
       row.map((value, column): Cell => ({
         value: typeof value === "string" ? excelText(value) : value,
         type: typeof value === "string" ? String : Number,
-        format: column === 4 ? "@" : undefined,
+        format: [2, 5].includes(column) ? "@" : undefined,
         wrap: true,
         height: Math.min(
           409,
@@ -98,7 +98,7 @@ export async function guestWorkbook(
           transform: (xml) =>
             insertElementMarkupAccordingToOrderOfSiblings(
               xml,
-              `<autoFilter ref="A5:H${rows.length + 5}"/>`,
+              `<autoFilter ref="A5:J${rows.length + 5}"/>`,
               getOrderOfSiblings("xl/worksheets/sheet{id}.xml", "worksheet")!,
               "worksheet",
             ),

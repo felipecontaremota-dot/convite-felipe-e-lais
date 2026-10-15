@@ -1,12 +1,15 @@
+import { invitationLink } from "../../utils/security";
 import type { Snapshot } from "../../types/domain";
-import { listGuests, RSVP_LABELS } from "./adminDomain";
+import { listGuests, RSVP_LABELS, formatPhone } from "./adminDomain";
 
 export const guestExportHeaders = [
   "Nº",
-  "Nome completo",
-  "Família / Unidade de acesso",
-  "Tag",
+  "Nome",
   "WhatsApp",
+  "Tag",
+  "Convite",
+  "Senha",
+  "Família",
   "E-mail",
   "Presença",
   "Tipo",
@@ -20,12 +23,24 @@ export type GuestExportRow = [
   string,
   string,
   string,
+  string,
+  string,
 ];
-// An explicit allowlist: never pass a snapshot, credentials or complete records to the writer.
+export function exportWhatsApp(value: string) {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "");
+  const national =
+    [12, 13].includes(digits.length) && digits.startsWith("55")
+      ? digits.slice(2)
+      : digits;
+  return [10, 11].includes(national.length) ? formatPhone(national) : value;
+}
+// Explicit columns only: never pass a snapshot, administrative/session credentials or complete records to the writer.
 export function guestExportRows(
   data: Snapshot | null,
   search: string,
   filter: string,
+  baseUrl = process.env.EXPO_PUBLIC_WEB_BASE_URL || "",
 ): GuestExportRow[] {
   if (data?.role !== "ADMIN") throw Error("Exportação não autorizada.");
   const event = data.event.id;
@@ -42,13 +57,24 @@ export function guestExportRows(
     .filter((g) => g.event_id === event)
     .map((g, index) => {
       const c = contacts.get(g.id),
-        status = rsvps.get(g.id);
+        status = rsvps.get(g.id),
+        unit = invitations.get(g.invitation_id);
+      let link = "";
+      if (unit?.sharing_code && unit.link_active !== false && baseUrl) {
+        try {
+          link = invitationLink(baseUrl, unit.sharing_code);
+        } catch {
+          /* Missing/invalid access data stays blank. */
+        }
+      }
       return [
         index + 1,
         g.name || "",
-        invitations.get(g.invitation_id)?.name || "",
+        exportWhatsApp(c?.whatsapp || ""),
         g.group_label || "",
-        c?.whatsapp || "",
+        link,
+        unit?.pin || "",
+        unit?.name || "",
         c?.email || "",
         status ? RSVP_LABELS[status] || "" : RSVP_LABELS.PENDING,
         g.is_child
