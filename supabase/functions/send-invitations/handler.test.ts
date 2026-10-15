@@ -149,7 +149,7 @@ function fixture(
           send: async (d: Delivery) => {
             sends++;
             assert(
-              d.body.includes("Senha de acesso: 0047") &&
+              d.body.includes("senha individual: 🔑 0047") &&
                 d.body.includes("/convite-felipe-e-lais/c/"),
               "server credentials and correct base path",
             );
@@ -229,7 +229,7 @@ Deno.test("invitation template escapes all dynamic HTML and keeps textual fallba
   );
   assert(
     !result.html.includes("<script>") && result.html.includes("&quot;") &&
-      result.text.includes("Senha de acesso: 0047"),
+      result.text.includes("senha individual: 🔑 0047"),
     "escaping",
   );
 });
@@ -313,9 +313,13 @@ Deno.test("real Resend abstraction mocked at HTTP boundary records accepted invi
         );
         const body = JSON.parse(String(init?.body));
         assert(
-          body.html.includes("https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email_v2.jpeg") &&
-            body.html.includes('href="https://example.test/convite-felipe-e-lais/c/CodeSeguroNaoEnumeravelCom32Chars"') &&
-            body.text.includes("Senha de acesso: 0047"),
+          body.html.includes(
+            "https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email_v2.jpeg",
+          ) &&
+            body.html.includes(
+              'href="https://example.test/convite-felipe-e-lais/c/CodeSeguroNaoEnumeravelCom32Chars"',
+            ) &&
+            body.text.includes("senha individual: 🔑 0047"),
           "centralized template sent",
         );
         assert(
@@ -697,17 +701,85 @@ Deno.test(
     );
     assert(
       result.text ===
-        `Felipe & Laís\nOlá, Ana & João,\nTemos um convite especial para você.\n15 de dezembro de 2026 · 16h\nABRIR NOSSO CONVITE: ${url}\nSenha de acesso: 0047`,
-      "unchanged plain text fallback",
+        `Olá, Ana & João! Tudo bem? 🥰
+
+Temos um convite especial para você!
+
+É isso mesmo! Seu nome está na nossa lista de pessoas especiais e, por isso, temos a alegria e a honra de te convidar para celebrar um dos momentos mais importantes da nossa história: O NOSSO CASAMENTO! 💍❤️
+
+📅 15 de dezembro de 2026
+⏰ Às 16h (horário de Goiás)
+📍 Villarejo — Aparecida de Goiânia/GO
+
+Preparamos para você um convite exclusivo, 100% digital, interativo e que até vira um aplicativo no seu celular! 📲
+
+E o melhor: ele foi preparado com muito carinho, pensando em cada detalhe para tornar essa experiência ainda mais especial!
+
+🔐 COMO ACESSAR SEU CONVITE?
+
+Basta clicar na imagem acima e digitar sua senha individual: 🔑 0047
+
+Ou então, no seu link exclusivo: ${url} e digitar sua senha individual: 🔑 0047
+
+Ou acessar o nosso site https://www.felipeelais2026.com.br e digitar seu NOME COMPLETO e sua senha individual: 🔑 0047
+
+✨ Lá dentro, você vai encontrar todas as informações sobre o casamento, localização, confirmação de presença e algumas surpresinhas que preparamos!
+
+💙 Ahhh, um pedido importante: não esqueça de confirmar sua presença pelo próprio convite, combinado? É por lá que vamos organizar nossa lista e liberar seu QR Code de acesso ao evento!
+
+Estamos contando os dias para celebrar esse momento e esperamos, de coração, poder dividir essa alegria com você! 🥹🥂
+
+Com muito carinho,
+Felipe & Laís 💙💍`,
+      "approved plain text content with dynamic credentials",
     );
     const fragments = [
-      "Olá, Ana &amp; João,",
+      "Olá, <strong>Ana &amp; João</strong>! Tudo bem? 🥰",
       "Temos um convite especial para você!",
       `<a href="${url}" style="display:block;text-decoration:none;"><img src="https://nwgyxmwaqckpghznbfzm.supabase.co/storage/v1/object/public/convites-assets/convite-email_v2.jpeg"`,
-      "A sua senha de acesso é: <strong>0047</strong>",
-      "Você também pode acessar o seu convite através desse link:",
+      "É isso mesmo! Seu nome está na nossa lista",
+      "Basta clicar na imagem acima e digitar sua senha individual: 🔑 <strong>0047</strong>",
       `>${url}</a>`,
+      '<a href="https://www.felipeelais2026.com.br"',
+      "Estamos contando os dias",
+      "<strong>Com muito carinho,</strong>",
+      "<strong>Felipe &amp; Laís</strong> 💙💍",
     ];
+    const bold = [
+      "Ana &amp; João",
+      "O NOSSO CASAMENTO!",
+      "15 de dezembro de 2026",
+      "Às 16h (horário de Goiás)",
+      "Villarejo — Aparecida de Goiânia/GO",
+      "100% digital, interativo e que até vira um aplicativo no seu celular!",
+      "COMO ACESSAR SEU CONVITE?",
+      "nosso site",
+      "Ahhh, um pedido importante:",
+      "Com muito carinho,",
+      "Felipe &amp; Laís",
+    ];
+    for (const phrase of bold) {
+      assert(
+        result.html.includes(`<strong>${phrase}</strong>`),
+        "approved emphasis: " + phrase,
+      );
+    }
+    assert(
+      (result.html.match(/<strong>0047<\/strong>/g) || []).length === 3,
+      "all three passwords emphasized",
+    );
+    assert(
+      (result.text.match(/0047/g) || []).length === 3,
+      "all three plain text passwords",
+    );
+    assert(
+      !/[*]|\[(Nome|Senha|Link)\]/.test(result.html),
+      "no prompt markers in HTML",
+    );
+    assert(
+      !/<[^>]+>|[*]|\[(Nome|Senha|Link)\]/.test(result.text),
+      "plain text without markup or placeholders",
+    );
     let previous = -1;
     for (const fragment of fragments) {
       const position = result.html.indexOf(fragment);
@@ -716,8 +788,8 @@ Deno.test(
     }
     assert(
       (result.html.match(/<img /g) || []).length === 1 &&
-        (result.html.match(/<a /g) || []).length === 2,
-      "one artwork and two individual links",
+        (result.html.match(/<a /g) || []).length === 3,
+      "one artwork, two individual links and general site",
     );
     assert(
       result.html.includes("max-width:600px;height:auto;") &&
