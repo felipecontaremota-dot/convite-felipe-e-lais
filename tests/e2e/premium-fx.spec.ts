@@ -91,6 +91,10 @@ for (const role of ["noivos", "convidado"]) {
     await page
       .getByRole("button", { name: "Abrir localização", exact: true })
       .click();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "Abrir localização", exact: true }),
+    ).toHaveCount(0);
     await page
       .getByRole("button", { name: "Copiar endereço", exact: true })
       .click();
@@ -109,6 +113,10 @@ for (const role of ["noivos", "convidado"]) {
       ),
     ).toBe(true);
     await clipboard(page, true);
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "Abrir localização", exact: true }),
+    ).toHaveCount(0);
     await page
       .getByRole("button", { name: "Copiar endereço", exact: true })
       .click();

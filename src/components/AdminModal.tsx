@@ -55,6 +55,7 @@ export function AdminModal({
   hideClose = false,
   contentWidth,
   registration = false,
+  animationType,
 }: {
   title: string;
   children: React.ReactNode;
@@ -70,6 +71,7 @@ export function AdminModal({
   hideClose?: boolean;
   contentWidth?: number;
   registration?: boolean;
+  animationType?: "none" | "fade" | "slide";
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -183,7 +185,9 @@ export function AdminModal({
     <Modal
       visible
       transparent
-      animationType={chat && Platform.OS === "web" ? "none" : "fade"}
+      animationType={
+        animationType ?? (chat && Platform.OS === "web" ? "none" : "fade")
+      }
       onRequestClose={() => {
         if (dismissible) onClose();
       }}

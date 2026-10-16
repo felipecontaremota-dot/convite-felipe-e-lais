@@ -107,6 +107,10 @@ for (const width of [390, 1280]) {
         () => (window as unknown as { shared: string }).shared,
       ),
     ).toBe(address);
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "Abrir localização", exact: true }),
+    ).toHaveCount(0);
     await page
       .getByRole("button", { name: "Copiar endereço", exact: true })
       .click();

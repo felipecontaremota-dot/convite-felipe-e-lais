@@ -5,10 +5,14 @@ export function GuestModal({
   title,
   children,
   onClose,
+  closeOnOutside = false,
+  animationType,
 }: {
   title: string;
   children: ReactNode | ((close: () => void) => ReactNode);
   onClose: () => void;
+  closeOnOutside?: boolean;
+  animationType?: "none" | "fade" | "slide";
 }) {
   const { reducedMotion } = useFxToast();
   const [closing, setClosing] = useState(false);
@@ -30,8 +34,9 @@ export function GuestModal({
     <AdminModal
       title={title}
       premium
+      animationType={animationType}
       closing={closing}
-      closeOnOutside={false}
+      closeOnOutside={closeOnOutside}
       onClose={close}
     >
       {/* eslint-disable-next-line react-hooks/refs -- This render callback only binds close to event handlers; it never invokes it during render. */}

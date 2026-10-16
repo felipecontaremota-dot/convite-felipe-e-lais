@@ -1,6 +1,6 @@
 import { useFxToast } from "../../components/FxToastProvider";
 import React from "react";
-import { Image, Platform, Text } from "react-native";
+import { Image, Platform, Pressable, Text } from "react-native";
 import { Button, Card, Screen, styles, useFeedback } from "../../components/ui";
 import type { WeddingEvent } from "../../types/domain";
 import { useApp } from "../../lib/AppProvider";
@@ -34,18 +34,20 @@ export function LocationCard({
   const links = event ? transportLinks(event) : null;
   return (
     <Card>
-      <Image
-        source={require("../../../assets/villarejo-eventos.jpg")}
-        accessible
-        accessibilityLabel="Villarejo Eventos"
-        resizeMode="cover"
-        style={{
-          width: 112,
-          height: 112,
-          borderRadius: 56,
-          alignSelf: "center",
-        }}
-      />
+      <VenueLogo>
+        <Image
+          source={require("../../../assets/villarejo-eventos.jpg")}
+          accessible
+          accessibilityLabel="Villarejo Eventos"
+          resizeMode="cover"
+          style={{
+            width: 112,
+            height: 112,
+            borderRadius: 56,
+            alignSelf: "center",
+          }}
+        />
+      </VenueLogo>
       <Text accessibilityRole="header" style={styles.heading}>
         {event?.venue_name || "Local a definir"}
       </Text>
@@ -100,4 +102,43 @@ function LocationPreview({ event }: { event?: WeddingEvent }) {
         style: { width: "100%", height: 280, border: 0, borderRadius: 12 },
       })
     : null;
+}
+
+function VenueLogo({ children }: { children: React.ReactNode }) {
+  const url =
+    "https://www.instagram.com/villarejoeventos?vrfl=M2tpa292Nzc5bDBz";
+  const label = "Visitar o Instagram do Villarejo Eventos";
+  const [hovered, setHovered] = React.useState(false);
+  const style = {
+    alignSelf: "center" as const,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    opacity: hovered ? 0.85 : 1,
+  };
+  if (Platform.OS === "web")
+    return React.createElement(
+      "a",
+      {
+        href: url,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        "aria-label": label,
+        onMouseEnter: () => setHovered(true),
+        onMouseLeave: () => setHovered(false),
+        style: { ...style, display: "block" },
+        role: "link",
+      },
+      children,
+    );
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      onPress={() => openExternal(url)}
+      style={style}
+    >
+      {children}
+    </Pressable>
+  );
 }
