@@ -477,7 +477,7 @@ test("location saves separate GPS URL, rejects HTTP and opens direct external de
   await page
     .getByRole("button", { name: "Abrir localização", exact: true })
     .click();
-  for (const name of ["Google Maps", "Waze", "Uber", "99", "Copiar endereço"])
+  for (const name of ["Google Maps", "Waze", "Uber", "99"])
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
   for (const name of [
     "Abrir no Apple Maps",
@@ -486,6 +486,13 @@ test("location saves separate GPS URL, rejects HTTP and opens direct external de
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
       0,
     );
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Abrir localização", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Copiar endereço", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText("Rua do Evento, 12", { exact: true }),
   ).toHaveCount(1);
