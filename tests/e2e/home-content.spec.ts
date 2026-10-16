@@ -52,7 +52,7 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
   for (const [status, responded_at, message] of [
     ["CONFIRMED", null, "Sua presença está confirmada."],
     ["DECLINED", null, "Sua ausência foi confirmada, sentiremos sua falta."],
-    ["PENDING", null, "Sua presença ainda não foi confirmada."],
+    ["PENDING", null, "Ainda dá tempo de você confirmar sua presença."],
     [
       "PENDING",
       "2026-10-10T19:00:00Z",
@@ -91,10 +91,9 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
     page.getByText("Bem-vindos, Família Demo", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      "Ainda dá tempo de você confirmar a sua presença e de sua família.",
-      { exact: true },
-    ),
+    page.getByText("Ainda dá tempo de você confirmar sua presença.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await page.evaluate(() => {
     const db = JSON.parse(localStorage.getItem("demo-db")!);
@@ -127,10 +126,9 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
     page.getByText("Bem-vindos, Member 0 e família", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      "2 presenças confirmadas · 1 ausência confirmada · 1 ainda não confirmada · 1 ainda decidindo",
-      { exact: true },
-    ),
+    page.getByText("Ainda dá tempo de você confirmar sua presença.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -198,10 +196,9 @@ test("Home recognizes an explicit deciding response saved offline without changi
   await page.getByRole("link", { name: "Início", exact: true }).click();
   await expect(
     page
-      .getByText(
-        "1 presença confirmada · 1 ainda não confirmada · 1 ainda decidindo",
-        { exact: true },
-      )
+      .getByText("Ainda dá tempo de você confirmar sua presença.", {
+        exact: true,
+      })
       .filter({ visible: true }),
   ).toBeVisible();
   expect(
@@ -225,10 +222,9 @@ test("Home recognizes an explicit deciding response saved offline without changi
     .not.toBeNull();
   await expect(
     page
-      .getByText(
-        "1 presença confirmada · 1 ainda não confirmada · 1 ainda decidindo",
-        { exact: true },
-      )
+      .getByText("Ainda dá tempo de você confirmar sua presença.", {
+        exact: true,
+      })
       .filter({ visible: true }),
   ).toBeVisible();
 });

@@ -658,3 +658,85 @@ test("pending contact sync cannot be overtaken and logout never silently discard
       .communications_revoked,
   ).toBe(true);
 });
+
+test("Wedding party uses real authenticated PostgreSQL RPCs and completion persists across two devices", async ({
+  page,
+  browser,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const g = individual("Padrinho PostgreSQL exclusivo"),
+    uid = actor(),
+    otherDevice = actor();
+  db.sql(
+    `update guests set profile_confirmed_at=clock_timestamp() where id='${g.id}';`,
+  );
+  const p = db.rpc(admin, "wedding_party_admin_set", {
+    p_event: event,
+    p_guest: g.id,
+    p_role: "PADRINHO",
+    p_expected_cycle: null,
+  });
+  const before = db.rpc(admin, "app_snapshot", { p_event: event }).rsvps;
+  await backend(page, uid);
+  await loginName(page, g.name);
+  await expect(page).toHaveURL(/padrinhos\?surpresa=1/);
+  await page
+    .getByRole("button", { name: "Abrir convite especial", exact: true })
+    .press("Enter");
+  await page
+    .getByRole("button", { name: "💙 É claro que aceito!", exact: true })
+    .click();
+  await expect(
+    page.getByText("Agora é oficial!", { exact: true }),
+  ).toBeVisible();
+  expect(
+    db.rpc(uid, "wedding_party_state", { p_event: event }).promotion
+      .completed_at,
+  ).toBeNull();
+  await page
+    .getByRole("button", {
+      name: "Conhecer minha área especial →",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "O grande dia", exact: true }),
+  ).toBeVisible();
+  const persisted = db.rpc(uid, "wedding_party_state", {
+    p_event: event,
+  }).promotion;
+  expect(persisted.completed_at).toBeTruthy();
+  const device = await browser.newContext();
+  try {
+    const second = await device.newPage();
+    await backend(second, otherDevice);
+    await loginName(second, g.name);
+    await expect(second).toHaveURL(/\/inicio$/);
+    await expect(
+      second.getByRole("button", { name: "Espaço dos Padrinhos", exact: true }),
+    ).toBeVisible();
+    await expect(
+      second.getByRole("button", {
+        name: "Abrir convite especial",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    expect(
+      db.rpc(otherDevice, "wedding_party_state", { p_event: event }).promotion
+        .completed_at,
+    ).toBe(persisted.completed_at);
+    db.rpc(admin, "wedding_party_admin_set", {
+      p_event: event,
+      p_guest: g.id,
+      p_role: null,
+      p_expected_cycle: p.cycle_id,
+    });
+    await second.goto("/padrinhos?pagina=recado");
+    await expect(second).toHaveURL(/\/inicio$/);
+    expect(db.rpc(admin, "app_snapshot", { p_event: event }).rsvps).toEqual(
+      before,
+    );
+  } finally {
+    await device.close();
+  }
+});

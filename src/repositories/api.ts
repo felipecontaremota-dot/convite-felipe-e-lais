@@ -316,3 +316,31 @@ export async function sendInvitations(
     failed: data.failed,
   };
 }
+
+export const weddingPartyState = () =>
+  rpc<import("../features/weddingParty/types").PartyState>(
+    "wedding_party_state",
+    { p_event: eventId },
+  );
+export const weddingPartyAdminGet = (guest: string) =>
+  rpc<import("../features/weddingParty/types").Promotion | null>(
+    "wedding_party_admin_get",
+    { p_event: eventId, p_guest: guest },
+  );
+export const weddingPartyAdminSet = (
+  guest: string,
+  role: import("../features/weddingParty/types").PartyRole | null,
+  cycle: string | null,
+) =>
+  rpc<import("../features/weddingParty/types").Promotion | null>(
+    "wedding_party_admin_set",
+    { p_event: eventId, p_guest: guest, p_role: role, p_expected_cycle: cycle },
+  );
+export const weddingPartyRespond = (
+  cycle: string,
+  action: "ACCEPT" | "COMPLETE",
+) =>
+  rpc<import("../features/weddingParty/types").PartyState>(
+    "wedding_party_respond",
+    { p_event: eventId, p_cycle: cycle, p_action: action },
+  );

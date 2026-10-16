@@ -124,6 +124,9 @@ export function demoSeed(): Snapshot {
   };
 }
 interface DemoDatabase {
+  weddingParty?: (import("../features/weddingParty/types").Promotion & {
+    active: boolean;
+  })[];
   snapshot: Snapshot;
   applied: string[];
   tickets: Ticket[];
@@ -833,5 +836,78 @@ export async function demoAdmin(
         throw Error("Operação desconhecida");
     }
     return {};
+  });
+}
+
+export function demoPartyAdminGet(guest: string) {
+  return transaction(
+    (db) =>
+      db.weddingParty?.find((p) => p.active && p.guest_id === guest) || null,
+  );
+}
+export function demoPartyAdminSet(
+  guest: string,
+  role: import("../features/weddingParty/types").PartyRole | null,
+  cycle: string | null,
+) {
+  return transaction((db) => {
+    if (!db.snapshot.guests.some((g) => g.id === guest))
+      throw Error("Convidado indisponível.");
+    db.weddingParty ??= [];
+    const current = db.weddingParty.find(
+      (p) => p.active && p.guest_id === guest,
+    );
+    if ((current?.cycle_id || null) !== cycle)
+      throw Error("Dados alterados. Atualize.");
+    if ((current?.role || null) === role) return current || null;
+    if (current) current.active = false;
+    if (!role) return null;
+    const promotion = {
+      cycle_id: id(),
+      guest_id: guest,
+      role,
+      accepted_at: null,
+      completed_at: null,
+      active: true,
+    };
+    db.weddingParty.push(promotion);
+    return promotion;
+  });
+}
+function demoPartyActor(db: DemoDatabase) {
+  const profile = db.snapshot.profile_confirmation;
+  const guest = db.snapshot.guests.find((g) => g.id === profile?.guest_id);
+  const invitation = db.snapshot.invitations.find(
+    (i) => i.id === guest?.invitation_id,
+  );
+  return profile?.confirmed_at &&
+    guest &&
+    invitation?.active &&
+    !invitation.archived_at
+    ? guest.id
+    : null;
+}
+export function demoPartyState() {
+  return transaction((db) => ({
+    promotion:
+      db.weddingParty?.find(
+        (p) => p.active && p.guest_id === demoPartyActor(db),
+      ) || null,
+    message:
+      "Obrigado por fazer parte deste capítulo da nossa história! Ter você ao nosso lado torna esse momento ainda mais especial. 💙",
+  }));
+}
+export function demoPartyRespond(cycle: string, action: "ACCEPT" | "COMPLETE") {
+  return transaction((db) => {
+    const p = db.weddingParty?.find(
+      (p) =>
+        p.active && p.cycle_id === cycle && p.guest_id === demoPartyActor(db),
+    );
+    if (!p) throw Error("Acesso não autorizado.");
+    if (action === "ACCEPT") p.accepted_at ||= stamp();
+    else {
+      if (!p.accepted_at) throw Error("Aceite o convite primeiro.");
+      p.completed_at ||= stamp();
+    }
   });
 }

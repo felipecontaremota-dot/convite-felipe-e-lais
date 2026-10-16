@@ -1,15 +1,25 @@
 import { theme } from "../../theme/tokens";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import { Image, Platform, Pressable, Text, View } from "react-native";
 import { Button, Card, Empty, Screen, styles } from "../../components/ui";
 import Svg, { Path } from "react-native-svg";
 import { WeddingCountdown } from "../../components/WeddingCountdown";
-import { homeGreeting, homePresence } from "./homeContent";
+import { homeGreeting, homeRsvpButton } from "./homeContent";
+import { useParty } from "../weddingParty/PartyProvider";
 import { HomeRsvpModal } from "../rsvp/HomeRsvpModal";
 import { useApp } from "../../lib/AppProvider";
 
 export function GuestHome() {
+  const party = useParty();
+  const presentedCycle = useRef<string | null>(null);
+  useEffect(() => {
+    const p = party.state.promotion;
+    if (p && !p.completed_at && presentedCycle.current !== p.cycle_id) {
+      presentedCycle.current = p.cycle_id;
+      router.push("/padrinhos?surpresa=1");
+    }
+  }, [party.state.promotion]);
   const [presenceOpen, setPresenceOpen] = useState(false);
   const [presenceTrigger, setPresenceTrigger] = useState<HTMLElement | null>(
     null,
@@ -66,21 +76,25 @@ export function GuestHome() {
             text="Villarejo"
           />
         </Pressable>
-        <Text style={styles.badge}>
-          {homePresence(
-            s?.invitations[0],
-            s?.guests ?? [],
-            s?.rsvps ?? [],
-            app.pending,
-          )}
-        </Text>
         <Button
           secondary
           title="Ver informações"
           onPress={() => router.push("/informacoes")}
         />
+        {party.state.promotion ? (
+          <Button
+            secondary
+            title="Espaço dos Padrinhos"
+            onPress={() => router.push("/padrinhos")}
+          />
+        ) : null}
         <Button
-          title="Confirmar presença"
+          title={homeRsvpButton(
+            s?.guests ?? [],
+            s?.rsvps ?? [],
+            app.pending,
+            s?.profile_confirmation?.guest_id,
+          )}
           onPress={() => {
             if (Platform.OS === "web")
               setPresenceTrigger(document.activeElement as HTMLElement | null);

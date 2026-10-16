@@ -120,3 +120,7 @@ run_sql < scripts/profile-confirmation-postflight.sql
 
 # Dedicated upgrade with a guest and a verified session created BEFORE the new schema.
 npx --no-install tsx scripts/test-profile-confirmation.ts
+
+# Additive wedding party lifecycle; fixtures use canonical access-unit creation.
+run_sql < tests/wedding-party.sql
+run_sql < scripts/wedding-party-postflight.sql

@@ -121,6 +121,10 @@ export class TestPostgres {
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
       event_role: `event_role(${event})`,
+      wedding_party_state: `wedding_party_state(${event})`,
+      wedding_party_admin_get: `wedding_party_admin_get(${event},${literal(args.p_guest)}::uuid)`,
+      wedding_party_admin_set: `wedding_party_admin_set(${event},${literal(args.p_guest)}::uuid,${args.p_role == null ? "null" : literal(args.p_role)},${args.p_expected_cycle == null ? "null" : literal(args.p_expected_cycle)}::uuid)`,
+      wedding_party_respond: `wedding_party_respond(${event},${literal(args.p_cycle)}::uuid,${literal(args.p_action)})`,
       issue_ticket: `issue_ticket(${event},${literal(args.p_guest)}::uuid,${args.p_regenerate === true})`,
       app_snapshot: `app_snapshot(${event})`,
       admin_action: `admin_action(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,
@@ -130,7 +134,7 @@ export class TestPostgres {
     return JSON.parse(
       this.sql(
         `begin; set local role authenticated; set local request.jwt.claim.sub=${literal(user)}; select to_jsonb(${expressions[fn]}); commit;`,
-      ).trim(),
+      ).trim() || "null",
     );
   }
 }

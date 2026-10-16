@@ -1,0 +1,70 @@
+\set ON_ERROR_STOP on
+begin;
+create function pg_temp.party_assert(v boolean,msg text) returns void language plpgsql as $$begin if v is distinct from true then raise exception 'party test: %',msg;end if;end$$;
+create function pg_temp.party_reject(q text) returns void language plpgsql as $$begin execute q;raise exception 'unexpected party success';exception when others then if sqlerrm='unexpected party success' then raise;end if;end$$;
+\set event '00000000-0000-4000-8000-000000000001'
+\set admin 'eeeeaaaa-0000-4000-8000-000000000001'
+\set a 'eeeeaaaa-0000-4000-8000-000000000002'
+\set b 'eeeeaaaa-0000-4000-8000-000000000003'
+\set c 'eeeeaaaa-0000-4000-8000-000000000004'
+insert into auth.users(id,is_anonymous) values(:'admin',false),(:'a',true),(:'b',true),(:'c',true);
+insert into user_roles(event_id,user_id,role) values(:'event',:'admin','ADMIN');
+set local request.jwt.claim.sub=:'admin';
+select admin_action(:'event','GUEST_CREATE','{"name":"Party promoted person","whatsapp":"62988881111"}') as first_guest \gset
+select admin_action(:'event','GUEST_CREATE','{"name":"Party ordinary member","whatsapp":"62988882222"}') as other_guest \gset
+select (:'first_guest'::jsonb->>'id') as gid,(:'other_guest'::jsonb->>'id') as other \gset
+select admin_action(:'event','INVITATION_SAVE','{"name":"Party test family","pin":"8811"}') as family \gset
+select (:'family'::jsonb->>'id') as fid \gset
+select admin_action(:'event','CODE_ROTATE',jsonb_build_object('id',:'fid','version',1));
+select admin_action(:'event','FAMILY_ADD_MEMBERS',jsonb_build_object('target_id',:'fid','target_version',2,'guests',(select jsonb_agg(jsonb_build_object('id',g.id,'version',g.version,'invitation_version',i.version)) from guests g join invitations i on i.id=g.invitation_id where g.id in (:'gid'::uuid,:'other'::uuid))));
+update guests set profile_confirmed_at=now() where id in (:'gid'::uuid,:'other'::uuid);
+insert into invitation_sessions(event_id,user_id,invitation_id,pin_verified_at,profile_guest_id) values(:'event',:'a',:'fid',now(),:'gid'),(:'event',:'b',:'fid',now(),:'gid'),(:'event',:'c',:'fid',now(),:'other');
+create temp table party_before_rsvp as select * from rsvps where guest_id in (:'gid'::uuid,:'other'::uuid);
+create temp table party_before_access as select i.id,i.code_hash,a.pin,a.sharing_code from invitations i join invitation_access a on a.invitation_id=i.id where i.id=:'fid';
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_set(:'event',:'gid','PADRINHO',null) as promotion \gset
+select (:'promotion'::jsonb->>'cycle_id') as cycle \gset
+select pg_temp.party_assert(:'promotion'::jsonb->>'role'='PADRINHO','male promotion');
+select pg_temp.party_assert(wedding_party_admin_set(:'event',:'gid','PADRINHO',:'cycle')->>'cycle_id'=:'cycle','same classification is not a new cycle');
+select pg_temp.party_reject(format('select wedding_party_admin_set(%L,%L,%L,null)',:'event',:'gid','MADRINHA'));
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'cycle_id'=:'cycle','selected promoted person sees cycle');
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'completed_at' is null,'opening state does not complete');
+select pg_temp.party_reject(format('select wedding_party_respond(%L,%L,%L)',:'event',:'cycle','COMPLETE'));
+select pg_temp.party_reject(format('select wedding_party_admin_get(%L,%L)',:'event',:'gid'));
+select pg_temp.party_reject(format('select wedding_party_admin_set(%L,%L,%L,%L)',:'event',:'gid','MADRINHA',:'cycle'));
+select pg_temp.party_reject('select * from wedding_party_private.promotions');
+select wedding_party_respond(:'event',:'cycle','ACCEPT') as accepted \gset
+select pg_temp.party_assert(wedding_party_respond(:'event',:'cycle','ACCEPT')->'promotion'->>'accepted_at'=(:'accepted'::jsonb->'promotion'->>'accepted_at'),'acceptance is idempotent');
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'completed_at' is null,'acceptance alone does not mark viewing complete');
+set local request.jwt.claim.sub=:'b';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'accepted_at'=(:'accepted'::jsonb->'promotion'->>'accepted_at'),'second device shares acceptance');
+select wedding_party_respond(:'event',:'cycle','COMPLETE') as completed \gset
+select pg_temp.party_assert(wedding_party_respond(:'event',:'cycle','COMPLETE')->'promotion'->>'completed_at'=(:'completed'::jsonb->'promotion'->>'completed_at'),'completion is idempotent');
+set local request.jwt.claim.sub=:'c';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'='null'::jsonb,'ordinary member of same family is not automatically promoted');
+select pg_temp.party_reject(format('select wedding_party_respond(%L,%L,%L)',:'event',:'cycle','ACCEPT'));
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_set(:'event',:'gid',null,:'cycle');
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'='null'::jsonb,'revocation immediate in backend');
+select pg_temp.party_reject(format('select wedding_party_respond(%L,%L,%L)',:'event',:'cycle','ACCEPT'));
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_set(:'event',:'gid','MADRINHA',null) as renewed \gset
+select pg_temp.party_assert(:'renewed'::jsonb->>'cycle_id'<>:'cycle' and :'renewed'::jsonb->>'accepted_at' is null and :'renewed'::jsonb->>'completed_at' is null,'female promotion gets fresh cycle and viewing');
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_reject(format('select wedding_party_respond(%L,%L,%L)',:'event',:'cycle','COMPLETE'));
+select pg_temp.party_assert(wedding_party_state('eeeeaaaa-9999-4000-8000-000000000001')->'promotion'='null'::jsonb,'event isolation');
+reset role;
+update invitations set active=false where id=:'fid';
+set local role authenticated;
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'='null'::jsonb,'inactive invitation blocked');
+reset role;
+select pg_temp.party_assert(not has_function_privilege('anon','public.wedding_party_respond(uuid,uuid,text)','EXECUTE'),'anonymous role cannot execute');
+select pg_temp.party_assert(not has_function_privilege('authenticated','wedding_party_private.actor(uuid)','EXECUTE'),'actor helper private');
+select pg_temp.party_assert((select jsonb_agg(to_jsonb(r) order by guest_id) from rsvps r where guest_id in (:'gid'::uuid,:'other'::uuid))=(select jsonb_agg(to_jsonb(r) order by guest_id) from party_before_rsvp r),'RSVP unchanged');
+select pg_temp.party_assert(not exists(select 1 from party_before_access b join invitations i on i.id=b.id join invitation_access a on a.invitation_id=i.id where b.code_hash is distinct from i.code_hash or b.pin is distinct from a.pin or b.sharing_code is distinct from a.sharing_code),'credentials unchanged');
+rollback;
+\echo Party lifecycle, family identity, two devices, grants, revocation, isolation and RSVP independence passed.

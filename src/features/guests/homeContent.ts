@@ -92,3 +92,21 @@ export function homePresence(
     )
     .join(" · ");
 }
+
+// Presentation-only CTA: RSVP records and the existing form remain unchanged.
+export function homeRsvpButton(
+  guests: Guest[],
+  records: import("../../types/domain").RsvpRecord[],
+  pending: OfflineMutation[] = [],
+  selectedGuest?: string | null,
+) {
+  const members = selectedGuest
+    ? guests.filter((g) => g.id === selectedGuest)
+    : guests;
+  const states = members.map((g) => presenceFor(g, records, pending));
+  if (states.length && states.every((s) => s === "CONFIRMED"))
+    return "Sua presença está confirmada.";
+  if (states.length && states.every((s) => s === "DECLINED"))
+    return "Sua ausência foi confirmada, sentiremos sua falta.";
+  return "Ainda dá tempo de você confirmar sua presença.";
+}

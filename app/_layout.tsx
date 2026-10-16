@@ -1,3 +1,4 @@
+import { PartyProvider } from "../src/features/weddingParty/PartyProvider";
 import { ProfileConfirmationGate } from "../src/features/guests/ProfileConfirmationGate";
 import { FxToastProvider } from "../src/components/FxToastProvider";
 import { InstallProvider } from "../src/features/install/InstallProvider";
@@ -19,12 +20,14 @@ export default function Layout() {
         <InstallProvider>
           <FxToastProvider>
             <ThemeStyles />
-            <MessageCenterProvider>
-              <Stack screenOptions={{ headerShown: false }} />
-              <FloatingMessages />
-              <FloatingAdminMessages />
-              <ProfileConfirmationGate />
-            </MessageCenterProvider>
+            <PartyProvider>
+              <MessageCenterProvider>
+                <Stack screenOptions={{ headerShown: false }} />
+                <FloatingMessages />
+                <FloatingAdminMessages />
+                <ProfileConfirmationGate />
+              </MessageCenterProvider>
+            </PartyProvider>
           </FxToastProvider>
         </InstallProvider>
       </AppProvider>

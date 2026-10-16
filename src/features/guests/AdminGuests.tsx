@@ -1,3 +1,4 @@
+import { PromotionControl } from "../weddingParty/PromotionControl";
 import { GuestExportButton } from "./GuestExportButton";
 import { ActionFeedbackButton } from "../../components/ActionFeedbackButton";
 import { rsvpTone } from "../../theme/feedback";
@@ -152,6 +153,7 @@ function GuestForm({
           { value: "FEMININE", label: "Feminino" },
         ]}
       />
+      <PromotionControl guest={guest} gender={greetingForm} />
       <Toggle label="Criança (até 10 anos)" value={child} onChange={setChild} />
       <Select
         label="Grupo / vínculo"

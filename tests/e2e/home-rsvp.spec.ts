@@ -25,7 +25,7 @@ for (const width of [320, 1280]) {
     await home(page, width);
     const before = await snapshot(page);
     const trigger = page.getByRole("button", {
-      name: "Confirmar presença",
+      name: /^(Sua presença está confirmada\.|Sua ausência foi confirmada, sentiremos sua falta\.|Ainda dá tempo de você confirmar sua presença\.)$/,
       exact: true,
     });
     const dialog = page.getByRole("dialog", { name: title, exact: true });
@@ -97,7 +97,10 @@ for (const width of [320, 1280]) {
       await home(page, width);
       const before = await snapshot(page);
       await page
-        .getByRole("button", { name: "Confirmar presença", exact: true })
+        .getByRole("button", {
+          name: /^(Sua presença está confirmada\.|Sua ausência foi confirmada, sentiremos sua falta\.|Ainda dá tempo de você confirmar sua presença\.)$/,
+          exact: true,
+        })
         .click();
       const dialog = page.getByRole("dialog", { name: title, exact: true });
       const card = dialog
@@ -218,7 +221,10 @@ for (const width of [320, 1280]) {
       ).toHaveValue("Chegaremos cedo");
       await page.getByRole("link", { name: "Início", exact: true }).click();
       await page
-        .getByRole("button", { name: "Confirmar presença", exact: true })
+        .getByRole("button", {
+          name: /^(Sua presença está confirmada\.|Sua ausência foi confirmada, sentiremos sua falta\.|Ainda dá tempo de você confirmar sua presença\.)$/,
+          exact: true,
+        })
         .click();
       await expect(
         dialog.getByText(responseMessages[status], { exact: true }).last(),
@@ -255,7 +261,7 @@ test("Home retains offline RSVP, synchronizes once and dismisses on navigation",
   await page.getByRole("link", { name: "Início", exact: true }).click();
   const before = await snapshot(page);
   const trigger = page.getByRole("button", {
-    name: "Confirmar presença",
+    name: /^(Sua presença está confirmada\.|Sua ausência foi confirmada, sentiremos sua falta\.|Ainda dá tempo de você confirmar sua presença\.)$/,
     exact: true,
   });
   await trigger.click();
