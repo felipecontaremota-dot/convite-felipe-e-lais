@@ -6,6 +6,8 @@ import {
   responseMessages,
 } from "../../src/features/rsvp/presenceContent";
 
+const description =
+  "Responda por cada integrante. A confirmação é diferente da entrada no dia do evento.";
 const title = "Sua presença faz parte da nossa história";
 const snapshot = (page: Page) =>
   page.evaluate(() => JSON.parse(localStorage.getItem("demo-db")!));
@@ -31,6 +33,12 @@ for (const width of [320, 1280]) {
       await trigger.click();
       await expect(page).toHaveURL(/\/inicio$/);
       await expect(dialog).toHaveAttribute("aria-modal", "true");
+      await expect(dialog.getByText(description, { exact: true })).toHaveCount(
+        0,
+      );
+      await expect(
+        dialog.getByRole("heading", { name: title, exact: true }),
+      ).toBeVisible();
       expect(await page.evaluate(() => document.body.style.overflow)).toBe(
         "hidden",
       );
@@ -66,6 +74,10 @@ for (const width of [320, 1280]) {
     await expect(page).toHaveURL(/\/informacoes$/);
     await expect(
       page.getByRole("heading", { name: "Informações", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Presença", exact: true }).click();
+    await expect(
+      page.getByText(description, { exact: true }).filter({ visible: true }),
     ).toBeVisible();
     await page.getByRole("link", { name: "Perfil", exact: true }).click();
     await expect(

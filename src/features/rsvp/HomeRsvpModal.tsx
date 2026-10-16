@@ -37,6 +37,7 @@ export function HomeRsvpModal({
   }, [returnFocus]);
   return (
     <RsvpFlow
+      showDescription={false}
       renderContent={(content, blocked) => (
         <GuestModal
           title="Sua presença faz parte da nossa história"

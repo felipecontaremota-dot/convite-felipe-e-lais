@@ -167,8 +167,10 @@ export function RsvpScreen() {
 // Both entry points share forms, locks, persistence and the complete presentation.
 export function RsvpFlow({
   renderContent,
+  showDescription = true,
 }: {
   renderContent?: (content: ReactNode, blocked: boolean) => ReactNode;
+  showDescription?: boolean;
 }) {
   const app = useApp();
   const focused = useIsFocused();
@@ -201,10 +203,12 @@ export function RsvpFlow({
   };
   const content = (
     <>
-      <Text style={styles.text}>
-        Responda por cada integrante. A confirmação é diferente da entrada no
-        dia do evento.
-      </Text>
+      {showDescription ? (
+        <Text style={styles.text}>
+          Responda por cada integrante. A confirmação é diferente da entrada no
+          dia do evento.
+        </Text>
+      ) : null}
       {app.data?.guests.map((g) => (
         <RsvpForm
           key={g.id}
