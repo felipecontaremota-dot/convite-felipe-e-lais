@@ -11,7 +11,13 @@ import { useFxToast } from "../../components/FxToastProvider";
 import type { RSVP } from "../../types/domain";
 import { responseContent } from "./presenceContent";
 import { RsvpFx } from "./RsvpFx";
-function Compose({ onClose }: { onClose: () => void }) {
+function Compose({
+  onClose,
+  captureKeyboard = false,
+}: {
+  onClose: () => void;
+  captureKeyboard?: boolean;
+}) {
   const app = useApp();
   const toast = useFxToast();
   const [queued, setQueued] = useState(false);
@@ -109,7 +115,11 @@ function Compose({ onClose }: { onClose: () => void }) {
     }
   };
   return (
-    <GuestModal title="Deixe uma mensagem para os noivos 💌" onClose={onClose}>
+    <GuestModal
+      title="Deixe uma mensagem para os noivos 💌"
+      onClose={onClose}
+      captureKeyboard={captureKeyboard}
+    >
       {(close) => (
         <>
           <Field
@@ -151,9 +161,11 @@ function Compose({ onClose }: { onClose: () => void }) {
 export function RsvpPresentation({
   status,
   onDone,
+  aboveModal = false,
 }: {
   status: RSVP;
   onDone: () => void;
+  aboveModal?: boolean;
 }) {
   const { reducedMotion } = useFxToast();
   const [stage, setStage] = useState<"fx" | "response" | "compose">("fx");
@@ -164,10 +176,11 @@ export function RsvpPresentation({
   return (
     <>
       {stage === "fx" ? (
-        <RsvpFx status={status} onCancel={onDone} />
+        <RsvpFx status={status} onCancel={onDone} aboveModal={aboveModal} />
       ) : stage === "response" ? (
         <GuestModal
           title={responseContent[status].title}
+          captureKeyboard={aboveModal}
           onClose={() => setStage("compose")}
         >
           <Text style={[styles.text, { textAlign: "center", lineHeight: 24 }]}>
@@ -175,7 +188,7 @@ export function RsvpPresentation({
           </Text>
         </GuestModal>
       ) : (
-        <Compose onClose={onDone} />
+        <Compose onClose={onDone} captureKeyboard={aboveModal} />
       )}
     </>
   );

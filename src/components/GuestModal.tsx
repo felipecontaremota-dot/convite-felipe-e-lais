@@ -7,11 +7,15 @@ export function GuestModal({
   onClose,
   closeOnOutside = false,
   animationType,
+  dismissible = true,
+  captureKeyboard = false,
 }: {
   title: string;
   children: ReactNode | ((close: () => void) => ReactNode);
   onClose: () => void;
   closeOnOutside?: boolean;
+  dismissible?: boolean;
+  captureKeyboard?: boolean;
   animationType?: "none" | "fade" | "slide";
 }) {
   const { reducedMotion } = useFxToast();
@@ -25,7 +29,7 @@ export function GuestModal({
     [],
   );
   const close = () => {
-    if (lock.current) return;
+    if (lock.current || !dismissible) return;
     lock.current = true;
     setClosing(true);
     timer.current = setTimeout(onClose, reducedMotion ? 0 : 180);
@@ -34,6 +38,8 @@ export function GuestModal({
     <AdminModal
       title={title}
       premium
+      dismissible={dismissible}
+      captureKeyboard={captureKeyboard}
       animationType={animationType}
       closing={closing}
       closeOnOutside={closeOnOutside}

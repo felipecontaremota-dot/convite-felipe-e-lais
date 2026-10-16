@@ -1,14 +1,19 @@
 import { theme } from "../../theme/tokens";
 import { useState } from "react";
 import { router } from "expo-router";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Platform, Pressable, Text, View } from "react-native";
 import { Button, Card, Empty, Screen, styles } from "../../components/ui";
 import Svg, { Path } from "react-native-svg";
 import { WeddingCountdown } from "../../components/WeddingCountdown";
 import { homeGreeting, homePresence } from "./homeContent";
+import { HomeRsvpModal } from "../rsvp/HomeRsvpModal";
 import { useApp } from "../../lib/AppProvider";
 
 export function GuestHome() {
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const [presenceTrigger, setPresenceTrigger] = useState<HTMLElement | null>(
+    null,
+  );
   const [highlight, setHighlight] = useState(false);
   const app = useApp(),
     s = app.data;
@@ -71,12 +76,16 @@ export function GuestHome() {
         </Text>
         <Button
           secondary
-          title="Informar contatos"
-          onPress={() => router.push("/perfil")}
+          title="Ver informações"
+          onPress={() => router.push("/informacoes")}
         />
         <Button
           title="Confirmar presença"
-          onPress={() => router.push("/presenca")}
+          onPress={() => {
+            if (Platform.OS === "web")
+              setPresenceTrigger(document.activeElement as HTMLElement | null);
+            setPresenceOpen(true);
+          }}
         />
         <Button
           secondary
@@ -84,6 +93,12 @@ export function GuestHome() {
           onPress={() => router.push("/ingressos")}
         />
       </Card>
+      {presenceOpen ? (
+        <HomeRsvpModal
+          onClose={() => setPresenceOpen(false)}
+          returnFocus={presenceTrigger}
+        />
+      ) : null}
       <Text style={styles.heading}>Recados com carinho</Text>
       {s?.announcements.length ? (
         s.announcements.map((a) => (

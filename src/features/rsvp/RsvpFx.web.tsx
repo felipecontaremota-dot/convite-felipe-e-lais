@@ -2,7 +2,14 @@ import { createPortal } from "react-dom";
 import type { RSVP } from "../../types/domain";
 import { useFxToast } from "../../components/FxToastProvider";
 import { theme } from "../../theme/tokens";
-export function RsvpFx({ status }: { status: RSVP; onCancel?: () => void }) {
+export function RsvpFx({
+  status,
+  aboveModal = false,
+}: {
+  status: RSVP;
+  onCancel?: () => void;
+  aboveModal?: boolean;
+}) {
   const { reducedMotion } = useFxToast();
   if (reducedMotion || typeof document === "undefined") return null;
   const symbols =
@@ -19,7 +26,7 @@ export function RsvpFx({ status }: { status: RSVP; onCancel?: () => void }) {
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
-        zIndex: 90,
+        zIndex: aboveModal ? 10000 : 90,
         overflow: "hidden",
       }}
     >

@@ -15,6 +15,7 @@ export function RsvpFx({
 }: {
   status: RSVP;
   onCancel?: () => void;
+  aboveModal?: boolean;
 }) {
   const { reducedMotion } = useFxToast();
   const { height } = useWindowDimensions();

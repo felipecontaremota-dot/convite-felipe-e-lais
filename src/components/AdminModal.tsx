@@ -56,6 +56,7 @@ export function AdminModal({
   contentWidth,
   registration = false,
   animationType,
+  captureKeyboard = false,
 }: {
   title: string;
   children: React.ReactNode;
@@ -71,6 +72,7 @@ export function AdminModal({
   hideClose?: boolean;
   contentWidth?: number;
   registration?: boolean;
+  captureKeyboard?: boolean;
   animationType?: "none" | "fade" | "slide";
 }) {
   const { width } = useWindowDimensions();
@@ -172,15 +174,15 @@ export function AdminModal({
         }
       }
     };
-    document.addEventListener("keydown", handle);
+    document.addEventListener("keydown", handle, captureKeyboard);
     return () => {
       clearTimeout(timer);
-      document.removeEventListener("keydown", handle);
+      document.removeEventListener("keydown", handle, captureKeyboard);
       restoreRoots.forEach((restore) => restore());
       if (previous?.isConnected && !previous.closest("[inert]"))
         previous.focus();
     };
-  }, [dialog]);
+  }, [dialog, captureKeyboard]);
   return (
     <Modal
       visible

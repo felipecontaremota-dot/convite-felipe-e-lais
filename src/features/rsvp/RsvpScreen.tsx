@@ -1,7 +1,7 @@
 import { useIsFocused } from "expo-router";
 import { RsvpPresentation } from "./RsvpPresentation";
 import { CalendarAction } from "./CalendarAction";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
   Button,
@@ -157,6 +157,19 @@ function RsvpForm({
 }
 
 export function RsvpScreen() {
+  return (
+    <Screen section="guest" title="Sua presença faz parte da nossa história">
+      <RsvpFlow />
+    </Screen>
+  );
+}
+
+// Both entry points share forms, locks, persistence and the complete presentation.
+export function RsvpFlow({
+  renderContent,
+}: {
+  renderContent?: (content: ReactNode, blocked: boolean) => ReactNode;
+}) {
   const app = useApp();
   const focused = useIsFocused();
   const generation = useRef(0);
@@ -186,8 +199,8 @@ export function RsvpScreen() {
     setBlocked(false);
     setPresentation(null);
   };
-  return (
-    <Screen section="guest" title="Sua presença faz parte da nossa história">
+  const content = (
+    <>
       <Text style={styles.text}>
         Responda por cada integrante. A confirmação é diferente da entrada no
         dia do evento.
@@ -210,12 +223,21 @@ export function RsvpScreen() {
           }}
         />
       ))}
-      {presentation && focused ? (
-        <RsvpPresentation status={presentation} onDone={done} />
-      ) : null}
       {!app.data?.guests.length ? (
         <Empty text="Seu convite ainda não possui integrantes." />
       ) : null}
-    </Screen>
+    </>
+  );
+  return (
+    <>
+      {renderContent ? renderContent(content, blocked) : content}
+      {presentation && focused ? (
+        <RsvpPresentation
+          status={presentation}
+          onDone={done}
+          aboveModal={!!renderContent}
+        />
+      ) : null}
+    </>
   );
 }

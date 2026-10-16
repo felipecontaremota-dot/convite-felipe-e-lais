@@ -149,9 +149,9 @@ test("Home personalizes the access unit, reads RSVP and keeps both button routes
   ).toBeVisible();
   await page.goto("/inicio");
   await page
-    .getByRole("button", { name: "Informar contatos", exact: true })
+    .getByRole("button", { name: "Ver informações", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/perfil$/);
+  await expect(page).toHaveURL(/\/informacoes$/);
   await page.goto("/inicio");
   await page
     .getByRole("button", { name: "Ver meus convites", exact: true })
