@@ -58,3 +58,49 @@ and the four [authenticated SECURITY DEFINER RPCs](https://supabase.com/docs/gui
 These RPCs are intentionally callable: each checks event, actor and ownership/ADMIN,
 uses a fixed pg_catalog search_path, and never grants direct private-table access.
 Tests exercise unauthorized, other-event, revoked and inactive-session denial.
+
+## Personalized paper letter (2026-10-19)
+
+The opening is a layered HTML/CSS envelope with paper grain, independent folds,
+a hinged 3D flap, seal release and a clipped letter that emerges behind the front folds.
+A viewport-sized portal continues the same sheet toward the reader. The 5,200 ms
+sequence uses transform/opacity; a 5,450 ms independent timeout prevents a failed
+animation from stranding navigation. Repeated activation is locked synchronously. A 420 ms paper crossfade settles the
+full-frame sheet into the reading article (about 5.6 seconds including handoff).
+Reduced motion opens the readable letter immediately; leaving the route cancels timers.
+The native fallback remains a static, accessible envelope and readable text.
+
+Caveat (variable weights 400–700), bundled locally with its SIL OFL license in
+`public/fonts`, supplies the web letter's handwriting without third-party font requests.
+The article uses natural scrolling and selects text normally. IntersectionObserver
+triggers a one-time Web Animation per paragraph. Text is visible by default, so a
+missing observer/animation API cannot hide the narrative or final actions.
+
+The complete requested narrative is in `letterContent.ts`. Personal paragraphs retain blank
+lines and single line breaks and are rendered as React text, never HTML. Two name
+occurrences are bold. An explicit server-side full-name treatment rule resolves only Amanda
+Curcio Cariolano Romão Medina (NFC, case/spacing normalized) to Medina within the
+selected guest's authorized state. Other Amandas retain their first name. The full-name
+exception is not embedded in the public JavaScript, and registered names are unchanged.
+
+`personal_message` extends the existing private promotions table. Null is retained
+for existing cycles until the noivos write their messages; no content is fabricated.
+The authenticated ADMIN-only `wedding_party_admin_save` RPC atomically promotes and
+saves, or updates the message in place, without resetting acceptance/completion.
+It reuses existing locks/creation, checks the expected cycle and previous message,
+limits text to 12,000 characters, and never logs message contents. The existing
+actor-scoped state RPC returns only the selected person's message. Same-family
+identity declaration boundaries documented above continue to apply.
+
+The admin modal supports cancel-before-promotion and later editing. Gender comes
+from the recorded promotion during editing. Re-promotion creates a new cycle and
+requires a new message. Last-screen cards, RSVP, authentication and Home are unchanged.
+
+Migration `20261019232846_wedding_party_letters.sql` was applied to production;
+its filename matches the version recorded by the migration runner. RLS, private-schema
+and table grants, all five authenticated RPCs' fixed search_path/owner, and unauthenticated
+denial passed the read-only postflight. No existing guest names, classification,
+acceptance, completion or RSVP data were changed by the migration. The new message
+field remains null until an administrator writes it. The additional authenticated
+SECURITY DEFINER advisory is intentional for the checked ADMIN-only save RPC;
+the rationale and Supabase remediation reference are documented above.

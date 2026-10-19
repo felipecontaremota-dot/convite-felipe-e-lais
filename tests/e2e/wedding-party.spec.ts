@@ -72,7 +72,7 @@ for (const [width, role] of [
           ? /aceita ser nossa madrinha/
           : /aceita ser nosso padrinho/,
       ),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10000 });
     await page
       .getByRole("button", {
         name: "Preciso pensar um pouquinho...",
@@ -261,6 +261,31 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
     const promote =
       gender === "MASCULINE" ? "Promover a padrinho" : "Promover a madrinha";
     await form.getByRole("button", { name: promote, exact: true }).click();
+    const messageDialog = page.getByRole("dialog", {
+      name: "Mensagem especial para Convidado Um",
+      exact: true,
+    });
+    await expect(messageDialog).toBeVisible();
+    await messageDialog
+      .getByLabel("Trecho personalizado", { exact: true })
+      .fill("Você faz parte da nossa história.\n\nCom muito carinho!");
+    await messageDialog
+      .getByRole("button", { name: "Cancelar", exact: true })
+      .click();
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("demo-db")!).weddingParty?.length ||
+          0,
+      ),
+    ).toBe(0);
+    await form.getByRole("button", { name: promote, exact: true }).click();
+    await messageDialog
+      .getByLabel("Trecho personalizado", { exact: true })
+      .fill("Você faz parte da nossa história.\n\nCom muito carinho!");
+    await messageDialog
+      .getByRole("button", { name: "Salvar mensagem e promover", exact: true })
+      .click();
     await expect(
       form.getByRole("button", { name: "Remover promoção", exact: true }),
     ).toBeVisible();
@@ -268,6 +293,24 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
       () =>
         JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0].cycle_id,
     );
+    await form
+      .getByRole("button", { name: "Editar mensagem especial", exact: true })
+      .click();
+    await expect(
+      messageDialog.getByLabel("Trecho personalizado", { exact: true }),
+    ).toHaveValue("Você faz parte da nossa história.\n\nCom muito carinho!");
+    await messageDialog
+      .getByLabel("Trecho personalizado", { exact: true })
+      .fill("Mensagem revisada.\n\nSegundo parágrafo.");
+    await messageDialog
+      .getByRole("button", { name: "Salvar mensagem", exact: true })
+      .click();
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0].cycle_id,
+      ),
+    ).toBe(first);
     await form
       .getByRole("button", { name: "Remover promoção", exact: true })
       .click();
@@ -280,6 +323,13 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
       .click();
     await expect(confirm).toHaveCount(0);
     await form.getByRole("button", { name: promote, exact: true }).click();
+    await messageDialog
+      .getByLabel("Trecho personalizado", { exact: true })
+      .fill("Um novo convite especial.");
+    await messageDialog
+      .getByRole("button", { name: "Salvar mensagem e promover", exact: true })
+      .click();
+    await expect(messageDialog).toHaveCount(0);
     const data = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("demo-db")!),
     );
@@ -313,4 +363,176 @@ test("A new promotion cycle restarts automatic presentation even after a complet
   await expect(
     page.getByRole("button", { name: "Abrir convite especial", exact: true }),
   ).toBeVisible();
+});
+
+for (const width of [320, 768, 1280])
+  test(`Paper letter preserves story, personal paragraphs, bold Medina, reveal and safe text at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await fixture(page, "MADRINHA");
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      db.snapshot.guests[0].name = "Amanda Curcio Cariolano Romão Medina";
+      db.weddingParty[0].display_name = "Medina";
+      db.weddingParty[0].personal_message =
+        "Primeiro parágrafo pessoal.\nCom uma linha preservada.\n\nSegundo parágrafo pessoal.\n\n<script>window.UNSAFE=true</script>";
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    });
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Abrir convite especial", exact: true })
+      .click();
+    const letter = page.getByRole("article", {
+      name: "Carta especial de Felipe e Laís",
+    });
+    await expect(letter).toBeVisible({ timeout: 10000 });
+    await expect(letter.locator("strong")).toHaveText(["Medina", "Medina"]);
+    const paragraphs = letter.locator("[data-letter-paragraph]");
+    const text = await paragraphs.allTextContents();
+    expect(text[0]).toBe(
+      "Nós, Felipe e Laís, nos conhecemos quase que por acaso.",
+    );
+    expect(text[8]).toBe(
+      "Assim foi na vida dos dois quando você, Medina, apareceu!",
+    );
+    expect(text[9]).toBe(
+      "Primeiro parágrafo pessoal.\nCom uma linha preservada.",
+    );
+    expect(text[10]).toBe("Segundo parágrafo pessoal.");
+    expect(text.at(-1)).toBe("Medina, aceita ser nossa madrinha?");
+    await expect(letter.locator("script")).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => !!(window as unknown as { UNSAFE?: boolean }).UNSAFE,
+      ),
+    ).toBe(false);
+    await page.evaluate(() => document.fonts.ready);
+    expect(
+      await paragraphs
+        .first()
+        .evaluate((el) => getComputedStyle(el).fontFamily),
+    ).toContain("PartyCaveat");
+    expect(
+      await page.evaluate(() => document.fonts.check("25px PartyCaveat")),
+    ).toBe(true);
+    await page.screenshot({ path: `/tmp/letter-${width}.png` });
+    await paragraphs.last().scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole("button", { name: "💙 É claro que aceito!", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "💙 É claro que aceito!", exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        "Você acaba de ser promovida a uma das pessoas mais importantes do nosso grande dia!",
+        { exact: true },
+      ),
+    ).toBeVisible();
+  });
+for (const width of [320, 1280])
+  test(`Cinematic opening extracts the letter, prevents repeats and reveals on scroll only once at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await fixture(page);
+    const envelope = page.getByRole("button", {
+      name: "Abrir convite especial",
+      exact: true,
+    });
+    const start = await page.evaluate(() => performance.now());
+    await envelope.press("Enter");
+    await expect(envelope).toBeDisabled();
+    await envelope.dispatchEvent("click");
+    await expect(page.locator("[data-envelope-flight]")).toHaveCount(1);
+    const initialTop = await page
+      .locator("[data-envelope-letter]")
+      .evaluate((el) => el.getBoundingClientRect().top);
+    await expect
+      .poll(
+        () =>
+          page
+            .locator("[data-envelope-letter]")
+            .evaluate((el) => el.getBoundingClientRect().top),
+        { timeout: 5000 },
+      )
+      .toBeLessThan(initialTop - 20);
+    await page.screenshot({ path: "/tmp/envelope-opening.png" });
+    const letter = page.locator("[data-party-paper]");
+    await expect(letter).toBeVisible({ timeout: 10000 });
+    expect(
+      (await page.evaluate(() => performance.now())) - start,
+    ).toBeGreaterThan(4500);
+    await expect(page.locator("[data-paper-handoff]")).toHaveCount(0);
+    const first = letter.locator("[data-letter-paragraph]").first(),
+      last = letter.locator("[data-letter-paragraph]").last();
+    await expect(first).toHaveAttribute("data-revealed", "true");
+    await expect(last).not.toHaveAttribute("data-revealed", "true");
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toHaveAttribute("data-revealed", "true");
+    await first.scrollIntoViewIfNeeded();
+    await expect(last).toHaveAttribute("data-revealed", "true");
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0]
+            .completed_at,
+      ),
+    ).toBeNull();
+  });
+test("Letter remains fully readable without IntersectionObserver or animation support", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "IntersectionObserver", {
+      value: undefined,
+      configurable: true,
+    });
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await fixture(page);
+  await page
+    .getByRole("button", { name: "Abrir convite especial", exact: true })
+    .click();
+  await expect(
+    page.getByText("Nós, Felipe e Laís, nos conhecemos quase que por acaso.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "💙 É claro que aceito!", exact: true })
+    .click();
+  await expect(
+    page.getByText("Agora é oficial!", { exact: true }),
+  ).toBeVisible();
+});
+
+test("Disabled CSS animation cannot strand the opening sequence", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page
+    .getByRole("button", { name: "Abrir convite especial", exact: true })
+    .press("Enter");
+  await page.addStyleTag({
+    content:
+      "[data-envelope-flight], [data-envelope-shell], [data-envelope-letter], [data-party-flap], [data-envelope-seal] { animation:none!important; }",
+  });
+  await expect(page.locator("[data-party-paper]")).toBeVisible({
+    timeout: 10000,
+  });
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0]
+          .completed_at,
+    ),
+  ).toBeNull();
 });

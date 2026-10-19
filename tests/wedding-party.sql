@@ -66,5 +66,62 @@ select pg_temp.party_assert(not has_function_privilege('anon','public.wedding_pa
 select pg_temp.party_assert(not has_function_privilege('authenticated','wedding_party_private.actor(uuid)','EXECUTE'),'actor helper private');
 select pg_temp.party_assert((select jsonb_agg(to_jsonb(r) order by guest_id) from rsvps r where guest_id in (:'gid'::uuid,:'other'::uuid))=(select jsonb_agg(to_jsonb(r) order by guest_id) from party_before_rsvp r),'RSVP unchanged');
 select pg_temp.party_assert(not exists(select 1 from party_before_access b join invitations i on i.id=b.id join invitation_access a on a.invitation_id=i.id where b.code_hash is distinct from i.code_hash or b.pin is distinct from a.pin or b.sharing_code is distinct from a.sharing_code),'credentials unchanged');
+
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_get(:'event',:'gid') as message_cycle \gset
+select (:'message_cycle'::jsonb->>'cycle_id') as mcycle \gset
+select wedding_party_admin_save(:'event',:'gid','MADRINHA',:'mcycle',E'Primeiro\nlinha\n\nSegundo <script>texto seguro</script>',null) as saved_message \gset
+select pg_temp.party_assert(:'saved_message'::jsonb->>'cycle_id'=:'mcycle','message does not recreate cycle');
+select pg_temp.party_assert(:'saved_message'::jsonb->>'personal_message'=E'Primeiro\nlinha\n\nSegundo <script>texto seguro</script>','newlines preserved literally');
+select pg_temp.party_reject(format('select wedding_party_admin_save(%L,%L,%L,%L,%L,null)',:'event',:'gid','MADRINHA',:'mcycle','stale edit'));
+select pg_temp.party_reject(format('select wedding_party_admin_save(%L,%L,%L,%L,%L,%L)',:'event',:'gid','PADRINHO',:'mcycle','gender change',:'saved_message'::jsonb->>'personal_message'));
+select pg_temp.party_reject(format('select wedding_party_admin_save(%L,%L,%L,%L,%L,%L)',:'event',:'gid','MADRINHA',:'mcycle','   ',:'saved_message'::jsonb->>'personal_message'));
+select pg_temp.party_reject(format('select wedding_party_admin_save(%L,%L,%L,%L,%L,%L)',:'event',:'gid','MADRINHA',:'mcycle',E'\n\t',:'saved_message'::jsonb->>'personal_message'));
+select wedding_party_admin_save(:'event',:'gid','MADRINHA',:'mcycle','Mensagem editada',:'saved_message'::jsonb->>'personal_message');
+select pg_temp.party_assert(wedding_party_admin_get(:'event',:'other') is null,'no other person promoted or modified');
+reset role;
+update invitations set active=true where id=:'fid';
+set local role authenticated;
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'personal_message'='Mensagem editada','only selected guest reads personal message');
+select pg_temp.party_reject(format('select wedding_party_admin_save(%L,%L,%L,%L,%L,%L)',:'event',:'gid','MADRINHA',:'mcycle','guest edit','Mensagem editada'));
+select wedding_party_respond(:'event',:'mcycle','ACCEPT');
+select wedding_party_respond(:'event',:'mcycle','COMPLETE') as message_completed \gset
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_save(:'event',:'gid','MADRINHA',:'mcycle','Após conclusão','Mensagem editada');
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'completed_at'=(:'message_completed'::jsonb->'promotion'->>'completed_at'),'editing after completion does not replay');
+set local request.jwt.claim.sub=:'c';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'='null'::jsonb,'same family member cannot read another message');
+reset role;
+select pg_temp.party_assert(not has_function_privilege('anon','public.wedding_party_admin_save(uuid,uuid,text,uuid,text,text)','EXECUTE'),'anonymous save denied');
+
+-- Restricted treatment is resolved server-side for the selected person's exact full name.
+update guests set name='Amanda Curcio Cariolano Romão Medina' where id=:'gid';
+set local role authenticated;
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'display_name'='Medina','exact configured full name receives Medina');
+reset role;
+update guests set name='Amanda Outra Pessoa' where id=:'gid';
+set local role authenticated;
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'display_name' is null,'other Amandas have no override');
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_save(:'event',:'other','PADRINHO',null,'Mensagem exclusiva da outra pessoa',null);
+select pg_temp.party_reject(format('select wedding_party_admin_save(%L,%L,%L,%L,%L,%L)',:'event',:'gid','MADRINHA',:'mcycle',repeat('x',12001),'Após conclusão'));
+select pg_temp.party_reject(format('select wedding_party_admin_save(%L,%L,%L,null,%L,null)','eeeeaaaa-9999-4000-8000-000000000001',:'gid','PADRINHO','Outro evento'));
+set local request.jwt.claim.sub=:'a';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'personal_message'='Após conclusão','promoted person A receives only own message');
+set local request.jwt.claim.sub=:'c';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'personal_message'='Mensagem exclusiva da outra pessoa','promoted person B receives only own message');
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_save(:'event',:'gid','MADRINHA',:'mcycle','Somente a primeira pessoa','Após conclusão');
+set local request.jwt.claim.sub=:'c';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'personal_message'='Mensagem exclusiva da outra pessoa','editing A leaves B message intact');
+reset role;
 rollback;
 \echo Party lifecycle, family identity, two devices, grants, revocation, isolation and RSVP independence passed.

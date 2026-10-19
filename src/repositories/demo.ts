@@ -911,3 +911,43 @@ export function demoPartyRespond(cycle: string, action: "ACCEPT" | "COMPLETE") {
     }
   });
 }
+
+export function demoPartyAdminSave(
+  guest: string,
+  role: import("../features/weddingParty/types").PartyRole,
+  cycle: string | null,
+  message: string,
+  expectedMessage: string | null,
+) {
+  return transaction((db) => {
+    if (!message.trim() || message.length > 12000)
+      throw Error("Mensagem inválida.");
+    const current = db.weddingParty?.find(
+      (p) => p.active && p.guest_id === guest,
+    );
+    if (
+      (current?.cycle_id || null) !== cycle ||
+      (current?.personal_message ?? null) !== expectedMessage
+    )
+      throw Error("Dados alterados. Atualize.");
+    if (current && current.role !== role)
+      throw Error("A classificação deve ser preservada.");
+    if (current) {
+      current.personal_message = message;
+      return current;
+    }
+    if (!db.snapshot.guests.some((g) => g.id === guest))
+      throw Error("Convidado indisponível.");
+    const promotion = {
+      cycle_id: id(),
+      guest_id: guest,
+      role,
+      accepted_at: null,
+      completed_at: null,
+      active: true,
+      personal_message: message,
+    };
+    (db.weddingParty ??= []).push(promotion);
+    return promotion;
+  });
+}
