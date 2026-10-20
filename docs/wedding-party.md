@@ -178,3 +178,15 @@ record the opening, white peak, paper and bidirectional reading. The three frame
 checks also passed after refining the partial-flap capture angle. No production
 guest was edited for testing. Authenticated inspection of the published custom domain
 is limited by the environment proxy's CONNECT rejection, not a demonstrated site error.
+
+### CI validation follow-up
+
+The first Version 2 CI run passed 234 E2E and failed the preexisting dashboard
+keyboard drilldown test at the second card. The preceding production commit had
+already failed the same test at the other viewport. The test could observe the
+synchronous modal focus restoration, focus the next card and then have that focus
+stolen by the dashboard's pending requestAnimationFrame restoration. The test now
+waits through that rendering boundary before continuing its keyboard assertions;
+no dashboard or modal implementation changed and no assertion was removed.
+Ten consecutive targeted runs (five each at 320 and 1280 px), lint and typecheck
+passed before publishing this test-only follow-up.

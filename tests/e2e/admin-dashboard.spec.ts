@@ -110,6 +110,15 @@ for (const width of [320, 1280]) {
           .getByRole("button", { name: "Fechar modal", exact: true })
           .click();
       await expect(dialog).toHaveCount(0);
+      // DashboardDetailsModal restores focus in requestAnimationFrame after unmount.
+      // Its synchronous modal cleanup can already satisfy toBeFocused before that
+      // deferred restoration runs, stealing focus from the next card's Space press.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
       await expect(card).toBeFocused();
       expect(await page.evaluate(() => document.body.style.overflow)).not.toBe(
         "hidden",
