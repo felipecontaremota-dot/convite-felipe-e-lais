@@ -1,3 +1,4 @@
+import { envelopeSequence } from "../src/features/weddingParty/envelopeTimeline";
 import {
   partyName,
   letterParagraphs,
@@ -58,17 +59,16 @@ it("retains only safe party navigation on reload, never credentials or arbitrary
   expect(partyNavigation("/login", "?surpresa=1&pin=1234")).toBe("");
 });
 
-it("uses the first name and restricts the Medina treatment to the exact configured full name", () => {
+it("uses any optional treatment as text and falls back to the first registered name", () => {
   expect(partyName("João Pedro Silva")).toBe("João");
   expect(partyName("Maria Fernanda Oliveira")).toBe("Maria");
-  expect(
-    partyName(
-      " Amanda   Curcio Cariolano Romão Medina ".normalize("NFD"),
-      "Medina",
-    ),
-  ).toBe("Medina");
-  expect(partyName("Amanda Outra Pessoa")).toBe("Amanda");
-  expect(partyName("Amanda Curcio Cariolano Romão")).toBe("Amanda");
+  expect(partyName("  Amanda   Silva ", "  Minha querida amiga  ")).toBe(
+    "Minha querida amiga",
+  );
+  expect(partyName("Amanda Silva", "   ")).toBe("Amanda");
+  expect(partyName("João Pedro Silva", null)).toBe("João");
+  expect(partyName("João Pedro Silva", "<em>João</em>")).toBe("<em>João</em>");
+  expect(partyName(" ")).toBe("Você");
 });
 it("preserves the entire story in order, personal paragraphs, safe text and gendered question", () => {
   const body = letterParagraphs(
@@ -95,4 +95,31 @@ it("preserves the entire story in order, personal paragraphs, safe text and gend
   expect(letterParagraphs("João", null, "PADRINHO").at(-1)?.after).toBe(
     ", aceita ser nosso padrinho?",
   );
+});
+
+it("waits for completed flap and extraction before light, never advancing on rerender or time alone", async () => {
+  const calls: string[] = [];
+  const pending: (() => void)[] = [];
+  const running = envelopeSequence(
+    (step) => {
+      calls.push(step);
+      return new Promise<void>((resolve) => pending.push(resolve));
+    },
+    (phase) => calls.push(`phase:${phase}`),
+  );
+  expect(calls).toEqual(["phase:seal", "seal"]);
+  pending.shift()!();
+  await Promise.resolve();
+  expect(calls.slice(-2)).toEqual(["phase:opening", "flap"]);
+  pending.shift()!();
+  await Promise.resolve();
+  expect(calls.slice(-2)).toEqual(["phase:open", "settle"]);
+  pending.shift()!();
+  await Promise.resolve();
+  expect(calls.slice(-2)).toEqual(["phase:extracting", "letter"]);
+  pending.shift()!();
+  await Promise.resolve();
+  expect(calls.slice(-3)).toEqual(["phase:revealed", "phase:flash", "light"]);
+  pending.shift()!();
+  await running;
 });

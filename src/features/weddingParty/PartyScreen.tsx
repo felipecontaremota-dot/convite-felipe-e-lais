@@ -92,7 +92,7 @@ function PartyExperience({
   const [arriving, setArriving] = useState(false);
   useEffect(() => {
     if (!arriving) return;
-    const timer = setTimeout(() => setArriving(false), 480);
+    const timer = setTimeout(() => setArriving(false), 700);
     return () => clearTimeout(timer);
   }, [arriving]);
   const [busy, setBusy] = useState(false),

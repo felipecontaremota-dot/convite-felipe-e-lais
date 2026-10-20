@@ -284,6 +284,9 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
       .getByLabel("Trecho personalizado", { exact: true })
       .fill("Você faz parte da nossa história.\n\nCom muito carinho!");
     await messageDialog
+      .getByLabel("Nome ou apelido carinhoso", { exact: true })
+      .fill("Minha querida amiga");
+    await messageDialog
       .getByRole("button", { name: "Salvar mensagem e promover", exact: true })
       .click();
     await expect(
@@ -299,6 +302,12 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
     await expect(
       messageDialog.getByLabel("Trecho personalizado", { exact: true }),
     ).toHaveValue("Você faz parte da nossa história.\n\nCom muito carinho!");
+    await expect(
+      messageDialog.getByLabel("Nome ou apelido carinhoso", { exact: true }),
+    ).toHaveValue("Minha querida amiga");
+    await messageDialog
+      .getByLabel("Nome ou apelido carinhoso", { exact: true })
+      .fill("Meu bem");
     await messageDialog
       .getByLabel("Trecho personalizado", { exact: true })
       .fill("Mensagem revisada.\n\nSegundo parágrafo.");
@@ -311,6 +320,30 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
           JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0].cycle_id,
       ),
     ).toBe(first);
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0]
+            .display_name,
+      ),
+    ).toBe("Meu bem");
+    await form
+      .getByRole("button", { name: "Editar mensagem especial", exact: true })
+      .click();
+    await messageDialog
+      .getByLabel("Nome ou apelido carinhoso", { exact: true })
+      .fill("");
+    await messageDialog
+      .getByRole("button", { name: "Salvar mensagem", exact: true })
+      .click();
+    const cleared = await page.evaluate(
+      () => JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0],
+    );
+    expect(cleared.display_name).toBeNull();
+    expect(cleared.cycle_id).toBe(first);
+    expect(cleared.personal_message).toBe(
+      "Mensagem revisada.\n\nSegundo parágrafo.",
+    );
     await form
       .getByRole("button", { name: "Remover promoção", exact: true })
       .click();
@@ -366,7 +399,7 @@ test("A new promotion cycle restarts automatic presentation even after a complet
 });
 
 for (const width of [320, 768, 1280])
-  test(`Paper letter preserves story, personal paragraphs, bold Medina, reveal and safe text at ${width}px`, async ({
+  test(`Paper letter preserves story, personal paragraphs, bold optional treatment, reveal and safe text at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -413,9 +446,9 @@ for (const width of [320, 768, 1280])
       await paragraphs
         .first()
         .evaluate((el) => getComputedStyle(el).fontFamily),
-    ).toContain("PartyCaveat");
+    ).toContain("PartyHand");
     expect(
-      await page.evaluate(() => document.fonts.check("25px PartyCaveat")),
+      await page.evaluate(() => document.fonts.check("25px PartyHand")),
     ).toBe(true);
     await page.screenshot({ path: `/tmp/letter-${width}.png` });
     await paragraphs.last().scrollIntoViewIfNeeded();
@@ -437,48 +470,140 @@ for (const width of [320, 768, 1280])
       ),
     ).toBeVisible();
   });
-for (const width of [320, 1280])
-  test(`Cinematic opening extracts the letter, prevents repeats and reveals on scroll only once at ${width}px`, async ({
+// Pause the browser's real animations at real intermediate frames; screenshot and inspect geometry.
+// No fake timers for sequencing: finish() resolves each native Animation.finished promise.
+async function pauseEnvelope(page: Page) {
+  await page.addInitScript(() => {
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (...args) {
+      const result = animate.apply(this, args);
+      if (
+        this.matches(
+          "[data-envelope-seal],[data-party-flap],[data-envelope-letter],[data-envelope-flash]",
+        )
+      )
+        result.pause();
+      return result;
+    };
+  });
+}
+async function position(
+  page: Page,
+  selector: string,
+  progress: number,
+  finish = false,
+) {
+  const el = page.locator(selector);
+  await expect.poll(() => el.evaluate((e) => e.getAnimations().length)).toBe(1);
+  await el.evaluate(
+    (e, { progress, finish }) => {
+      const a = e.getAnimations()[0]!;
+      a.currentTime = Number(a.effect!.getTiming().duration) * progress;
+      if (finish) a.finish();
+    },
+    { progress, finish },
+  );
+}
+for (const width of [320, 768, 1280])
+  test(`Physical envelope frames and reversible reading at ${width}px`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
+    await pauseEnvelope(page);
     await fixture(page);
+    const frame = async (name: string) => {
+      const path = testInfo.outputPath(`${name}-${width}.png`);
+      await page.screenshot({ path });
+      await testInfo.attach(name, { path, contentType: "image/png" });
+    };
     const envelope = page.getByRole("button", {
       name: "Abrir convite especial",
       exact: true,
     });
-    const start = await page.evaluate(() => performance.now());
-    await envelope.press("Enter");
-    await expect(envelope).toBeDisabled();
-    await envelope.dispatchEvent("click");
-    await expect(page.locator("[data-envelope-flight]")).toHaveCount(1);
-    const initialTop = await page
-      .locator("[data-envelope-letter]")
-      .evaluate((el) => el.getBoundingClientRect().top);
-    await expect
-      .poll(
-        () =>
-          page
-            .locator("[data-envelope-letter]")
-            .evaluate((el) => el.getBoundingClientRect().top),
-        { timeout: 5000 },
-      )
-      .toBeLessThan(initialTop - 20);
-    await page.screenshot({ path: "/tmp/envelope-opening.png" });
+    const paper = page.locator("[data-envelope-letter]");
     const letter = page.locator("[data-party-paper]");
-    await expect(letter).toBeVisible({ timeout: 10000 });
+    await expect(paper).toHaveCSS("visibility", "hidden");
+    await expect(envelope).toHaveAttribute("data-phase", "closed");
+    // More than the former automatic extraction delay: no unsolicited reveal on mount.
+    await page.waitForTimeout(3800);
+    await expect(paper).toHaveCSS("visibility", "hidden");
+    expect(await paper.evaluate((el) => el.getAnimations().length)).toBe(0);
+    await frame("01-closed");
+    await envelope.press("Enter");
+    await envelope.dispatchEvent("click");
+    await expect(envelope).toBeDisabled();
+    await position(page, "[data-envelope-seal]", 1, true);
+    await position(page, "[data-party-flap]", 0.25);
+    await expect(paper).toHaveCSS("visibility", "hidden");
+    await frame("02-flap-partial");
+    await position(page, "[data-party-flap]", 0.999);
+    await expect(paper).toHaveCSS("visibility", "hidden");
+    await frame("03-flap-open");
+    await position(page, "[data-party-flap]", 1, true);
+    await position(page, "[data-envelope-letter]", 0);
+    const startTop = await paper.evaluate(
+      (el) => el.getBoundingClientRect().top,
+    );
+    const order = await envelope.evaluate((el) => ({
+      open: Number((el as HTMLElement).dataset.openedAt),
+      extract: Number((el as HTMLElement).dataset.extractedAt),
+    }));
+    expect(order.extract).toBeGreaterThan(order.open);
+    await frame("04-extraction-start");
+    await position(page, "[data-envelope-letter]", 0.5);
     expect(
-      (await page.evaluate(() => performance.now())) - start,
-    ).toBeGreaterThan(4500);
+      await paper.evaluate((el) => el.getBoundingClientRect().top),
+    ).toBeLessThan(startTop - 50);
+    await frame("05-extraction-partial");
+    await expect(letter).toHaveCount(0);
+    await expect(page.locator("[data-envelope-flash]")).toHaveCSS(
+      "opacity",
+      "0",
+    );
+    await position(page, "[data-envelope-letter]", 0.999);
+    await frame("06-extraction-complete");
+    await position(page, "[data-envelope-letter]", 1, true);
+    await position(page, "[data-envelope-flash]", 0.999);
+    await expect(page.locator("[data-envelope-flash]")).toHaveCSS(
+      "background-color",
+      "rgb(255, 255, 255)",
+    );
+    expect(
+      Number(
+        await page
+          .locator("[data-envelope-flash]")
+          .evaluate((e) => getComputedStyle(e).opacity),
+      ),
+    ).toBeGreaterThan(0.99);
+    await expect(letter).toHaveCount(0);
+    await frame("07-white-peak");
+    await position(page, "[data-envelope-flash]", 1, true);
+    await expect(letter).toBeVisible();
     await expect(page.locator("[data-paper-handoff]")).toHaveCount(0);
-    const first = letter.locator("[data-letter-paragraph]").first(),
-      last = letter.locator("[data-letter-paragraph]").last();
-    await expect(first).toHaveAttribute("data-revealed", "true");
-    await expect(last).not.toHaveAttribute("data-revealed", "true");
+    await page.evaluate(() => document.fonts.ready);
+    await frame("08-white-paper");
+    const first = letter.locator("[data-letter-paragraph]").first();
+    const last = letter.locator("[data-letter-paragraph]").last();
+    await expect(first).toHaveCSS("opacity", "1");
+    await expect(last).toHaveCSS("opacity", "0");
     await last.scrollIntoViewIfNeeded();
-    await expect(last).toHaveAttribute("data-revealed", "true");
+    await expect(last).toHaveCSS("opacity", "1");
+    await expect(first).toHaveCSS("opacity", "1"); // Above the reading region remains readable.
+    await frame("09-scroll-down");
     await first.scrollIntoViewIfNeeded();
-    await expect(last).toHaveAttribute("data-revealed", "true");
+    await expect(last).toHaveCSS("opacity", "0");
+    await expect(first).toHaveCSS("opacity", "1");
+    expect(
+      await first.evaluate((e) => getComputedStyle(e).transitionDuration),
+    ).toBe("1.35s, 1.35s");
+    await frame("10-scroll-up");
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toHaveCSS("opacity", "1");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
     expect(
       await page.evaluate(
         () =>
@@ -514,17 +639,19 @@ test("Letter remains fully readable without IntersectionObserver or animation su
   ).toBeVisible();
 });
 
-test("Disabled CSS animation cannot strand the opening sequence", async ({
+test("Missing Web Animations cannot strand the opening sequence", async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Element.prototype, "animate", {
+      value: undefined,
+      configurable: true,
+    });
+  });
   await fixture(page);
   await page
     .getByRole("button", { name: "Abrir convite especial", exact: true })
     .press("Enter");
-  await page.addStyleTag({
-    content:
-      "[data-envelope-flight], [data-envelope-shell], [data-envelope-letter], [data-party-flap], [data-envelope-seal] { animation:none!important; }",
-  });
   await expect(page.locator("[data-party-paper]")).toBeVisible({
     timeout: 10000,
   });

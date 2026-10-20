@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1800" viewBox="0 0 1200 1800" preserveAspectRatio="none">
+<defs>
+ <filter id="f" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".55 .8" numOctaves="3" seed="23" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncR type="linear" slope=".16" intercept=".84"/><feFuncG type="linear" slope=".16" intercept=".84"/><feFuncB type="linear" slope=".15" intercept=".85"/><feFuncA type="linear" slope=".3"/></feComponentTransfer></filter>
+ <radialGradient id="a"><stop offset="0" stop-color="#dfded8" stop-opacity=".2"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+ <linearGradient id="e"><stop stop-color="#c9c7bf" stop-opacity=".2"/><stop offset=".035" stop-color="#fff" stop-opacity="0"/><stop offset=".96" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#c9c7bf" stop-opacity=".16"/></linearGradient>
+</defs>
+<path fill="#fcfcfa" d="M0 0h1200v1800H0z"/>
+<path filter="url(#f)" opacity=".55" d="M0 0h1200v1800H0z"/>
+<ellipse cx="85" cy="250" rx="190" ry="310" fill="url(#a)"/><ellipse cx="1130" cy="1480" rx="190" ry="260" fill="url(#a)"/>
+<path fill="url(#e)" d="M0 0h1200v1800H0z"/>
+<g fill="none" stroke="#8f918a" stroke-opacity=".075" stroke-width=".8"><path d="M7 20q5 200-2 420t2 600t-1 730M1194 20q-6 320 1 590t-4 700t2 470M20 8q220 5 410-2t730 1M15 1793q320-5 510 1t650-2"/></g>
+</svg>

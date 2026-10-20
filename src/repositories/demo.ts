@@ -918,22 +918,38 @@ export function demoPartyAdminSave(
   cycle: string | null,
   message: string,
   expectedMessage: string | null,
+  displayName?: string,
+  expectedDisplayName?: string | null,
 ) {
   return transaction((db) => {
-    if (!message.trim() || message.length > 12000)
-      throw Error("Mensagem inválida.");
     const current = db.weddingParty?.find(
       (p) => p.active && p.guest_id === guest,
     );
+    const keepEmpty =
+      displayName !== undefined &&
+      !!current &&
+      current.personal_message == null &&
+      message === "";
+    if ((!message.trim() && !keepEmpty) || message.length > 12000)
+      throw Error("Mensagem inválida.");
     if (
       (current?.cycle_id || null) !== cycle ||
       (current?.personal_message ?? null) !== expectedMessage
     )
       throw Error("Dados alterados. Atualize.");
+    if (
+      displayName !== undefined &&
+      (current?.display_name ?? null) !== (expectedDisplayName ?? null)
+    )
+      throw Error("Dados alterados. Atualize.");
+    const nickname = displayName?.trim() || null;
+    if (nickname && (nickname.length > 100 || /[\n\r\t]/.test(nickname)))
+      throw Error("Nome de tratamento inválido.");
     if (current && current.role !== role)
       throw Error("A classificação deve ser preservada.");
     if (current) {
-      current.personal_message = message;
+      if (!keepEmpty) current.personal_message = message;
+      if (displayName !== undefined) current.display_name = nickname;
       return current;
     }
     if (!db.snapshot.guests.some((g) => g.id === guest))
@@ -946,6 +962,7 @@ export function demoPartyAdminSave(
       completed_at: null,
       active: true,
       personal_message: message,
+      display_name: nickname,
     };
     (db.weddingParty ??= []).push(promotion);
     return promotion;

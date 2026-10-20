@@ -1,7 +1,7 @@
 # Espaço dos Padrinhos
 
 Promotion is a separate, additive lifecycle in `wedding_party_private.promotions`.
-The four authenticated RPCs read/check the canonical event and existing family session.
+The authenticated RPCs read/check the canonical event and existing family session.
 No authentication, mutation/snapshot delegation, invitation or RSVP implementation is replaced.
 
 ## Identity and access boundary
@@ -59,7 +59,7 @@ These RPCs are intentionally callable: each checks event, actor and ownership/AD
 uses a fixed pg_catalog search_path, and never grants direct private-table access.
 Tests exercise unauthorized, other-event, revoked and inactive-session denial.
 
-## Personalized paper letter (2026-10-19)
+## Historical implementation (2026-10-19, superseded below)
 
 The opening is a layered HTML/CSS envelope with paper grain, independent folds,
 a hinged 3D flap, seal release and a clipped letter that emerges behind the front folds.
@@ -104,3 +104,77 @@ acceptance, completion or RSVP data were changed by the migration. The new messa
 field remains null until an administrator writes it. The additional authenticated
 SECURITY DEFINER advisory is intentional for the checked ADMIN-only save RPC;
 the rationale and Supabase remediation reference are documented above.
+
+## Version 2 — coordinated opening and optional treatment (2026-10-20)
+
+The previous extraction selector was unconditional and ran on mount. Its 1,400 ms
+launch also preceded the flap's 1,600 ms completion. It is replaced by
+`envelopeTimeline.ts`: seal 400 ms → flap 1,100 ms → a painted fully-open frame →
+extraction 2,400 ms → white overlay 460 ms. Each step awaits Animation.finished;
+a duration + 1,500 ms watchdog is failure recovery only, not normal synchronization.
+The letter starts invisible and clipped inside the pocket. Front folds remain above
+its layer throughout extraction. There is no camera flight or scaling transition.
+The document switches to the article at full white, holds for 120 ms and unveils
+for 520 ms (1,100 ms total light transition). Reduced motion skips the opening/flash.
+Leaving aborts animations; repeated activation is locked before any await.
+
+The predominantly white physical paper uses a local deterministic grayscale fiber
+SVG, subtle edge wear, irregular clipping and an external soft shadow. Text remains
+selectable HTML. Dancing Script (local variable 400–700, SIL OFL) replaces Caveat;
+title and real bold names use the same family with system cursive fallbacks.
+The only narrative edit is “pedido do coração” → “pedido de coração”.
+
+`useLetterReading` derives each paragraph state from its real position, scroll direction
+and a reading line at 90% of the viewport, with a 48 px hysteresis band. Above-reading
+paragraphs stay shown. Those below fade out on upward scrolling, then reappear on descent.
+One RAF batches scroll/observer notifications; a single CSS transition per property
+lasts 1,350 ms (previous 850 + 500), with no per-scroll Animation accumulation.
+Content defaults to readable, including failed/missing observer, print and reduced motion.
+
+`display_name` is an optional <=100-character text column on the existing private
+promotions table. Existing values start NULL with no identity-based backfill.
+No person-specific treatment exists in live RPCs or JavaScript. Empty means first
+registered name. Names/nicknames with spaces are supported and rendered as React text.
+The ADMIN-only `wedding_party_admin_save_details` RPC uses the established event lock,
+expected cycle, expected previous message and expected previous nickname; concurrent stale
+edits fail atomically. It delegates canonical creation/message validation to the existing
+six-argument RPC, preserving that endpoint's compatibility. Editing/clearing does not
+reset role, cycle, acceptance, completion or message. Ordinary guests see only their
+selected person's treatment through the actor-scoped state RPC. Family declaration
+boundaries documented above remain unchanged.
+
+The additive `wedding_party_nicknames` migration replaces the live hardcoded state
+function, extends admin reads and adds one checked authenticated SECURITY DEFINER RPC.
+Previously applied migrations remain immutable. No real guest is promoted or edited by
+this migration. Postflight checks all six RPCs, fixed search_path, owner, private schema,
+RLS and role grants. No Edge Function or auth/RSVP change is necessary.
+
+Browser tests capture actual paused native-animation frames at 320, 768 and 1280 px,
+including closed, partially/fully open flap, start/partial/complete extraction, white peak,
+white paper and scroll in both directions. They check physical geometry, computed opacity,
+no pre-click extraction, ordering and repeat activation. Database tests exercise generic
+compound treatment, no backfill, literal text, create/edit/clear, stale edits, two devices,
+role/event/family isolation and unchanged cycle/timestamps/message/RSVP/credentials.
+
+### Version 2 production postflight
+
+Applied `20261020172200_wedding_party_nicknames.sql` (the filename matches the
+production migration runner's recorded version). Read-only postflight passed for
+all six authenticated RPCs, owner, fixed search_path, private grants, RLS and
+unauthenticated denial. The digest of all preexisting promotion fields is identical
+before/after the migration. All existing nicknames are NULL: no guest-specific backfill.
+The live state function no longer contains the historical name exception.
+
+The security advisor adds only the expected authenticated SECURITY DEFINER finding
+for the new checked ADMIN RPC; all other findings are unchanged. The rationale and
+[Supabase advisory reference](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+are the same as for the existing guarded RPCs; direct private-table access remains denied.
+
+Validation: 340 unit tests, all 235 E2E, isolated full database regression, focused
+lifecycle/nickname SQL and real authenticated two-device browser integration passed.
+Lint, typecheck, web build/export and native PWA asset/installability validation passed.
+[Visual inspection panels at 320, 768 and 1280 px](evidence/wedding-party-v2/README.md)
+record the opening, white peak, paper and bidirectional reading. The three frame
+checks also passed after refining the partial-flap capture angle. No production
+guest was edited for testing. Authenticated inspection of the published custom domain
+is limited by the environment proxy's CONNECT rejection, not a demonstrated site error.

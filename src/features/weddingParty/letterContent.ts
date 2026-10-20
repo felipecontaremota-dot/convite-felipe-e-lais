@@ -1,8 +1,8 @@
 import type { PartyRole } from "./types";
-// The server supplies an explicit treatment only for the configured individual.
+// Optional treatment is stored privately for this promotion; registered identity is unchanged.
 export function partyName(fullName: string, treatment?: string | null) {
   const canonical = fullName.normalize("NFC").trim().replace(/\s+/g, " ");
-  return treatment || canonical.split(" ")[0] || "";
+  return treatment?.trim() || canonical.split(" ")[0] || "Você";
 }
 export const storyParagraphs = [
   "Nós, Felipe e Laís, nos conhecemos quase que por acaso.",
@@ -34,7 +34,7 @@ export function letterParagraphs(
     ...(message
       ? message.split(/\r?\n[ \t]*\r?\n/).map((before) => ({ before }))
       : []),
-    { before: "E é por isso que temos um pedido do coração para você!" },
+    { before: "E é por isso que temos um pedido de coração para você!" },
     {
       before: "",
       name,
@@ -45,4 +45,3 @@ export function letterParagraphs(
     },
   ];
 }
-export const ENVELOPE_DURATION = 5200;

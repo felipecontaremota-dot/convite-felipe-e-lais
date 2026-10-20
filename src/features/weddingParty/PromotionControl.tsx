@@ -25,9 +25,11 @@ export function PromotionControl({
     [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [editVersion, setEditVersion] = useState<{
     cycle: string | null;
     message: string | null;
+    displayName: string | null;
     role: PartyRole;
   } | null>(null);
   const beginEdit = () => {
@@ -36,9 +38,11 @@ export function PromotionControl({
     setEditVersion({
       cycle: query.data?.cycle_id || null,
       message: query.data?.personal_message ?? null,
+      displayName: query.data?.display_name ?? null,
       role: selected,
     });
     setMessage(query.data?.personal_message || "");
+    setDisplayName(query.data?.display_name || "");
     setError("");
     setEditing(true);
   };
@@ -100,13 +104,17 @@ export function PromotionControl({
             version.cycle,
             message,
             version.message,
+            displayName,
+            version.displayName,
           )
-        : api.weddingPartyAdminSave(
+        : api.weddingPartyAdminSaveDetails(
             guest.id,
             version.role,
             version.cycle,
             message,
             version.message,
+            displayName,
+            version.displayName,
           ));
       client.setQueryData(key, result);
       await client.invalidateQueries({ queryKey: ["party-state"] });
@@ -197,6 +205,17 @@ export function PromotionControl({
             ou madrinha.
           </Text>
           <Field
+            label="Nome ou apelido carinhoso"
+            value={displayName}
+            onChangeText={setDisplayName}
+            maxLength={100}
+            editable={!busy}
+          />
+          <Text style={styles.small}>
+            Informe como deseja chamar essa pessoa na carta especial. Se deixar
+            em branco, será utilizado o primeiro nome cadastrado.
+          </Text>
+          <Field
             label="Trecho personalizado"
             value={message}
             onChangeText={setMessage}
@@ -216,7 +235,16 @@ export function PromotionControl({
                 ? "Salvar mensagem"
                 : "Salvar mensagem e promover"
             }
-            disabled={busy || !message.trim() || !app.online}
+            disabled={
+              busy ||
+              (!message.trim() &&
+                !(
+                  editVersion?.cycle &&
+                  editVersion.message == null &&
+                  message === ""
+                )) ||
+              !app.online
+            }
             onPress={saveMessage}
           />
           <Button

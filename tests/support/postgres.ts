@@ -121,6 +121,7 @@ export class TestPostgres {
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
       event_role: `event_role(${event})`,
+      wedding_party_admin_save_details: `wedding_party_admin_save_details(${event},${literal(args.p_guest)}::uuid,${literal(args.p_role)},${args.p_expected_cycle == null ? "null" : literal(args.p_expected_cycle)}::uuid,${literal(args.p_message)},${args.p_expected_message == null ? "null" : literal(args.p_expected_message)},${args.p_display_name == null ? "null" : literal(args.p_display_name)},${args.p_expected_display_name == null ? "null" : literal(args.p_expected_display_name)})`,
       wedding_party_admin_save: `wedding_party_admin_save(${event},${literal(args.p_guest)}::uuid,${literal(args.p_role)},${args.p_expected_cycle == null ? "null" : literal(args.p_expected_cycle)}::uuid,${literal(args.p_message)},${args.p_expected_message == null ? "null" : literal(args.p_expected_message)})`,
       wedding_party_state: `wedding_party_state(${event})`,
       wedding_party_admin_get: `wedding_party_admin_get(${event},${literal(args.p_guest)}::uuid)`,

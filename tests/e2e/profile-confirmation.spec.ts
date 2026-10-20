@@ -670,7 +670,7 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
   db.sql(
     `update guests set profile_confirmed_at=clock_timestamp() where id='${g.id}';`,
   );
-  const p = db.rpc(admin, "wedding_party_admin_save", {
+  const p = db.rpc(admin, "wedding_party_admin_save_details", {
     p_event: event,
     p_guest: g.id,
     p_role: "PADRINHO",
@@ -678,6 +678,8 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
     p_message:
       "Mensagem individual do PostgreSQL.\n\nSegundo parágrafo preservado.",
     p_expected_message: null,
+    p_display_name: "Meu querido amigo",
+    p_expected_display_name: null,
   });
   const before = db.rpc(admin, "app_snapshot", { p_event: event }).rsvps;
   await backend(page, uid);
@@ -686,6 +688,10 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
   await page
     .getByRole("button", { name: "Abrir convite especial", exact: true })
     .press("Enter");
+  await expect(page.locator("[data-party-paper] strong")).toHaveText([
+    "Meu querido amigo",
+    "Meu querido amigo",
+  ]);
   await expect(
     page.getByText("Mensagem individual do PostgreSQL.", { exact: true }),
   ).toBeVisible();
@@ -731,6 +737,30 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
       db.rpc(otherDevice, "wedding_party_state", { p_event: event }).promotion
         .completed_at,
     ).toBe(persisted.completed_at);
+    const edited = db.rpc(admin, "wedding_party_admin_save_details", {
+      p_event: event,
+      p_guest: g.id,
+      p_role: "PADRINHO",
+      p_expected_cycle: p.cycle_id,
+      p_message: persisted.personal_message,
+      p_expected_message: persisted.personal_message,
+      p_display_name: null,
+      p_expected_display_name: "Meu querido amigo",
+    });
+    expect(edited.cycle_id).toBe(p.cycle_id);
+    expect(edited.completed_at).toBe(persisted.completed_at);
+    await second.emulateMedia({ reducedMotion: "reduce" });
+    await second.goto("/padrinhos");
+    await second
+      .getByRole("button", { name: "Rever a surpresa ↺", exact: true })
+      .click();
+    await second
+      .getByRole("button", { name: "Abrir convite especial", exact: true })
+      .click();
+    await expect(second.locator("[data-party-paper] strong")).toHaveText([
+      "Padrinho",
+      "Padrinho",
+    ]);
     db.rpc(admin, "wedding_party_admin_set", {
       p_event: event,
       p_guest: g.id,

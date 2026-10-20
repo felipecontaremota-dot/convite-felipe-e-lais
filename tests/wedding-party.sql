@@ -71,6 +71,9 @@ set local role authenticated;
 set local request.jwt.claim.sub=:'admin';
 select wedding_party_admin_get(:'event',:'gid') as message_cycle \gset
 select (:'message_cycle'::jsonb->>'cycle_id') as mcycle \gset
+select wedding_party_admin_save_details(:'event',:'gid','MADRINHA',:'mcycle','',null,'Minha amiga',null) as legacy_named \gset
+select pg_temp.party_assert(:'legacy_named'::jsonb->>'personal_message' is null,'legacy null message preserved by nickname-only edit');
+select wedding_party_admin_save_details(:'event',:'gid','MADRINHA',:'mcycle','',null,'','Minha amiga');
 select wedding_party_admin_save(:'event',:'gid','MADRINHA',:'mcycle',E'Primeiro\nlinha\n\nSegundo <script>texto seguro</script>',null) as saved_message \gset
 select pg_temp.party_assert(:'saved_message'::jsonb->>'cycle_id'=:'mcycle','message does not recreate cycle');
 select pg_temp.party_assert(:'saved_message'::jsonb->>'personal_message'=E'Primeiro\nlinha\n\nSegundo <script>texto seguro</script>','newlines preserved literally');
@@ -97,17 +100,34 @@ select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'='null'::j
 reset role;
 select pg_temp.party_assert(not has_function_privilege('anon','public.wedding_party_admin_save(uuid,uuid,text,uuid,text,text)','EXECUTE'),'anonymous save denied');
 
--- Restricted treatment is resolved server-side for the selected person's exact full name.
+-- No hardcoded identity treatment or automatic backfill; optional text is private.
 update guests set name='Amanda Curcio Cariolano Romão Medina' where id=:'gid';
 set local role authenticated;
 set local request.jwt.claim.sub=:'a';
-select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'display_name'='Medina','exact configured full name receives Medina');
-reset role;
-update guests set name='Amanda Outra Pessoa' where id=:'gid';
-set local role authenticated;
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'display_name' is null,'existing guest has no automatic treatment');
+select pg_temp.party_reject(format('select wedding_party_admin_save_details(%L,%L,%L,%L,%L,%L,%L,null)',:'event',:'gid','MADRINHA',:'mcycle','Após conclusão','Após conclusão','Guest edit'));
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_save_details(:'event',:'gid','MADRINHA',:'mcycle','Após conclusão','Após conclusão','  Minha querida amiga  ',null) as named \gset
+select pg_temp.party_assert(:'named'::jsonb->>'display_name'='Minha querida amiga','compound nickname trimmed');
+select pg_temp.party_assert(:'named'::jsonb->>'cycle_id'=:'mcycle' and :'named'::jsonb->>'completed_at'=(:'message_completed'::jsonb->'promotion'->>'completed_at'),'nickname does not restart completed cycle');
+select pg_temp.party_reject(format('select wedding_party_admin_save_details(%L,%L,%L,%L,%L,%L,%L,null)',:'event',:'gid','MADRINHA',:'mcycle','Stale write','Após conclusão','Other'));
+select pg_temp.party_reject(format('select wedding_party_admin_save_details(%L,%L,%L,%L,%L,%L,%L,%L)',:'event',:'gid','MADRINHA',:'mcycle','Após conclusão','Após conclusão',repeat('x',101),'Minha querida amiga'));
+select pg_temp.party_reject(format('select wedding_party_admin_save_details(%L,%L,%L,%L,%L,%L,%L,%L)',:'event',:'gid','MADRINHA',:'mcycle','Após conclusão','Após conclusão',E'Invalid\nname','Minha querida amiga'));
+select pg_temp.party_reject(format('select wedding_party_admin_save_details(%L,%L,%L,%L,%L,%L,%L,%L)','eeeeaaaa-9999-4000-8000-000000000001',:'gid','MADRINHA',:'mcycle','Após conclusão','Após conclusão','Other event','Minha querida amiga'));
+select wedding_party_admin_save_details(:'event',:'gid','MADRINHA',:'mcycle','Após conclusão','Após conclusão','<b>Amiga</b>','Minha querida amiga');
 set local request.jwt.claim.sub=:'a';
-select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'display_name' is null,'other Amandas have no override');
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'display_name'='<b>Amiga</b>','nickname returned as literal text');
+set local request.jwt.claim.sub=:'b';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'->>'display_name'='<b>Amiga</b>','second device reads persisted nickname');
+set local request.jwt.claim.sub=:'c';
+select pg_temp.party_assert(wedding_party_state(:'event')->'promotion'='null'::jsonb,'other family member cannot read nickname');
+set local request.jwt.claim.sub=:'admin';
+select wedding_party_admin_save_details(:'event',:'gid','MADRINHA',:'mcycle','Após conclusão','Após conclusão','   ','<b>Amiga</b>') as cleared \gset
+select pg_temp.party_assert(:'cleared'::jsonb->>'display_name' is null and :'cleared'::jsonb->>'personal_message'='Após conclusão','clearing nickname preserves message');
+select pg_temp.party_assert(:'cleared'::jsonb->>'accepted_at'=(:'message_completed'::jsonb->'promotion'->>'accepted_at') and :'cleared'::jsonb->>'completed_at'=(:'message_completed'::jsonb->'promotion'->>'completed_at'),'clearing preserves acceptance and completion');
 reset role;
+select pg_temp.party_assert(not has_function_privilege('anon','public.wedding_party_admin_save_details(uuid,uuid,text,uuid,text,text,text,text)','EXECUTE'),'anonymous details edit denied');
+select pg_temp.party_assert(not has_function_privilege('service_role','public.wedding_party_admin_save_details(uuid,uuid,text,uuid,text,text,text,text)','EXECUTE'),'service bypass not exposed');
 
 set local role authenticated;
 set local request.jwt.claim.sub=:'admin';
