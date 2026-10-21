@@ -145,3 +145,39 @@ describe("requested invited formula", () => {
     expect(d.doubleDeduction).toBe(1);
   });
 });
+
+describe("origin cards and sent-only pending answers", () => {
+  it("uses exact individual classifications, sent state and RSVP, without classifying families", () => {
+    const s = fixture();
+    s.guests.forEach((g, i) => {
+      g.group_label = i < 3 ? "Convidado(a) da noiva" : "Convidado(a) do noivo";
+    });
+    const d = dashboardDetails(s);
+    expect(d.counts.bride).toBe(0); // 3 - 2 - 1, with one overlap
+    expect(d.lists.bride.map((g) => g.id)).toEqual(["c"]);
+    expect(d.overlaps.bride).toBe(1);
+    expect(d.counts.groom).toBe(2);
+    expect(d.lists.groom.map((g) => g.id)).toEqual(["d", "e"]);
+    expect(
+      new Set([...d.lists.bride, ...d.lists.groom].map((g) => g.id)).size,
+    ).toBe(3);
+    s.guests[2]!.group_label = "Familiar da noiva";
+    s.guests[3]!.group_label = "";
+    const changed = dashboardDetails(s);
+    expect(changed.lists.bride).toHaveLength(0);
+    expect(changed.unclassified).toBe(1);
+    expect(changed.otherClassifications).toBe(1);
+  });
+  it("leaves an unsent person's individual Pending status intact, but excludes them from the indicator", () => {
+    const s = fixture();
+    s.guests[3]!.invitation_sent = false;
+    const before = JSON.stringify(s);
+    const d = dashboardDetails(s);
+    expect(d.lists.unanswered.map((g) => g.id)).toEqual(["e"]);
+    expect(d.counts.unanswered).toBe(1);
+    expect(d.status.get("d")).toBe("Ainda não respondeu");
+    expect(JSON.stringify(s)).toBe(before);
+    s.guests[3]!.invitation_sent = true;
+    expect(dashboardDetails(s).counts.unanswered).toBe(2);
+  });
+});

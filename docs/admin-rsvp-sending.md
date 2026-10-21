@@ -35,7 +35,7 @@ Novos recibos confirmados e novos destinatários registrados em um recibo dedupl
 - **Convidados**: indicador calculado exatamente como `Na lista − Convites não enviados − Não irão`, em `dashboardDetails`, fonte compartilhada dos contadores e listas. O modal lista pessoas com convite enviado e sem recusa de presença.
 - **Convites não enviados**: pessoas não marcadas, no mesmo escopo de Na lista.
 - A fórmula inclui cadastros com unidade inativa e não é limitada artificialmente a zero. Uma pessoa com convite não enviado e RSVP negativo é descontada duas vezes: o modal explicita o indicador, a quantidade real de registros e a sobreposição, sem excluir registros elegíveis para forçar igualdade.
-- Confirmados, Não irão, Pendentes e Talvez irão particionam o mesmo conjunto de pessoas, distinguindo resposta indefinida de ausência de resposta.
+- Confirmados, Não irão e Talvez irão distinguem as respostas existentes. O indicador Pendentes considera somente enviados sem resposta; pessoas não enviadas preservam seu estado individual Pendente, mas não entram nesse indicador. Os novos indicadores por origem estão descritos em `dashboard-cards.md`.
 - Filtros de envio e dos quatro estados de presença usam os mesmos dados persistidos. Não há vínculo automático entre RSVP e envio. O filtro Enviados permanece um filtro de envio; o card Convidados combina envio e RSVP pela fórmula acima.
 - O seletor RSVP é a última tag textual antes dos ícones (envio individual antes de copiar link). A variante compacta compartilha o tamanho visual da Tag, sem seta ou espaço lateral reservado, preservando o select nativo, cores e foco acessível.
 

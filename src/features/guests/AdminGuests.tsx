@@ -1,10 +1,9 @@
 import { PromotionControl } from "../weddingParty/PromotionControl";
 import { adminRsvpOptions, adminRsvpStatus } from "./adminGuestStatus";
 import { GuestExportButton } from "./GuestExportButton";
-import { ActionFeedbackButton } from "../../components/ActionFeedbackButton";
+import { GuestInvitationActions } from "./GuestInvitationActions";
+import { useInvitationDelivery } from "./useInvitationDelivery";
 import { GuestRsvpControl, GuestSendingControl } from "./GuestAdminControls";
-import { invitationActionOutcome } from "./invitationActionOutcome";
-import { AppError } from "../../lib/errors";
 import { theme } from "../../theme/tokens";
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
@@ -34,18 +33,10 @@ import {
 } from "../../components/adminUi";
 import { AdminModal, SelectedChips } from "../../components/AdminModal";
 import { useApp } from "../../lib/AppProvider";
-import {
-  lastInvitationDelivery,
-  retainedInvitationRequest,
-  type InvitationSendResult,
-} from "./invitationDelivery";
+import { lastInvitationDelivery } from "./invitationDelivery";
 import type { Guest } from "../../types/domain";
 import * as Crypto from "expo-crypto";
-import { copyText } from "../../utils/externalLinks";
-import {
-  AccessControls,
-  resolveAccessLink,
-} from "../invitations/AccessControls";
+import { AccessControls } from "../invitations/AccessControls";
 import {
   GROUPS,
   brazilPhone,
@@ -201,78 +192,18 @@ function GuestForm({
 }
 export function GuestsScreen() {
   const [sendAllOpen, setSendAllOpen] = useState(false);
-  const requests = useRef(new Map<string, string>());
-  const acknowledged = useRef(new Set<string>());
-  const overrides = useRef(new Map<string, string>());
-  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
-  const [overrideKey, setOverrideKey] = useState<string | null>(null);
-
   const app = useApp(),
     feedback = useFeedback();
-  useEffect(() => {
-    const history = app.data?.invitation_deliveries || [];
-    for (const [key, request] of requests.current) {
-      const rows = history.filter((d) => d.request_id === request);
-      if (
-        rows.length &&
-        rows.every((d) => d.status !== "pending" || d.superseded_by)
-      )
-        requests.current.delete(key);
-    }
-    for (const delivery of history) {
-      if (
-        delivery.status !== "pending" ||
-        delivery.superseded_by ||
-        !delivery.request_id ||
-        acknowledged.current.has(delivery.request_id)
-      )
-        continue;
-      const keys = delivery.bulk
-        ? ["bulk"]
-        : (app.data?.guests || [])
-            .filter(
-              (g) =>
-                (delivery.guest_ids || [delivery.guest_id]).includes(g.id) ||
-                (g.invitation_id === delivery.invitation_id &&
-                  app.data?.contacts.some(
-                    (c) =>
-                      c.guest_id === g.id &&
-                      c.email.trim().toLowerCase() === delivery.recipient_email,
-                  )),
-            )
-            .map((g) => g.id);
-      for (const key of keys)
-        if (!requests.current.has(key))
-          requests.current.set(key, delivery.request_id);
-    }
-    setPendingKeys([...requests.current.keys()]);
-  }, [app.data]);
-  const deliver = async (
-    guest?: string,
-    onResult?: (result: InvitationSendResult) => void,
-  ) => {
-    const key = guest || "bulk";
-    if (!requests.current.has(key)) {
-      if (guest && requests.current.has("bulk"))
-        return "Há um envio em massa com resultado não confirmado. Use Tentar novamente nessa operação antes de iniciar um envio individual.";
-      if (!guest && requests.current.size)
-        return "Há convites individuais com resultado não confirmado. Verifique essas operações antes de iniciar um envio em massa.";
-    }
-    let result;
-    try {
-      result = await retainedInvitationRequest(
-        requests.current,
-        key,
-        Crypto.randomUUID,
-        (request) =>
-          app.sendInvitations(request, guest, overrides.current.get(request)),
-      );
-    } finally {
-      setPendingKeys([...requests.current.keys()]);
-    }
-    onResult?.(result);
-    return result.message;
-  };
+  const delivery = useInvitationDelivery();
+  const {
+    requests,
+    acknowledged,
+    overrides,
+    pendingKeys,
+    overrideKey,
+    setOverrideKey,
+    deliver,
+  } = delivery;
   const activePeople = (app.data?.guests || []).filter((g) =>
     app.data?.invitations.some(
       (i) => i.id === g.invitation_id && i.active && !i.archived_at,
@@ -703,53 +634,10 @@ export function GuestsScreen() {
               ) : null}
               <GuestRsvpControl guest={g} />
               <GuestSendingControl guest={g} />
-              <ActionFeedbackButton
-                onStart={feedback.clear}
-                icon="copy"
-                label={`Copiar link do convite de ${g.name}`}
-                action={async () => {
-                  if (!unit) throw new AppError("Link indisponível.");
-                  await copyText(await resolveAccessLink(unit, app.scope));
-                  return { message: "Link copiado", confirmed: true };
-                }}
-                onError={(error) =>
-                  void feedback.run(async () => {
-                    throw error;
-                  })
-                }
-              />
-              <ActionFeedbackButton
-                onStart={feedback.clear}
-                icon="send"
-                label={`Enviar convite para ${g.name}`}
-                action={async () => {
-                  if (
-                    !requests.current.has(g.id) &&
-                    !data?.contacts
-                      .find((c) => c.guest_id === g.id)
-                      ?.email.trim()
-                  )
-                    throw new AppError(
-                      "Este convidado não possui e-mail cadastrado.",
-                    );
-                  const response: { value?: InvitationSendResult } = {};
-                  const message = await deliver(g.id, (result) => {
-                    response.value = result;
-                  });
-                  return response.value
-                    ? invitationActionOutcome(response.value)
-                    : {
-                        message: "Envio não iniciado",
-                        confirmed: false,
-                        detail: message,
-                      };
-                }}
-                onNotice={(message) => void feedback.run(async () => message)}
-                onError={(error) =>
-                  void feedback.run(async () => {
-                    throw error;
-                  })
-                }
+              <GuestInvitationActions
+                guest={g}
+                delivery={delivery}
+                feedback={feedback}
               />
               <IconButton
                 icon="delete"

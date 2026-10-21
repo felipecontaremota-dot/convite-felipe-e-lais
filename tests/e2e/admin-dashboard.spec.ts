@@ -41,6 +41,8 @@ async function setup(page: Page, width: number) {
       invitation_id: i < 2 ? "family-a" : "family-b",
       name,
       invitation_sent: i >= 1,
+      group_label:
+        i % 2 === 0 ? "Convidado(a) da noiva" : "Convidado(a) do noivo",
     }));
     s.rsvps = ["CONFIRMED", "DECLINED", "PENDING", "PENDING"].map(
       (status, i) => ({
@@ -59,6 +61,8 @@ async function setup(page: Page, width: number) {
   await page.reload();
 }
 const categories = [
+  ["Convidados da noiva", "Convidados da noiva", ["Carla Indecisa"]],
+  ["Convidados do noivo", "Convidados do noivo", ["Davi Pendente"]],
   [
     "Convidados",
     "Convidados com convite enviado",
@@ -98,9 +102,7 @@ for (const width of [320, 1280]) {
       expect(await page.evaluate(() => document.body.style.overflow)).toBe(
         "hidden",
       );
-      await dialog
-        .getByRole("button", { name: "Fechar modal", exact: true })
-        .focus();
+      await dialog.getByRole("button").last().focus();
       await page.keyboard.press("Tab");
       await expect(
         dialog.getByRole("button", { name: "Fechar modal", exact: true }),

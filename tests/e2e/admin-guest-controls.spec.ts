@@ -432,3 +432,86 @@ test("failed and delayed administrative writes keep the prior state and prevent 
     row.getByRole("button", { name: /Convite enviado —/ }),
   ).toBeVisible();
 });
+
+test("dashboard email reuses a retained request, confirms real receipts and never changes RSVP", async ({
+  page,
+}) => {
+  const f = family("painel email");
+  action("GUEST_RSVP_SET", {
+    id: f.first.id,
+    status: "CONFIRMED",
+    expected_status: "PENDING",
+    expected_responded_at: null,
+  });
+  const prior = snapshot().rsvps.find(
+    (r: { guest_id: string }) => r.guest_id === f.first.id,
+  );
+  await backend(page);
+  const requests: { request_id: string; guest_id: string }[] = [];
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(
+    "http://127.0.0.1:54321/functions/v1/send-invitations",
+    async (route) => {
+      const body = route.request().postDataJSON();
+      requests.push(body);
+      if (requests.length === 1) {
+        await hold;
+        await route.fulfill({
+          status: 400,
+          json: { message: "controlled failure" },
+        });
+        return;
+      }
+      db.sql(
+        `insert into invitation_deliveries(event_id,invitation_id,guest_id,request_id,recipient_email,status,sent_at) values('${event}','${f.unit.id}','${f.first.id}','${body.request_id}','control@example.test','sent',now());`,
+      );
+      await route.fulfill({
+        json: {
+          pending: 0,
+          sent: 1,
+          skipped: 0,
+          failed: 0,
+          results: [{ status: "sent" }],
+        },
+      });
+    },
+  );
+  await login(page);
+  await page.getByRole("button", { name: /^Confirmados:/ }).click();
+  const dialog = page.locator("[data-admin-modal]"),
+    row = dialog.locator("[data-dashboard-guest]").filter({ hasText: f.name });
+  await expect(row.getByText("Não enviado", { exact: true })).toBeVisible();
+  const send = row.getByRole("button", {
+    name: `Enviar convite para ${f.name}`,
+    exact: true,
+  });
+  await send.evaluate((el: HTMLButtonElement) => {
+    el.click();
+    el.click();
+  });
+  await expect.poll(() => requests.length).toBe(1);
+  await expect(send).toBeDisabled();
+  release();
+  await expect(
+    row.getByText(/Não foi possível confirmar o envio/),
+  ).toBeVisible();
+  await expect(row.getByText("Não enviado", { exact: true })).toBeVisible();
+  await send.click();
+  await expect(row.getByText("Enviado", { exact: true })).toBeVisible();
+  expect(requests).toHaveLength(2);
+  expect(requests[0]!.guest_id).toBe(f.first.id);
+  expect(requests[1]!.request_id).toBe(requests[0]!.request_id);
+  expect(
+    snapshot().rsvps.find(
+      (r: { guest_id: string }) => r.guest_id === f.first.id,
+    ),
+  ).toEqual(prior);
+  expect(
+    snapshot().guests.find((g: { id: string }) => g.id === f.other.id)
+      .invitation_sent,
+  ).toBe(false);
+  await expect(dialog).toBeVisible();
+});

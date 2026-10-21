@@ -1,3 +1,7 @@
+import { Tag } from "../../components/adminUi";
+import { GuestInvitationActions } from "../guests/GuestInvitationActions";
+import type { useInvitationDelivery } from "../guests/useInvitationDelivery";
+import { useApp } from "../../lib/AppProvider";
 import { useEffect } from "react";
 import { Platform, Text, View } from "react-native";
 import { AdminModal } from "../../components/AdminModal";
@@ -10,11 +14,13 @@ import {
 
 export function DashboardDetailsModal({
   category,
+  delivery,
   details,
   onClose,
   returnFocus,
 }: {
   category: DashboardCategory;
+  delivery: ReturnType<typeof useInvitationDelivery>;
   details: ReturnType<typeof dashboardDetails>;
   onClose: () => void;
   returnFocus: HTMLElement | null;
@@ -36,6 +42,13 @@ export function DashboardDetailsModal({
       });
     };
   }, [returnFocus]);
+  const app = useApp();
+  if (app.data?.role !== "ADMIN") return null;
+  const isFinal =
+    category === "sent" || category === "bride" || category === "groom";
+  const overlap = isFinal
+    ? details.overlaps[category as "sent" | "bride" | "groom"]
+    : 0;
   const config = dashboardCategories[category],
     guests = details.lists[category];
   return (
@@ -46,18 +59,18 @@ export function DashboardDetailsModal({
       onClose={onClose}
       captureKeyboard
     >
-      {category === "sent" ? (
+      {isFinal ? (
         <Text style={styles.text}>
           Convite enviado e sem recusa de presença.
         </Text>
       ) : null}
-      {category === "sent" && details.doubleDeduction > 0 ? (
+      {isFinal && overlap > 0 ? (
         <Text accessibilityRole="alert" style={styles.text}>
-          Indicador: {details.counts.sent}. Registros nesta lista:{" "}
-          {guests.length}. {details.doubleDeduction} pessoa(s) estão
-          simultaneamente com convite não enviado e RSVP “Não irá”, sendo
-          descontadas duas vezes pela fórmula Na lista − Convites não enviados −
-          Não irão. A lista preserva todos os registros elegíveis.
+          Indicador: {details.counts[category]}. Registros nesta lista:{" "}
+          {guests.length}. {overlap} pessoa(s) estão simultaneamente com convite
+          não enviado e RSVP “Não irá”, sendo descontadas duas vezes pela
+          fórmula Na lista − Convites não enviados − Não irão. A lista preserva
+          todos os registros elegíveis.
         </Text>
       ) : null}
       {guests.length ? (
@@ -75,6 +88,11 @@ export function DashboardDetailsModal({
               {invitation && (invitation.kind || "FAMILY") === "FAMILY" ? (
                 <Text style={styles.text}>Família: {invitation.name}</Text>
               ) : null}
+              <View style={styles.row}>
+                {guest.group_label ? <Tag>{guest.group_label}</Tag> : null}
+                <Tag>{guest.invitation_sent ? "Enviado" : "Não enviado"}</Tag>
+                <GuestInvitationActions guest={guest} delivery={delivery} />
+              </View>
               <Text style={styles.text}>
                 Presença: {details.status.get(guest.id)}
               </Text>
