@@ -79,7 +79,10 @@ test("positive RSVP remains saved independently of calendar choices and returns 
   });
   await expect(agenda).toHaveCount(0);
   await card
-    .getByRole("radio", { name: "Já tô com a roupa de ir!!!", exact: true })
+    .getByRole("radio", {
+      name: "Sim, eu vou, já tô com a roupa de ir",
+      exact: true,
+    })
     .click();
   await card
     .getByRole("button", { name: "Pode reservar meu lugar! 🎉", exact: true })
@@ -134,8 +137,14 @@ test("positive RSVP remains saved independently of calendar choices and returns 
   await popup.close();
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
   for (const [label, submit] of [
-    ["Vou deixar meu lugar pra outro sortudo!", "Pode passar minha vez! 💔"],
-    ["Vou ver e te aviso...", "Deixa eu fazer um suspense... 🕓"],
+    [
+      "Não vou, irei deixar meu lugar para outro sortudo!",
+      "Pode passar minha vez! 💔",
+    ],
+    [
+      "Não sei ainda, vou ver e te aviso...",
+      "Deixa eu fazer um suspense... 🕓",
+    ],
   ]) {
     await card
       .getByRole("button", { name: "Editar minha confirmação", exact: true })

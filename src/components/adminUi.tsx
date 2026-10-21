@@ -91,7 +91,13 @@ export function Select({
   value,
   options,
   onChange,
+  compact = false,
+  disabled = false,
+  tone = "neutral",
 }: {
+  compact?: boolean;
+  disabled?: boolean;
+  tone?: FeedbackTone;
   label: string;
   value: string;
   options: { value: string; label: string }[];
@@ -100,12 +106,14 @@ export function Select({
   const [open, setOpen] = useState(false);
   if (Platform.OS === "web")
     return (
-      <View style={{ gap: 6 }}>
-        <Text style={styles.small}>{label}</Text>
+      <View style={{ gap: 6, maxWidth: "100%" }}>
+        {!compact && <Text style={styles.small}>{label}</Text>}
         {React.createElement(
           "select",
           {
             "aria-label": label,
+            title: compact ? "Alterar confirmação de presença" : undefined,
+            disabled,
             value,
             onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
               onChange(e.target.value),
@@ -117,7 +125,18 @@ export function Select({
               color: theme.colors.ink,
               background: theme.colors.card,
               fontSize: 16,
-              width: "100%",
+              width: compact ? "auto" : "100%",
+              maxWidth: "100%",
+              ...(compact
+                ? {
+                    padding: 8,
+                    borderRadius: 8,
+                    background: feedbackColors[tone].background,
+                    color: feedbackColors[tone].text,
+                    borderColor: feedbackColors[tone].border,
+                    cursor: disabled ? "wait" : "pointer",
+                  }
+                : {}),
             },
           },
           options.map((o) =>
@@ -137,6 +156,7 @@ export function Select({
         accessibilityLabel={label}
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(true)}
+        disabled={disabled}
         style={styles.nav}
       >
         <Text style={styles.small}>{label}</Text>

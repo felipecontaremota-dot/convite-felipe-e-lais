@@ -2,7 +2,7 @@ import type { Guest, Snapshot } from "../../types/domain";
 import { effectiveResponse } from "../rsvp/presenceContent";
 
 export type DashboardCategory =
-  "confirmed" | "declined" | "unanswered" | "deciding" | "unsent";
+  "confirmed" | "declined" | "unanswered" | "deciding" | "unsent" | "sent";
 export const dashboardCategories: Record<
   DashboardCategory,
   { label: string; title: string; empty: string }
@@ -27,6 +27,11 @@ export const dashboardCategories: Record<
     title: "Convidados que talvez irão",
     empty: "Nenhum convidado está indeciso no momento.",
   },
+  sent: {
+    label: "Convidados",
+    title: "Convidados com convite enviado",
+    empty: "Nenhum convite marcado como enviado.",
+  },
   unsent: {
     label: "Convites não enviados",
     title: "Convites não enviados",
@@ -40,6 +45,7 @@ export function dashboardDetails(snapshot: Snapshot | null | undefined) {
     unanswered: [],
     deciding: [],
     unsent: [],
+    sent: [],
   };
   const guests = snapshot?.guests ?? [];
   const records = new Map(snapshot?.rsvps.map((r) => [r.guest_id, r]));
@@ -65,9 +71,7 @@ export function dashboardDetails(snapshot: Snapshot | null | undefined) {
         deciding: "Talvez irá",
       }[category],
     );
-    const invitation = invitations.get(guest.invitation_id);
-    // sent_at is the existing delivery marker; a link, PIN or activation is not proof of sending.
-    if (invitation?.active && !invitation.sent_at) lists.unsent.push(guest);
+    lists[guest.invitation_sent ? "sent" : "unsent"].push(guest);
   }
   for (const list of Object.values(lists))
     list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));

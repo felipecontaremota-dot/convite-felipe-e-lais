@@ -43,6 +43,21 @@ function RsvpForm({
   const [status, setStatus] = useState<RSVP>(response.status),
     [dietary, setDietary] = useState(response.dietary),
     [note, setNote] = useState(response.note);
+  // Refresh pristine forms on a remote response, without erasing an active draft.
+  const responseKey = JSON.stringify([
+    response.status,
+    response.dietary,
+    response.note,
+    response.answered,
+  ]);
+  const [seenResponse, setSeenResponse] = useState(responseKey);
+  if (!editing && !saving && responseKey !== seenResponse) {
+    setSeenResponse(responseKey);
+    setStatus(response.status);
+    setDietary(response.dietary);
+    setNote(response.note);
+  }
+
   return (
     <Card>
       <Text style={styles.heading}>{guest.name}</Text>
@@ -80,7 +95,10 @@ function RsvpForm({
                 }}
                 disabled={blocked || saving}
                 aria-checked={status === option.value}
-                onPress={() => setStatus(option.value)}
+                onPress={() => {
+                  setEditing(true);
+                  setStatus(option.value);
+                }}
                 style={[
                   styles.nav,
                   { maxWidth: "100%", justifyContent: "center" },
@@ -91,9 +109,20 @@ function RsvpForm({
                   style={[
                     styles.text,
                     status === option.value && styles.selectedText,
+                    { fontWeight: "400" },
                   ]}
                 >
-                  {option.label}
+                  {option.before}
+                  <Text
+                    style={{
+                      color: option.color,
+                      fontWeight: "700",
+                      textDecorationLine: "underline",
+                    }}
+                  >
+                    {option.emphasis}
+                  </Text>
+                  {option.after}
                 </Text>
               </Pressable>
             ))}
@@ -102,13 +131,19 @@ function RsvpForm({
             label={`Restrição alimentar de ${guest.name}`}
             editable={!blocked && !saving}
             value={dietary}
-            onChangeText={setDietary}
+            onChangeText={(value) => {
+              setEditing(true);
+              setDietary(value);
+            }}
           />
           <Field
             label={`Observação de ${guest.name}`}
             editable={!blocked && !saving}
             value={note}
-            onChangeText={setNote}
+            onChangeText={(value) => {
+              setEditing(true);
+              setNote(value);
+            }}
             multiline
           />
           <Button

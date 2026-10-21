@@ -605,7 +605,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const result = demoRole
         ? await demo.demoAdmin(action, payload)
         : await api.adminAction(action, payload);
-      await query.refetch();
+      await query.refetch({
+        throwOnError:
+          action === "GUEST_RSVP_SET" || action === "GUEST_INVITATION_SENT_SET",
+      });
       return result;
     },
     ticket,

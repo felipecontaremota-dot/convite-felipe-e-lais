@@ -1,9 +1,37 @@
 import type { OfflineMutation, RsvpRecord, RSVP } from "../../types/domain";
 
-export const presenceChoices: { value: RSVP; label: string }[] = [
-  { value: "CONFIRMED", label: "Já tô com a roupa de ir!!!" },
-  { value: "DECLINED", label: "Vou deixar meu lugar pra outro sortudo!" },
-  { value: "PENDING", label: "Vou ver e te aviso..." },
+export const presenceChoices: {
+  value: RSVP;
+  label: string;
+  before: string;
+  emphasis: string;
+  after: string;
+  color: string;
+}[] = [
+  {
+    value: "CONFIRMED",
+    label: "Sim, eu vou, já tô com a roupa de ir",
+    before: "Sim, ",
+    emphasis: "eu vou",
+    after: ", já tô com a roupa de ir",
+    color: "#03ab00",
+  },
+  {
+    value: "DECLINED",
+    label: "Não vou, irei deixar meu lugar para outro sortudo!",
+    before: "",
+    emphasis: "Não vou",
+    after: ", irei deixar meu lugar para outro sortudo!",
+    color: "#ff0022",
+  },
+  {
+    value: "PENDING",
+    label: "Não sei ainda, vou ver e te aviso...",
+    before: "",
+    emphasis: "Não sei ainda",
+    after: ", vou ver e te aviso...",
+    color: "#ffb700",
+  },
 ];
 export const confirmationLabels: Record<RSVP, string> = {
   CONFIRMED: "Pode reservar meu lugar! 🎉",

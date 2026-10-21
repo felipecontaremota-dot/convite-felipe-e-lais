@@ -6,6 +6,7 @@ function fixture() {
     guests: ["a", "b", "c", "d", "e"].map((id, i) => ({
       id,
       name: id,
+      invitation_sent: i >= 2,
       invitation_id: i < 2 ? "f" : "i",
     })),
     invitations: [
@@ -42,17 +43,23 @@ describe("dashboard guest details", () => {
         lists.unanswered.length,
     ).toBe(5);
   });
-  it("uses actual unit sent_at, not the existence of credentials or activation; members are counted individually", () => {
+  it("partitions individual sending independently of unit receipts, credentials and activation", () => {
     const s = fixture();
     expect(dashboardDetails(s).lists.unsent.map((g) => g.id)).toEqual([
       "a",
       "b",
     ]);
     s.invitations[0]!.sent_at = "2026-01-01";
-    expect(dashboardDetails(s).lists.unsent).toEqual([]);
-    s.invitations[0]!.sent_at = null;
     s.invitations[0]!.active = false;
-    expect(dashboardDetails(s).lists.unsent).toEqual([]);
+    expect(dashboardDetails(s).lists.unsent.map((g) => g.id)).toEqual([
+      "a",
+      "b",
+    ]);
+    s.guests[0]!.invitation_sent = true;
+    const { lists } = dashboardDetails(s);
+    expect(lists.unsent.map((g) => g.id)).toEqual(["b"]);
+    expect(lists.sent).toHaveLength(4);
+    expect(lists.sent.length + lists.unsent.length).toBe(s.guests.length);
   });
   it("reflects responses, edits, additions and removals without mutating the snapshot", () => {
     const s = fixture();

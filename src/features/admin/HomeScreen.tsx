@@ -14,6 +14,7 @@ export function AdminHome() {
   const [selected, setSelected] = useState<DashboardCategory | null>(null);
   const [trigger, setTrigger] = useState<HTMLElement | null>(null);
   const categories: Record<string, DashboardCategory> = {
+    Convidados: "sent",
     Confirmados: "confirmed",
     "Não irão": "declined",
     Pendentes: "unanswered",
@@ -21,12 +22,13 @@ export function AdminHome() {
     "Convites não enviados": "unsent",
   };
   const navigate: Record<string, () => void> = {
-    Convidados: () => router.push("/convidados"),
+    "Na lista": () => router.push("/convidados"),
     Famílias: () => router.push("/familias"),
     "Mensagens não lidas": () => router.push("/gestao-mensagens"),
   };
   const counts: [string, number | undefined][] = [
-    ["Convidados", s?.guests.length],
+    ["Na lista", s?.guests.length],
+    ["Convidados", details.lists.sent.length],
     ["Confirmados", details.lists.confirmed.length],
     ["Não irão", details.lists.declined.length],
     ["Pendentes", details.lists.unanswered.length],

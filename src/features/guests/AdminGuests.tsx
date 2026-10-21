@@ -1,7 +1,8 @@
 import { PromotionControl } from "../weddingParty/PromotionControl";
+import { adminRsvpOptions, adminRsvpStatus } from "./adminGuestStatus";
 import { GuestExportButton } from "./GuestExportButton";
 import { ActionFeedbackButton } from "../../components/ActionFeedbackButton";
-import { rsvpTone } from "../../theme/feedback";
+import { GuestRsvpControl, GuestSendingControl } from "./GuestAdminControls";
 import { invitationActionOutcome } from "./invitationActionOutcome";
 import { AppError } from "../../lib/errors";
 import { theme } from "../../theme/tokens";
@@ -47,7 +48,6 @@ import {
 } from "../invitations/AccessControls";
 import {
   GROUPS,
-  RSVP_LABELS,
   brazilPhone,
   expectedGuests,
   formatPhone,
@@ -364,6 +364,9 @@ export function GuestsScreen() {
           { value: "CONFIRMED", label: "Confirmados" },
           { value: "DECLINED", label: "Não irão" },
           { value: "PENDING", label: "Pendentes" },
+          { value: "MAYBE", label: "Talvez" },
+          { value: "SENT", label: "Convites enviados" },
+          { value: "UNSENT", label: "Convites não enviados" },
         ]}
       />
       <Button
@@ -578,10 +581,13 @@ export function GuestsScreen() {
               : `Acesso compartilhado pela família ${invitation.name}`}{" "}
             ·{" "}
             {
-              RSVP_LABELS[
-                data?.rsvps.find((r) => r.guest_id === current.id)?.status ||
-                  "PENDING"
-              ]
+              adminRsvpOptions.find(
+                (option) =>
+                  option.value ===
+                  adminRsvpStatus(
+                    data?.rsvps.find((r) => r.guest_id === current.id),
+                  ),
+              )?.label
             }
           </Text>
           <AccessControls
@@ -624,9 +630,7 @@ export function GuestsScreen() {
         </AdminModal>
       ) : null}
       {guests.map((g) => {
-        const unit = data?.invitations.find((i) => i.id === g.invitation_id),
-          status =
-            data?.rsvps.find((r) => r.guest_id === g.id)?.status || "PENDING";
+        const unit = data?.invitations.find((i) => i.id === g.invitation_id);
         return (
           <View
             key={g.id}
@@ -676,7 +680,7 @@ export function GuestsScreen() {
               {unit && (unit.kind || "FAMILY") === "FAMILY" ? (
                 <Tag>{unit.name}</Tag>
               ) : null}
-              <Tag tone={rsvpTone(status)}>{RSVP_LABELS[status]}</Tag>
+              <GuestRsvpControl guest={g} />
               {g.is_child ? <Tag tone="child">Criança</Tag> : null}
               {g.admin_notes?.trim() ? (
                 <Text
@@ -698,6 +702,7 @@ export function GuestsScreen() {
                   !
                 </Text>
               ) : null}
+              <GuestSendingControl guest={g} />
               <ActionFeedbackButton
                 onStart={feedback.clear}
                 icon="copy"

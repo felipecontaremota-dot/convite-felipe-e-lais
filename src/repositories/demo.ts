@@ -1,3 +1,4 @@
+import { adminRsvpStatus } from "../features/guests/adminGuestStatus";
 import { ACCESS_ACTIONS, demoAccess } from "./demoAccess";
 import { generatePin } from "../utils/password";
 import type { Snapshot, Role, OfflineMutation, Ticket } from "../types/domain";
@@ -228,6 +229,12 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.rules = [];
       s.rsvps = s.rsvps.map((r) => ({ ...r, dietary: "", note: "" }));
     }
+    if (role === "ADMIN") {
+      s.capabilities = { ...s.capabilities, admin_guest_controls: true };
+      s.guests.forEach((g) => {
+        g.invitation_sent = !!g.invitation_sent;
+      });
+    }
     if (role !== "ADMIN") {
       s.invitations.forEach((i) => {
         delete i.pin;
@@ -235,6 +242,7 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       });
       s.guests.forEach((g) => {
         delete g.admin_notes;
+        delete g.invitation_sent;
       });
     }
     return s;
@@ -548,6 +556,52 @@ export async function demoAdmin(
     if (["FAMILY_MERGE", "FAMILY_SPLIT"].includes(action))
       throw Error("retired admin action");
     switch (action) {
+      case "GUEST_INVITATION_SENT_SET": {
+        const guest = s.guests.find((g) => g.id === entity);
+        if (
+          !guest ||
+          typeof p.sent !== "boolean" ||
+          typeof p.expected_sent !== "boolean"
+        )
+          throw Error("Dados inválidos.");
+        if (
+          !!guest.invitation_sent !== p.sent &&
+          !!guest.invitation_sent !== p.expected_sent
+        )
+          throw Error("Dados alterados. Atualize a tela.");
+        guest.invitation_sent = p.sent;
+        return { ok: true, sent: p.sent };
+      }
+      case "GUEST_RSVP_SET": {
+        const guest = s.guests.find((g) => g.id === entity),
+          row = s.rsvps.find((r) => r.guest_id === entity);
+        if (
+          !guest ||
+          !row ||
+          !["PENDING", "CONFIRMED", "DECLINED", "MAYBE"].includes(
+            String(p.status),
+          )
+        )
+          throw Error("Dados inválidos.");
+        if (adminRsvpStatus(row) === p.status)
+          return { ok: true, unchanged: true };
+        if (
+          row.status !== p.expected_status ||
+          row.responded_at !== p.expected_responded_at
+        )
+          throw Error("Dados alterados. Atualize a tela.");
+        row.status =
+          p.status === "MAYBE" ? "PENDING" : (p.status as typeof row.status);
+        row.responded_at = p.status === "PENDING" ? null : stamp();
+        row.source = "ADMIN";
+        if (p.status !== "CONFIRMED") {
+          s.credentials.forEach((c) => {
+            if (c.guest_id === entity && !c.revoked_at) c.revoked_at = stamp();
+          });
+          db.tickets = db.tickets.filter((t) => t.guest_id !== entity);
+        }
+        return { ok: true };
+      }
       case "INVITATION_SAVE":
         if (inv) {
           Object.assign(inv, {

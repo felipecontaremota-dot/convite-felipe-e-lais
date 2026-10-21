@@ -216,9 +216,16 @@ test("canonical RSVP and child tags render their semantic colors", async ({
     ["Pendente", "rgb(234, 242, 250)"],
     ["Criança", "rgb(255, 242, 229)"],
   ]) {
-    const tag = page
-      .locator("[data-guest-row]")
-      .getByText(label, { exact: true });
+    const value = {
+      Confirmado: "CONFIRMED",
+      "Não irá": "DECLINED",
+      Pendente: "PENDING",
+    }[label];
+    const tag = value
+      ? page.locator(
+          `[data-guest-row] select:has(option[value="${value}"]:checked)`,
+        )
+      : page.locator("[data-guest-row]").getByText(label, { exact: true });
     await expect(tag).toBeVisible();
     expect(
       await tag.evaluate((el) => getComputedStyle(el).backgroundColor),

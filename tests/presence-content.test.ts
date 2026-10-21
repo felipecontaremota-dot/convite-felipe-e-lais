@@ -69,9 +69,9 @@ it("preserves the exact approved copy and the four o'clock emoji", async () => {
   const { presenceChoices, confirmationLabels, responseMessages } =
     await import("../src/features/rsvp/presenceContent");
   expect(presenceChoices.map((o) => o.label)).toEqual([
-    "Já tô com a roupa de ir!!!",
-    "Vou deixar meu lugar pra outro sortudo!",
-    "Vou ver e te aviso...",
+    "Sim, eu vou, já tô com a roupa de ir",
+    "Não vou, irei deixar meu lugar para outro sortudo!",
+    "Não sei ainda, vou ver e te aviso...",
   ]);
   expect(confirmationLabels).toEqual({
     CONFIRMED: "Pode reservar meu lugar! 🎉",

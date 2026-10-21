@@ -40,6 +40,7 @@ async function setup(page: Page, width: number) {
       id: `person-${i}`,
       invitation_id: i < 2 ? "family-a" : "family-b",
       name,
+      invitation_sent: i >= 2,
     }));
     s.rsvps = ["CONFIRMED", "DECLINED", "PENDING", "PENDING"].map(
       (status, i) => ({
@@ -58,6 +59,11 @@ async function setup(page: Page, width: number) {
   await page.reload();
 }
 const categories = [
+  [
+    "Convidados",
+    "Convidados com convite enviado",
+    ["Carla Indecisa", "Davi Pendente"],
+  ],
   ["Confirmados", "Convidados confirmados", ["Ana Confirmada"]],
   ["Não irão", "Convidados que não irão", ["Bruno Ausente"]],
   ["Pendentes", "Convidados pendentes", ["Davi Pendente"]],
@@ -141,7 +147,7 @@ for (const width of [320, 1280]) {
       animations: "disabled",
     });
     for (const [label, count, path] of [
-      ["Convidados", 4, "/convidados"],
+      ["Na lista", 4, "/convidados"],
       ["Famílias", 2, "/familias"],
       ["Mensagens não lidas", 0, "/gestao-mensagens"],
     ] as const) {
@@ -161,7 +167,9 @@ test("Dashboard updates after refresh and shows every empty category", async ({
   await page.evaluate(() => {
     const db = JSON.parse(localStorage.getItem("demo-db")!);
     db.snapshot.rsvps[2].status = "CONFIRMED";
-    db.snapshot.invitations[0].sent_at = "2026-01-02";
+    db.snapshot.guests.forEach((g: { invitation_sent: boolean }) => {
+      g.invitation_sent = true;
+    });
     localStorage.setItem("demo-db", JSON.stringify(db));
   });
   await page.reload();
@@ -281,7 +289,7 @@ test("An open dashboard list follows the existing snapshot refresh and scrolls i
   });
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "Convidados: 120", exact: true }),
+    page.getByRole("button", { name: "Na lista: 120", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Confirmados: 120", exact: true }),

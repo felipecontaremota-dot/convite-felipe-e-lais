@@ -63,7 +63,10 @@ test("link exclusivo, RSVP individual, ingressos, presentes, mensagem e localiza
     .getByRole("button", { name: "Editar minha confirmação", exact: true })
     .click();
   await second
-    .getByRole("radio", { name: "Já tô com a roupa de ir!!!", exact: true })
+    .getByRole("radio", {
+      name: "Sim, eu vou, já tô com a roupa de ir",
+      exact: true,
+    })
     .click();
   await second
     .getByRole("button", { name: "Pode reservar meu lugar! 🎉", exact: true })

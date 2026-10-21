@@ -175,7 +175,10 @@ test("Home recognizes an explicit deciding response saved offline without changi
     exact: true,
   });
   await card
-    .getByRole("radio", { name: "Vou ver e te aviso...", exact: true })
+    .getByRole("radio", {
+      name: "Não sei ainda, vou ver e te aviso...",
+      exact: true,
+    })
     .click();
   await context.setOffline(true);
   await save.click();

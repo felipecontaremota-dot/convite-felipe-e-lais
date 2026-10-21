@@ -1,3 +1,4 @@
+import { adminRsvpStatus } from "./adminGuestStatus";
 import { z } from "zod";
 import type { Snapshot, Guest } from "../../types/domain";
 import { normalizePhone } from "../../utils/security";
@@ -52,7 +53,13 @@ export function listGuests(
           .includes(query) &&
         (filter === "ALL" ||
           g.group_label === filter ||
-          data?.rsvps.some((r) => r.guest_id === g.id && r.status === filter)),
+          (filter === "SENT"
+            ? !!g.invitation_sent
+            : filter === "UNSENT"
+              ? !g.invitation_sent
+              : adminRsvpStatus(
+                  data?.rsvps.find((r) => r.guest_id === g.id),
+                ) === filter)),
     )
     .sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),

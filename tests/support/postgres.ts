@@ -47,7 +47,10 @@ export class TestPostgres {
           source,
         );
   }
-  async start(baseline: "main" | "prod-profile" | "pre-confirmation" = "main") {
+  async start(
+    baseline:
+      "main" | "prod-profile" | "pre-confirmation" | "pre-admin-guest" = "main",
+  ) {
     if (this.ci) {
       this.run("sudo", ["systemctl", "start", "postgresql.service"]);
       this.run("sudo", ["-u", "postgres", "createdb", this.name]);
@@ -82,14 +85,22 @@ export class TestPostgres {
           `DO $$BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} ${attributes}; END IF; END$$;`,
       );
       this.sql(bootstrap);
-      for (const file of readdirSync("supabase/migrations")
+      const migrations = readdirSync("supabase/migrations");
+      const adminGuestCutoff = migrations.find((f) =>
+        f.endsWith("_admin_guest_rsvp_sending.sql"),
+      );
+      if (baseline === "pre-admin-guest" && !adminGuestCutoff)
+        throw Error("Missing admin guest migration");
+      for (const file of migrations
         .filter(
           (f) =>
             f.endsWith(".sql") &&
             (baseline === "main" ||
-              (baseline === "prod-profile"
-                ? f < "20261013204105"
-                : f < "20261015033043")),
+              (baseline === "pre-admin-guest"
+                ? f < adminGuestCutoff!
+                : baseline === "prod-profile"
+                  ? f < "20261013204105"
+                  : f < "20261015033043")),
         )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));

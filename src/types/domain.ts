@@ -33,6 +33,7 @@ export interface Invitation {
   version: number;
 }
 export interface Guest {
+  invitation_sent?: boolean;
   profile_confirmed_at?: string | null;
   greeting_form?: "MASCULINE" | "FEMININE" | null;
   is_child?: boolean;
@@ -179,7 +180,11 @@ export interface Snapshot {
     guest_id?: string | null;
     confirmed_at?: string | null;
   };
-  capabilities?: { messaging_v2?: boolean; notification_schedules?: boolean };
+  capabilities?: {
+    messaging_v2?: boolean;
+    notification_schedules?: boolean;
+    admin_guest_controls?: boolean;
+  };
   notification_schedules?: NotificationSchedule[];
   current_invitation_id?: string | null;
   role: Role | null;
