@@ -27,12 +27,12 @@ export function AdminHome() {
     "Mensagens não lidas": () => router.push("/gestao-mensagens"),
   };
   const counts: [string, number | undefined][] = [
-    ["Na lista", s?.guests.length],
-    ["Convidados", details.lists.sent.length],
-    ["Confirmados", details.lists.confirmed.length],
-    ["Não irão", details.lists.declined.length],
-    ["Pendentes", details.lists.unanswered.length],
-    ["Talvez irão", details.lists.deciding.length],
+    ["Na lista", details.counts.total],
+    ["Convidados", details.counts.sent],
+    ["Confirmados", details.counts.confirmed],
+    ["Não irão", details.counts.declined],
+    ["Pendentes", details.counts.unanswered],
+    ["Talvez irão", details.counts.deciding],
     [
       "Famílias",
       s?.invitations.filter(
@@ -45,7 +45,7 @@ export function AdminHome() {
       s?.messages.filter((m) => !m.from_admin && !m.read_at).length,
     ],
     ["Check-ins", s?.checkins.length],
-    ["Convites não enviados", details.lists.unsent.length],
+    ["Convites não enviados", details.counts.unsent],
     [
       "Famílias já ativadas",
       s?.invitations.filter(

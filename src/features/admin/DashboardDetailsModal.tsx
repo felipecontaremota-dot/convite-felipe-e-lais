@@ -46,6 +46,20 @@ export function DashboardDetailsModal({
       onClose={onClose}
       captureKeyboard
     >
+      {category === "sent" ? (
+        <Text style={styles.text}>
+          Convite enviado e sem recusa de presença.
+        </Text>
+      ) : null}
+      {category === "sent" && details.doubleDeduction > 0 ? (
+        <Text accessibilityRole="alert" style={styles.text}>
+          Indicador: {details.counts.sent}. Registros nesta lista:{" "}
+          {guests.length}. {details.doubleDeduction} pessoa(s) estão
+          simultaneamente com convite não enviado e RSVP “Não irá”, sendo
+          descontadas duas vezes pela fórmula Na lista − Convites não enviados −
+          Não irão. A lista preserva todos os registros elegíveis.
+        </Text>
+      ) : null}
       {guests.length ? (
         guests.map((guest) => {
           const invitation = details.invitations.get(guest.invitation_id);

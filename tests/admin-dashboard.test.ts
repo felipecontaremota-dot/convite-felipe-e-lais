@@ -82,3 +82,66 @@ describe("dashboard guest details", () => {
     ).toBe(true);
   });
 });
+
+describe("requested invited formula", () => {
+  it("computes 100 minus 50 unsent minus 5 declined as 45, from the shared snapshot", () => {
+    const s = fixture();
+    s.guests = Array.from({ length: 100 }, (_, i) => ({
+      ...s.guests[0]!,
+      id: `guest-${i}`,
+      invitation_sent: i >= 50,
+    }));
+    s.rsvps = s.guests.slice(50, 55).map((g) => ({
+      guest_id: g.id,
+      status: "DECLINED",
+      responded_at: "2026-01-01",
+    })) as Snapshot["rsvps"];
+    const d = dashboardDetails(s);
+    expect(d.counts).toMatchObject({
+      total: 100,
+      unsent: 50,
+      declined: 5,
+      sent: 45,
+    });
+    expect(d.lists.sent).toHaveLength(45);
+    expect(d.doubleDeduction).toBe(0);
+  });
+  it("updates sending, decline and returning to Pending without changing other records", () => {
+    const s = fixture();
+    s.guests.forEach((g) => {
+      g.invitation_sent = true;
+    });
+    expect(dashboardDetails(s).counts.sent).toBe(4);
+    s.guests[2]!.invitation_sent = false;
+    expect(dashboardDetails(s).counts.sent).toBe(3);
+    s.guests[2]!.invitation_sent = true;
+    expect(dashboardDetails(s).counts.sent).toBe(4);
+    s.rsvps[2]!.status = "DECLINED";
+    expect(dashboardDetails(s).counts.sent).toBe(3);
+    s.rsvps[2]!.status = "PENDING";
+    s.rsvps[2]!.responded_at = undefined;
+    const d = dashboardDetails(s);
+    expect(d.counts.sent).toBe(4);
+    expect(d.lists.sent).toHaveLength(4);
+  });
+  it("identifies double deduction without hiding people or silently substituting set subtraction", () => {
+    const d = dashboardDetails(fixture());
+    expect(d.counts).toMatchObject({
+      total: 5,
+      unsent: 2,
+      declined: 1,
+      sent: 2,
+    });
+    expect(d.doubleDeduction).toBe(1);
+    expect(d.lists.sent.map((g) => g.id)).toEqual(["c", "d", "e"]);
+    expect(d.lists.sent.length - d.counts.sent).toBe(d.doubleDeduction);
+  });
+  it("preserves the exact arithmetic even when overlap yields a negative value", () => {
+    const s = fixture();
+    s.guests = [s.guests[1]!]; // declined, not sent
+    const d = dashboardDetails(s);
+    expect(d.counts.sent).toBe(-1);
+    expect(d.lists.sent).toHaveLength(0);
+    expect(d.doubleDeduction).toBe(1);
+  });
+});

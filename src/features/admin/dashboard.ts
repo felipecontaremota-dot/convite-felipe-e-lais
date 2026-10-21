@@ -30,7 +30,7 @@ export const dashboardCategories: Record<
   sent: {
     label: "Convidados",
     title: "Convidados com convite enviado",
-    empty: "Nenhum convite marcado como enviado.",
+    empty: "Nenhum convidado com convite enviado e sem recusa de presença.",
   },
   unsent: {
     label: "Convites não enviados",
@@ -71,9 +71,24 @@ export function dashboardDetails(snapshot: Snapshot | null | undefined) {
         deciding: "Talvez irá",
       }[category],
     );
-    lists[guest.invitation_sent ? "sent" : "unsent"].push(guest);
+    if (!guest.invitation_sent) lists.unsent.push(guest);
+    else if (category !== "declined") lists.sent.push(guest);
   }
   for (const list of Object.values(lists))
     list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  return { lists, invitations, status };
+  // Keep the requested arithmetic, including double deductions. Never truncate
+  // the eligible list or clamp the indicator to conceal an overlap.
+  const counts = {
+    confirmed: lists.confirmed.length,
+    declined: lists.declined.length,
+    unanswered: lists.unanswered.length,
+    deciding: lists.deciding.length,
+    unsent: lists.unsent.length,
+    total: guests.length,
+    sent: guests.length - lists.unsent.length - lists.declined.length,
+  } satisfies Record<DashboardCategory | "total", number>;
+  const doubleDeduction = lists.unsent.filter(
+    (guest) => records.get(guest.id)?.status === "DECLINED",
+  ).length;
+  return { lists, counts, doubleDeduction, invitations, status };
 }

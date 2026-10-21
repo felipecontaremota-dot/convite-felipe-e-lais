@@ -40,7 +40,7 @@ async function setup(page: Page, width: number) {
       id: `person-${i}`,
       invitation_id: i < 2 ? "family-a" : "family-b",
       name,
-      invitation_sent: i >= 2,
+      invitation_sent: i >= 1,
     }));
     s.rsvps = ["CONFIRMED", "DECLINED", "PENDING", "PENDING"].map(
       (status, i) => ({
@@ -68,11 +68,7 @@ const categories = [
   ["Não irão", "Convidados que não irão", ["Bruno Ausente"]],
   ["Pendentes", "Convidados pendentes", ["Davi Pendente"]],
   ["Talvez irão", "Convidados que talvez irão", ["Carla Indecisa"]],
-  [
-    "Convites não enviados",
-    "Convites não enviados",
-    ["Ana Confirmada", "Bruno Ausente"],
-  ],
+  ["Convites não enviados", "Convites não enviados", ["Ana Confirmada"]],
 ] as const;
 for (const width of [320, 1280]) {
   test(`Dashboard drilldowns match counts, preserve data and are accessible at ${width}px`, async ({
@@ -295,3 +291,138 @@ test("An open dashboard list follows the existing snapshot refresh and scrolls i
     page.getByRole("button", { name: "Confirmados: 120", exact: true }),
   ).toBeVisible();
 });
+
+for (const width of [320, 1280])
+  test(`Dashboard reports double deduction without truncating its list at ${width}px`, async ({
+    page,
+  }) => {
+    await setup(page, width);
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      db.snapshot.guests[1].invitation_sent = false;
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    });
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Convidados: 1", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Convidados com convite enviado — 2",
+      exact: true,
+    });
+    await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(2);
+    await expect(dialog.getByRole("alert")).toContainText(
+      "Indicador: 1. Registros nesta lista: 2.",
+    );
+    await expect(dialog.getByRole("alert")).toContainText("1 pessoa(s)");
+    await expect(
+      dialog.getByText("Carla Indecisa", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText("Davi Pendente", { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `/tmp/dashboard-overlap-${width}.png`,
+      animations: "disabled",
+    });
+  });
+
+test("Dashboard arithmetic follows sending and RSVP edits, including a temporary overlap", async ({
+  page,
+}) => {
+  await setup(page, 390);
+  const edit = async (
+    sent: boolean,
+    status: string,
+    expected: number,
+    listed: number,
+  ) => {
+    await page.getByRole("link", { name: "Convidados", exact: true }).click();
+    const row = page.locator('[data-guest-row="person-2"]');
+    const toggle = row.getByRole("button", {
+      name: /Convite (não enviado|enviado) —/,
+    });
+    if ((await toggle.getAttribute("aria-pressed")) !== String(sent))
+      await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", String(sent));
+    await row.getByRole("combobox").selectOption(status);
+    await expect(row.getByRole("combobox")).not.toBeDisabled();
+    await page.getByRole("link", { name: "Painel", exact: true }).click();
+    await page
+      .getByRole("button", { name: `Convidados: ${expected}`, exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(listed);
+    await expect(dialog.getByRole("alert")).toHaveCount(
+      expected === listed ? 0 : 1,
+    );
+    await page.keyboard.press("Escape");
+  };
+  await edit(false, "PENDING", 1, 1);
+  await edit(true, "DECLINED", 1, 1);
+  await edit(false, "DECLINED", 0, 1);
+  await edit(true, "PENDING", 2, 2);
+});
+
+for (const width of [320, 1280])
+  test(`RSVP stays the last tag after classification, family, child and note at ${width}px`, async ({
+    page,
+  }) => {
+    await setup(page, width);
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      Object.assign(db.snapshot.guests[2], {
+        is_child: true,
+        group_label: "Convidado(a) do noivo",
+        admin_notes: "Nota de teste",
+      });
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    });
+    await page.reload();
+    await page.getByRole("link", { name: "Convidados", exact: true }).click();
+    const row = page.locator('[data-guest-row="person-2"]'),
+      select = row.getByRole("combobox");
+    await expect(row.getByText("Criança", { exact: true })).toBeVisible();
+    const order = await select.evaluate((el) => {
+      const row = el.closest("[data-guest-row]")!,
+        tags = [...row.querySelectorAll("div")].filter((node) =>
+          ["Criança", "Família Beta", "Convidado(a) do noivo"].includes(
+            node.textContent || "",
+          ),
+        );
+      return (
+        tags.length >= 3 &&
+        tags.every(
+          (node) =>
+            !!(
+              node.compareDocumentPosition(el) &
+              Node.DOCUMENT_POSITION_FOLLOWING
+            ),
+        )
+      );
+    });
+    expect(order).toBe(true);
+    await select.focus();
+    await page.keyboard.press("Home");
+    await expect(select).toHaveValue("PENDING");
+    await expect(select).not.toBeDisabled();
+    await select.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(select).toHaveValue("CONFIRMED");
+    await expect(select).not.toBeDisabled();
+    await select.focus();
+    await expect(select).toHaveCSS("outline-width", "3px");
+    await expect(select).toHaveCSS("appearance", "none");
+    await expect(
+      row.getByRole("button", { name: /Copiar link/ }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `/tmp/rsvp-tag-order-${width}.png`,
+      animations: "disabled",
+    });
+  });

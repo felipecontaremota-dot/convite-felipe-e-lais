@@ -196,6 +196,15 @@ for (const width of [320, 1280])
         })
         .toBe(value);
       await expect(select).not.toBeDisabled();
+      await expect(select).toHaveCSS(
+        "background-color",
+        {
+          CONFIRMED: "rgb(232, 245, 237)",
+          DECLINED: "rgb(252, 237, 238)",
+          MAYBE: "rgb(255, 248, 223)",
+          PENDING: "rgb(234, 242, 250)",
+        }[value]!,
+      );
       expect(
         snapshot().rsvps.find(
           (r: { guest_id: string }) => r.guest_id === f.first.id,
@@ -212,6 +221,45 @@ for (const width of [320, 1280])
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(page.locator("[data-rsvp-fx]")).toHaveCount(0);
     }
+    await select.focus();
+    await expect(select).toBeFocused();
+    await expect(select).toHaveCSS("outline-style", "solid");
+    const proportions = await select.evaluate((el) => {
+      const css = getComputedStyle(el),
+        row = el.closest("[data-guest-row]")!,
+        action = row.querySelector('[aria-label^="Convite enviado —"]')!,
+        sizing = el.previousElementSibling!.firstElementChild!;
+      return {
+        height: el.getBoundingClientRect().height,
+        tagHeight: sizing.getBoundingClientRect().height,
+        width: el.getBoundingClientRect().width,
+        appearance: css.appearance,
+        backgroundImage: css.backgroundImage,
+        paddingLeft: css.paddingLeft,
+        paddingRight: css.paddingRight,
+        fontSize: css.fontSize,
+        sameFontAsTag: css.fontFamily === getComputedStyle(sizing).fontFamily,
+        radius: css.borderRadius,
+        immediatelyBeforeActions: el
+          .closest("select")!
+          .parentElement!.parentElement!.parentElement!.nextElementSibling?.contains(
+            action,
+          ),
+      };
+    });
+    expect(proportions).toMatchObject({
+      sameFontAsTag: true,
+      appearance: "none",
+      backgroundImage: "none",
+      paddingLeft: "8px",
+      paddingRight: "8px",
+      fontSize: "13px",
+      radius: "6px",
+      immediatelyBeforeActions: true,
+    });
+    expect(proportions.height).toBe(proportions.tagHeight);
+    expect(proportions.height).toBeLessThanOrEqual(30);
+    expect(proportions.width).toBeLessThan(115);
     const beforeSame = calls.length;
     await select.selectOption("CONFIRMED");
     expect(calls).toHaveLength(beforeSame);

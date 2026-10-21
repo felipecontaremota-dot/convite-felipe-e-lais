@@ -680,7 +680,6 @@ export function GuestsScreen() {
               {unit && (unit.kind || "FAMILY") === "FAMILY" ? (
                 <Tag>{unit.name}</Tag>
               ) : null}
-              <GuestRsvpControl guest={g} />
               {g.is_child ? <Tag tone="child">Criança</Tag> : null}
               {g.admin_notes?.trim() ? (
                 <Text
@@ -702,6 +701,7 @@ export function GuestsScreen() {
                   !
                 </Text>
               ) : null}
+              <GuestRsvpControl guest={g} />
               <GuestSendingControl guest={g} />
               <ActionFeedbackButton
                 onStart={feedback.clear}

@@ -104,51 +104,90 @@ export function Select({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  if (Platform.OS === "web")
+  if (Platform.OS === "web") {
+    const select = React.createElement(
+      "select",
+      {
+        "aria-label": label,
+        title: compact ? "Alterar confirmação de presença" : undefined,
+        disabled,
+        value,
+        onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
+          onChange(e.target.value),
+        style: {
+          minHeight: 48,
+          border: `1px solid ${theme.colors.inputBorder}`,
+          borderRadius: 10,
+          padding: 12,
+          color: theme.colors.ink,
+          backgroundColor: theme.colors.card,
+          fontSize: 16,
+          width: "100%",
+          maxWidth: "100%",
+          ...(compact
+            ? {
+                position: "absolute" as const,
+                inset: 0,
+                height: "100%",
+                minHeight: 0,
+                minWidth: 0,
+                boxSizing: "border-box" as const,
+                appearance: "none" as const,
+                WebkitAppearance: "none" as const,
+                MozAppearance: "none" as const,
+                backgroundImage: "none",
+                borderRadius: 6,
+                padding: "3px 8px",
+                fontFamily:
+                  '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
+                fontSize: 13,
+                lineHeight: "20px",
+                fontWeight: 400,
+                backgroundColor: feedbackColors[tone].background,
+                color: feedbackColors[tone].text,
+                borderColor: feedbackColors[tone].border,
+                cursor: disabled ? "wait" : "pointer",
+              }
+            : {}),
+        },
+      },
+      options.map((o) =>
+        React.createElement(
+          "option",
+          { key: o.value, value: o.value },
+          o.label,
+        ),
+      ),
+    );
     return (
       <View style={{ gap: 6, maxWidth: "100%" }}>
         {!compact && <Text style={styles.small}>{label}</Text>}
-        {React.createElement(
-          "select",
-          {
-            "aria-label": label,
-            title: compact ? "Alterar confirmação de presença" : undefined,
-            disabled,
-            value,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
-              onChange(e.target.value),
-            style: {
-              minHeight: 48,
-              border: `1px solid ${theme.colors.inputBorder}`,
-              borderRadius: 10,
-              padding: 12,
-              color: theme.colors.ink,
-              background: theme.colors.card,
-              fontSize: 16,
-              width: compact ? "auto" : "100%",
+        {compact ? (
+          <View
+            style={{
+              position: "relative",
+              alignSelf: "flex-start",
               maxWidth: "100%",
-              ...(compact
-                ? {
-                    padding: 8,
-                    borderRadius: 8,
-                    background: feedbackColors[tone].background,
-                    color: feedbackColors[tone].text,
-                    borderColor: feedbackColors[tone].border,
-                    cursor: disabled ? "wait" : "pointer",
-                  }
-                : {}),
-            },
-          },
-          options.map((o) =>
-            React.createElement(
-              "option",
-              { key: o.value, value: o.value },
-              o.label,
-            ),
-          ),
+            }}
+          >
+            {/* Size to the current label, without the native arrow or longest-option gutter. */}
+            <View
+              aria-hidden={true}
+              pointerEvents="none"
+              style={{ opacity: 0 }}
+            >
+              <Tag tone={tone}>
+                {options.find((o) => o.value === value)?.label}
+              </Tag>
+            </View>
+            {select}
+          </View>
+        ) : (
+          select
         )}
       </View>
     );
+  }
   return (
     <>
       <Pressable
@@ -157,12 +196,18 @@ export function Select({
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(true)}
         disabled={disabled}
-        style={styles.nav}
+        style={compact ? undefined : styles.nav}
       >
-        <Text style={styles.small}>{label}</Text>
-        <Text style={styles.text}>
-          {options.find((o) => o.value === value)?.label || "Selecionar"}
-        </Text>
+        {compact ? (
+          <Tag tone={tone}>{options.find((o) => o.value === value)?.label}</Tag>
+        ) : (
+          <>
+            <Text style={styles.small}>{label}</Text>
+            <Text style={styles.text}>
+              {options.find((o) => o.value === value)?.label || "Selecionar"}
+            </Text>
+          </>
+        )}
       </Pressable>
       <Modal
         visible={open}
