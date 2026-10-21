@@ -486,7 +486,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           name: "Família Demo",
           activated: (await readCache<Role>("demo-session")) === "GUEST",
         };
-      return api.identifyInvitation(code);
+      const result = await api.identifyInvitation(code);
+      if (result.activated) {
+        // Link recovery may bind the registered responsible on the server.
+        // Refresh and validate the snapshot before exposing the guest gate.
+        await query.refetch({ throwOnError: true });
+      }
+      return result;
     },
     enter: async (code, pin) => {
       if (demoEnabled && code === demo.DEMO_CODE) {

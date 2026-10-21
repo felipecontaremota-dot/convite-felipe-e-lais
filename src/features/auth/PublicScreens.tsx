@@ -143,7 +143,8 @@ export function InvitationAccess() {
   const identify = app.identify;
   useEffect(() => {
     let active = true;
-    // Identification never binds the anonymous UID or reveals the roster.
+    // Preview never authorizes a new UID or reveals the roster.
+    // An already verified link session recovers its responsible before entry.
     void identify(code)
       .then((result) => {
         if (!active) return;

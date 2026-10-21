@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Platform, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import * as Crypto from "expo-crypto";
 import { ConfirmModal, AdminModal } from "../../components/AdminModal";
 import { Button, Field, styles } from "../../components/ui";
@@ -19,7 +19,9 @@ import type { Contact, Guest } from "../../types/domain";
 
 export function ProfileConfirmationGate() {
   const app = useApp();
+  const pathname = usePathname();
   if (
+    pathname.startsWith("/c/") ||
     app.data?.role !== "GUEST" ||
     !app.data.profile_confirmation?.supported ||
     app.loading

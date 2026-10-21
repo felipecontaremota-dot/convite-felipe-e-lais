@@ -776,3 +776,208 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
     await device.close();
   }
 });
+
+test("exclusive link responsible identity PostgreSQL authorization matrix", () => {
+  expect(
+    db.sql(readFileSync("tests/link-responsible-identity.sql", "utf8")),
+  ).toContain("Link responsible identity:");
+});
+
+function responsibleFamily(label: string) {
+  // The responsible is deliberately not the first member created.
+  const first = individual(`Outro integrante ${label}`);
+  const responsible = individual(`Responsável ${label}`);
+  const family = action("INVITATION_SAVE", {
+    name: `Família ${label}`,
+    pin: "4778",
+  });
+  action("CODE_ROTATE", { id: family.id, version: 1 });
+  const initial = db.rpc(admin, "app_snapshot", { p_event: event });
+  action("FAMILY_ADD_MEMBERS", {
+    target_id: family.id,
+    target_version: 2,
+    guests: [first, responsible].map((g) => ({
+      id: g.id,
+      version: initial.guests.find((x: { id: string }) => x.id === g.id)
+        .version,
+      invitation_version: initial.invitations.find(
+        (x: { id: string }) => x.id === g.invitation_id,
+      ).version,
+    })),
+  });
+  let snapshot = db.rpc(admin, "app_snapshot", { p_event: event });
+  let unit = snapshot.invitations.find(
+    (i: { id: string }) => i.id === family.id,
+  );
+  action("INVITATION_SAVE", {
+    id: family.id,
+    version: unit.version,
+    name: unit.name,
+    active: true,
+    primary_guest_id: responsible.id,
+  });
+  snapshot = db.rpc(admin, "app_snapshot", { p_event: event });
+  unit = snapshot.invitations.find((i: { id: string }) => i.id === family.id);
+  action("CODE_ROTATE", { id: family.id, version: unit.version });
+  snapshot = db.rpc(admin, "app_snapshot", { p_event: event });
+  unit = snapshot.invitations.find((i: { id: string }) => i.id === family.id);
+  // Already confirmed fixture: identity recovery must not demand another form.
+  db.sql(
+    `update guests set profile_confirmed_at=now() where id='${responsible.id}';`,
+  );
+  return { first, responsible, unit };
+}
+for (const width of [320, 1280]) {
+  test(`exclusive family link enters directly as registered responsible at ${width}px`, async ({
+    page,
+    browser,
+  }) => {
+    const f = responsibleFamily(`link ${width}`),
+      uid = actor();
+    await backend(page, uid);
+    await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript(() => {
+      (window as unknown as { memberPickerSeen: boolean }).memberPickerSeen =
+        false;
+      new MutationObserver(() => {
+        if (
+          document.body?.textContent?.includes("Quem está usando este convite?")
+        )
+          (
+            window as unknown as { memberPickerSeen: boolean }
+          ).memberPickerSeen = true;
+      }).observe(document, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    });
+    await page.goto(`/c/${f.unit.sharing_code}`);
+    await page.getByLabel("Senha de acesso", { exact: true }).fill("4778");
+    await page
+      .getByRole("button", { name: "Abrir convite", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/inicio$/);
+    await expect(
+      page.getByRole("dialog", {
+        name: "Quem está usando este convite?",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    const current = () => db.rpc(uid, "app_snapshot", { p_event: event });
+    expect(current().profile_confirmation.guest_id).toBe(f.responsible.id);
+    expect(current().guests).toHaveLength(2);
+    await page.reload();
+    await expect(
+      page.getByRole("link", { name: "Perfil", exact: true }),
+    ).toBeVisible();
+    expect(current().profile_confirmation.guest_id).toBe(f.responsible.id);
+    // Old, already verified link sessions recover without asking for a PIN again.
+    db.sql(
+      `update invitation_sessions set profile_guest_id=null where event_id='${event}' and user_id='${uid}';`,
+    );
+    await page.goto(`/c/${f.unit.sharing_code}`);
+    await expect(page).toHaveURL(/\/inicio$/);
+    expect(current().profile_confirmation.guest_id).toBe(f.responsible.id);
+    expect(
+      await page.evaluate(
+        () =>
+          (window as unknown as { memberPickerSeen: boolean }).memberPickerSeen,
+      ),
+    ).toBe(false);
+    expect(
+      current().rsvps.every((r: { status: string }) => r.status === "PENDING"),
+    ).toBe(true);
+    await expect(
+      page.getByRole("button", { name: "Ver meus convites", exact: true }),
+    ).toBeVisible();
+    // A separate anonymous session gets the same real responsible, never roster order.
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:8083",
+      viewport: { width, height: 844 },
+    });
+    const fresh = await context.newPage(),
+      secondUid = actor();
+    await backend(fresh, secondUid);
+    await fresh.goto(`/c/${f.unit.sharing_code}`);
+    await fresh.getByLabel("Senha de acesso", { exact: true }).fill("4778");
+    await fresh
+      .getByRole("button", { name: "Abrir convite", exact: true })
+      .click();
+    await expect(fresh).toHaveURL(/\/inicio$/);
+    await expect(fresh.getByRole("dialog")).toHaveCount(0);
+    expect(
+      db.rpc(secondUid, "app_snapshot", { p_event: event }).profile_confirmation
+        .guest_id,
+    ).toBe(f.responsible.id);
+    await context.close();
+  });
+}
+
+test("unconfirmed link responsible opens their own form without a member picker", async ({
+  page,
+}) => {
+  const f = responsibleFamily("cadastro pendente"),
+    uid = actor();
+  db.sql(
+    `update guests set profile_confirmed_at=null where id='${f.responsible.id}';`,
+  );
+  await backend(page, uid);
+  await page.goto(`/c/${f.unit.sharing_code}`);
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("4778");
+  await page
+    .getByRole("button", { name: "Abrir convite", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await expect(
+    page.getByRole("dialog", {
+      name: "Quem está usando este convite?",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    modal(page).getByLabel("Nome completo", { exact: true }),
+  ).toHaveValue(f.responsible.name);
+  await modal(page)
+    .getByRole("button", { name: "Confirmar", exact: true })
+    .click();
+  await expect(modal(page)).toHaveCount(0);
+  const snapshot = db.rpc(uid, "app_snapshot", { p_event: event });
+  expect(
+    snapshot.guests.find((g: { id: string }) => g.id === f.first.id)
+      .profile_confirmed_at,
+  ).toBeNull();
+  expect(
+    snapshot.rsvps.every((r: { status: string }) => r.status === "PENDING"),
+  ).toBe(true);
+});
+
+test("link without a valid responsible keeps the safe member selection", async ({
+  page,
+}) => {
+  const f = responsibleFamily("sem responsável"),
+    uid = actor();
+  db.sql(
+    `update invitations set primary_guest_id=null where id='${f.unit.id}';`,
+  );
+  await backend(page, uid);
+  await page.goto(`/c/${f.unit.sharing_code}`);
+  await page.getByLabel("Senha de acesso", { exact: true }).fill("4778");
+  await page
+    .getByRole("button", { name: "Abrir convite", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  const picker = page.getByRole("dialog", {
+    name: "Quem está usando este convite?",
+    exact: true,
+  });
+  await expect(picker).toBeVisible();
+  await picker.getByRole("button", { name: f.first.name, exact: true }).click();
+  await expect(
+    modal(page).getByLabel("Nome completo", { exact: true }),
+  ).toHaveValue(f.first.name);
+  expect(
+    db.rpc(uid, "app_snapshot", { p_event: event }).profile_confirmation
+      .guest_id,
+  ).toBe(f.first.id);
+});
