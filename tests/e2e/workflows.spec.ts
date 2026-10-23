@@ -202,7 +202,9 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
   );
   await page.getByRole("button", { name: "Sair deste dispositivo" }).click();
   await start(page, "cerimonial");
-  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
+  await page
+    .getByRole("link", { name: "Lista de convidados", exact: true })
+    .click();
   await page
     .getByLabel("Token ou conteúdo do QR (entrada acessível)")
     .fill(`wedding://ticket/${token}`);
@@ -228,7 +230,7 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
   await page.goto("/checkin");
   await expect(
     page.getByRole("button", {
-      name: "Registrar entrada manualmente: Convidado Um",
+      name: "Remover o registro de entrada: Convidado Um",
       exact: true,
     }),
   ).toBeVisible();
@@ -238,7 +240,9 @@ test("offline: consulta continua disponível sem inventar uma entrada persistida
   context,
 }) => {
   await start(page, "cerimonial");
-  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
+  await page
+    .getByRole("link", { name: "Lista de convidados", exact: true })
+    .click();
   await context.setOffline(true);
   await expect(
     page

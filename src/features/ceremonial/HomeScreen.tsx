@@ -1,17 +1,24 @@
-import { useState } from "react";
+import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
-import { AdminModal } from "../../components/AdminModal";
 import { Button, Card, Screen } from "../../components/ui";
 import { useApp } from "../../lib/AppProvider";
 import { WeddingOverview } from "../guests/HomeScreen";
 export function CeremonialHome() {
-  const app = useApp(),
-    [invitation, setInvitation] = useState(false);
+  const app = useApp();
   return (
     <Screen section="ceremonial" title="Bem-vindo ao nosso dia">
       <Card>
         <WeddingOverview startsAt={app.data?.event.starts_at} />
-        <Button title="Ler convite" onPress={() => setInvitation(true)} />
+        <Button
+          title="Ler convite"
+          disabled={!app.online}
+          onPress={() =>
+            router.push({
+              pathname: "/dia-do-evento",
+              params: { scanner: Crypto.randomUUID() },
+            })
+          }
+        />
         <Button
           secondary
           title="Ver informações"
@@ -23,15 +30,6 @@ export function CeremonialHome() {
           onPress={() => router.push("/padrinhos")}
         />
       </Card>
-      {invitation ? (
-        <AdminModal
-          title="Felipe & Laís — Nosso convite"
-          onClose={() => setInvitation(false)}
-          captureKeyboard
-        >
-          <WeddingOverview startsAt={app.data?.event.starts_at} />
-        </AdminModal>
-      ) : null}
     </Screen>
   );
 }

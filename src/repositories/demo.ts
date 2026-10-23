@@ -216,6 +216,7 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
         (c) => guestIds.has(c.guest_id) && !c.revoked_at,
       );
       s.checkins = [];
+      delete s.checkin_history;
       s.rules = [];
       s.gifts = s.gifts.filter((g) => g.active);
     }
@@ -260,7 +261,10 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
 }
 export async function demoMutate(m: OfflineMutation, role: Role) {
   return transaction((db) => {
-    if (db.applied.includes(m.mutationId) && m.type !== "CHECKIN_CREATE")
+    if (
+      db.applied.includes(m.mutationId) &&
+      !["CHECKIN_CREATE", "CHECKIN_REVERT"].includes(m.type)
+    )
       return;
     const s = db.snapshot,
       p = m.payload,
@@ -277,7 +281,10 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
                 !c.revoked_at,
             )),
       );
-    if (m.type !== "CHECKIN_CREATE" && role === "CEREMONIALIST")
+    if (
+      !["CHECKIN_CREATE", "CHECKIN_REVERT"].includes(m.type) &&
+      role === "CEREMONIALIST"
+    )
       throw Error("Acesso restrito");
     if (g && role === "GUEST" && g.invitation_id !== demoFamily)
       throw Error("Acesso restrito");
@@ -472,6 +479,51 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
           });
         break;
       }
+      case "CHECKIN_REVERT": {
+        if (role !== "ADMIN" && role !== "CEREMONIALIST")
+          throw Error("Acesso restrito");
+        s.checkin_history ??= s.checkins.map((c) => ({
+          id: `${c.id}:entry`,
+          checkin_id: c.id,
+          guest_id: c.guest_id,
+          guest_name:
+            s.guests.find((g) => g.id === c.guest_id)?.name || "Convidado",
+          action: "ENTRY" as const,
+          created_at: c.created_at,
+          actor_id: c.actor_id,
+          method: c.method,
+        }));
+        const c = s.checkins.find((c) => c.id === p.id);
+        const prior = s.checkin_history.find(
+          (h) => h.checkin_id === p.id && h.action === "REMOVAL",
+        );
+        if (!c && !prior) throw Error("Entrada não encontrada");
+        if (c) {
+          s.checkins = s.checkins.filter((item) => item.id !== c.id);
+          s.checkin_history.push({
+            id: id(),
+            checkin_id: c.id,
+            guest_id: c.guest_id,
+            guest_name:
+              s.guests.find((g) => g.id === c.guest_id)?.name || "Convidado",
+            action: "REMOVAL",
+            created_at: stamp(),
+            actor_id: "demo",
+            method: c.method,
+          });
+        }
+        const removed = s.checkin_history.find(
+          (h) => h.checkin_id === p.id && h.action === "REMOVAL",
+        )!;
+        return {
+          id: p.id as string,
+          event_id: event,
+          guest_id: removed.guest_id,
+          removed_at: removed.created_at,
+          removed_by: removed.actor_id,
+          duplicate: !c,
+        };
+      }
       case "CHECKIN_CREATE": {
         if (
           !s.invitations.some(
@@ -495,7 +547,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
           )
         )
           throw Error("Convite revogado");
-        if (!s.checkins.some((c) => c.guest_id === g.id))
+        if (!s.checkins.some((c) => c.guest_id === g.id)) {
           s.checkins.push({
             id: id(),
             event_id: event,
@@ -505,6 +557,18 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             actor_id: "demo",
             created_at: stamp(),
           });
+          const c = s.checkins.find((c) => c.guest_id === g.id)!;
+          (s.checkin_history ??= []).push({
+            id: `${c.id}:entry`,
+            checkin_id: c.id,
+            guest_id: c.guest_id,
+            guest_name: g.name,
+            action: "ENTRY",
+            created_at: c.created_at,
+            actor_id: c.actor_id,
+            method: c.method,
+          });
+        }
         if (!db.applied.includes(m.mutationId)) db.applied.push(m.mutationId);
         return s.checkins.find((c) => c.guest_id === g.id)!;
       }
@@ -569,6 +633,20 @@ export async function demoAdmin(
   action: string,
   p: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  if (action === "CHECKIN_REVERT")
+    return {
+      ...(await demoMutate(
+        {
+          mutationId: id(),
+          type: "CHECKIN_REVERT",
+          payload: p,
+          createdAt: stamp(),
+          attempts: 0,
+          lastError: null,
+        },
+        "ADMIN",
+      ))!,
+    };
   return transaction(async (db) => {
     const s = db.snapshot;
     const entity = String(p.id || "");
@@ -859,9 +937,6 @@ export async function demoAdmin(
           latitude: p.latitude ?? null,
           longitude: p.longitude ?? null,
         });
-        break;
-      case "CHECKIN_REVERT":
-        s.checkins = s.checkins.filter((c) => c.id !== entity);
         break;
       case "MESSAGE_READ":
         db.reads ??= {};

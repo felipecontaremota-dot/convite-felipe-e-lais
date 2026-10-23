@@ -83,7 +83,10 @@ async function backend(
         data = path.endsWith("/user") ? user : session;
       else if (path.startsWith("/rest/v1/rpc/")) {
         if (args.p_type) calls.push(args);
-        if (options.fail && args.p_type === "CHECKIN_CREATE")
+        if (
+          options.fail &&
+          ["CHECKIN_CREATE", "CHECKIN_REVERT"].includes(args.p_type)
+        )
           throw Error("controlled failure");
         data = db.rpc(uid, path.split("/").at(-1)!, args);
       }
@@ -116,6 +119,7 @@ for (const width of [320, 1280])
     test.setTimeout(120000);
     const g = person(`Ágata cerimonial ${width}`, "MADRINHA"),
       other = person(`Bruno cerimonial ${width}`, "PADRINHO", "PENDING");
+    const beforeEntries = snapshot().checkins.length;
     const options = { fail: false },
       calls = await backend(page, staff, options);
     await page.setViewportSize({ width, height: 900 });
@@ -136,10 +140,10 @@ for (const width of [320, 1280])
     await page
       .getByRole("button", { name: "Ler convite", exact: true })
       .click();
-    await expect(page.locator("[data-admin-modal]")).toContainText(
-      "15 de dezembro de 2026",
-    );
+    await expect(page).toHaveURL(/\/dia-do-evento\?scanner=/);
+    await expect(page.getByRole("dialog")).toContainText("Ler QR Code");
     await page.keyboard.press("Escape");
+    await page.getByRole("link", { name: "Início", exact: true }).click();
     await page
       .getByRole("button", { name: "Ver informações", exact: true })
       .click();
@@ -156,8 +160,16 @@ for (const width of [320, 1280])
       .getByLabel("Buscar padrinho ou madrinha")
       .fill(`cerimonial ${width}`);
     await expect(page.getByTestId("operational-party-guest")).toHaveCount(2);
-    await expect(page.getByText("Madrinha", { exact: true })).toBeVisible();
-    await expect(page.getByText("Padrinho", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByTestId("operational-party-guest")
+        .getByText("Madrinha", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByTestId("operational-party-guest")
+        .getByText("Padrinho", { exact: true }),
+    ).toBeVisible();
     await page.screenshot({
       path: `/tmp/ceremonial-party-${width}.png`,
       animations: "disabled",
@@ -166,13 +178,14 @@ for (const width of [320, 1280])
       page.getByRole("button", { name: /Promover|Remover padrinho/ }),
     ).toHaveCount(0);
     await page
-      .getByRole("link", { name: "Dia do evento", exact: true })
+      .getByRole("link", { name: "Lista de convidados", exact: true })
       .click();
     await page
-      .getByLabel("Buscar nome ou família")
+      .getByRole("textbox", { name: "Buscar nome ou família", exact: true })
       .fill(`agata cerimonial ${width}`);
     const row = page
       .getByTestId("operational-guest")
+      .filter({ visible: true })
       .filter({ hasText: g.name });
     await expect(row).toBeVisible();
     await expect(row).toContainText("Sem lactose");
@@ -209,6 +222,11 @@ for (const width of [320, 1280])
       .click();
     await expect(dialog).toHaveCount(0);
     await expect(row.getByText("Presente", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByText(`${beforeEntries + 1} check-ins`, { exact: true })
+        .filter({ visible: true }),
+    ).toBeVisible();
     const attempts = calls.filter((c) => c.p_type === "CHECKIN_CREATE");
     expect(attempts).toHaveLength(2);
     expect(attempts[0]!.p_mutation).toBe(attempts[1]!.p_mutation);
@@ -230,6 +248,90 @@ for (const width of [320, 1280])
         .locator(`[data-guest-row="${g.id}"]`)
         .getByText("Presente", { exact: true }),
     ).toBeVisible();
+    await expect(
+      adminPage.getByRole("link", { name: "Dia do evento", exact: true }),
+    ).toBeVisible();
+    const remove = page.getByRole("button", {
+      name: `Remover o registro de entrada: ${g.name}`,
+      exact: true,
+    });
+    await remove.click();
+    dialog = page.locator("[data-admin-modal]");
+    await expect(dialog).toContainText(
+      `Deseja remover o registro de entrada de ${g.name}?`,
+    );
+    const original = snapshot().checkins.find(
+      (c: { guest_id: string }) => c.guest_id === g.id,
+    );
+    await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+    expect(calls.filter((c) => c.p_type === "CHECKIN_REVERT")).toHaveLength(0);
+    expect(
+      snapshot().checkins.some((c: { id: string }) => c.id === original.id),
+    ).toBe(true);
+    options.fail = true;
+    await remove.click();
+    await dialog
+      .getByRole("button", { name: "Remover registro", exact: true })
+      .click();
+    await expect(
+      dialog.getByRole("alert").filter({ hasText: /Não foi possível/ }),
+    ).toBeVisible();
+    await expect(row.getByText("Presente", { exact: true })).toBeVisible();
+    options.fail = false;
+    await page.screenshot({
+      path: `/tmp/checkin-removal-${width}.png`,
+      animations: "disabled",
+    });
+    await dialog
+      .getByRole("button", { name: "Remover registro", exact: true })
+      .click();
+    await expect(dialog).toHaveCount(0);
+    await expect(manual).toBeVisible();
+    await expect(row.getByText("Presente", { exact: true })).toHaveCount(0);
+    await expect(
+      page
+        .getByText(`${beforeEntries} check-ins`, { exact: true })
+        .filter({ visible: true }),
+    ).toBeVisible();
+    const removals = calls.filter((c) => c.p_type === "CHECKIN_REVERT");
+    expect(removals).toHaveLength(2);
+    expect(removals[0]!.p_mutation).toBe(removals[1]!.p_mutation);
+    await expect(
+      adminPage
+        .locator(`[data-guest-row="${g.id}"]`)
+        .getByText("Presente", { exact: true }),
+    ).toHaveCount(0, { timeout: 15000 });
+    await expect(
+      page
+        .getByText(new RegExp(`Entrada removida — ${g.name}`))
+        .filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByText(new RegExp(`Entrada registrada — ${g.name}`))
+        .filter({ visible: true }),
+    ).toBeVisible();
+    await manual.click();
+    await dialog
+      .getByRole("button", { name: "Confirmar", exact: true })
+      .click();
+    await expect(dialog).toHaveCount(0);
+    await expect(remove).toBeVisible();
+    const history = snapshot().checkin_history.filter(
+      (c: { guest_id: string }) => c.guest_id === g.id,
+    );
+    expect(history.map((c: { action: string }) => c.action).sort()).toEqual([
+      "ENTRY",
+      "ENTRY",
+      "REMOVAL",
+    ]);
+    expect(
+      history.every((c: { actor_id: string }) => c.actor_id === staff),
+    ).toBe(true);
+    expect(
+      snapshot().rsvps.find((r: { guest_id: string }) => r.guest_id === g.id)
+        .status,
+    ).toBe("CONFIRMED");
     await adminContext.close();
     await page.screenshot({
       path: `/tmp/ceremonial-event-${width}.png`,
@@ -304,7 +406,7 @@ test("real QR decoding through simulated camera, automatic registration and dupl
     await backend(page);
     await login(page);
     await page
-      .getByRole("link", { name: "Dia do evento", exact: true })
+      .getByRole("link", { name: "Lista de convidados", exact: true })
       .click();
     await page
       .getByRole("button", { name: "Ler QR Code", exact: true })
@@ -355,6 +457,41 @@ test("real QR decoding through simulated camera, automatic registration and dupl
         (c: { guest_id: string }) => c.guest_id === g.id,
       ),
     ).toHaveLength(1);
+    const original = snapshot().checkins.find(
+      (c: { guest_id: string }) => c.guest_id === g.id,
+    );
+    await page
+      .getByRole("button", {
+        name: `Remover o registro de entrada: ${g.name}`,
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", { name: "Remover registro", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page
+      .getByRole("button", {
+        name: `Registrar entrada manualmente: ${g.name}`,
+        exact: true,
+      })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Ler QR Code", exact: true })
+      .click();
+    await expect(
+      page.getByText("Entrada confirmada.", { exact: true }),
+    ).toBeVisible({ timeout: 30000 });
+    const reentry = snapshot().checkins.filter(
+      (c: { guest_id: string }) => c.guest_id === g.id,
+    );
+    expect(reentry).toHaveLength(1);
+    expect(reentry[0].id).not.toBe(original.id);
+    expect(
+      snapshot().checkin_history.filter(
+        (h: { guest_id: string }) => h.guest_id === g.id,
+      ),
+    ).toHaveLength(3);
     await page
       .getByLabel("Token ou conteúdo do QR (entrada acessível)")
       .fill("not-a-QR");
@@ -386,7 +523,9 @@ test("camera denial has a manual fallback and never records an entry", async ({
   const before = snapshot().checkins.length;
   await backend(page);
   await login(page);
-  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
+  await page
+    .getByRole("link", { name: "Lista de convidados", exact: true })
+    .click();
   await page.getByRole("button", { name: "Ler QR Code", exact: true }).click();
   await expect(
     page.getByText(
@@ -402,9 +541,16 @@ test("an entry from another operator updates the open operational screen and par
   const g = person("Sincronização entre operadores", "MADRINHA");
   await backend(page);
   await login(page);
-  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
-  await page.getByLabel("Buscar nome ou família").fill(g.name);
-  const row = page.getByTestId("operational-guest").filter({ hasText: g.name });
+  await page
+    .getByRole("link", { name: "Lista de convidados", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Buscar nome ou família", exact: true })
+    .fill(g.name);
+  const row = page
+    .getByTestId("operational-guest")
+    .filter({ visible: true })
+    .filter({ hasText: g.name });
   await expect(row.getByText("Presente", { exact: true })).toHaveCount(0);
   const before = snapshot().checkins.length;
   db.rpc(admin, "app_mutate", {
@@ -426,6 +572,20 @@ test("an entry from another operator updates the open operational screen and par
       .getByTestId("operational-party-guest")
       .getByText("Presente", { exact: true }),
   ).toBeVisible();
+  const active = snapshot().checkins.find(
+    (c: { guest_id: string }) => c.guest_id === g.id,
+  );
+  db.rpc(admin, "app_mutate", {
+    p_event: event,
+    p_mutation: randomUUID(),
+    p_type: "CHECKIN_REVERT",
+    p_payload: { id: active.id },
+  });
+  await expect(
+    page
+      .getByTestId("operational-party-guest")
+      .getByText("Presente", { exact: true }),
+  ).toHaveCount(0, { timeout: 15000 });
 });
 
 test("unavailable camera shows an actionable message without a check-in", async ({
@@ -441,7 +601,9 @@ test("unavailable camera shows an actionable message without a check-in", async 
   await backend(page);
   const before = snapshot().checkins.length;
   await login(page);
-  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
+  await page
+    .getByRole("link", { name: "Lista de convidados", exact: true })
+    .click();
   await page.getByRole("button", { name: "Ler QR Code", exact: true }).click();
   await expect(
     page.getByText(
@@ -449,4 +611,80 @@ test("unavailable camera shows an actionable message without a check-in", async 
     ),
   ).toBeVisible();
   expect(snapshot().checkins).toHaveLength(before);
+});
+
+test("camera preview stays visible before any QR is presented", async () => {
+  const browser = await chromium.launch({
+    channel: "chromium",
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH,
+    args: ["--no-sandbox", "--use-fake-device-for-media-stream"],
+  });
+  try {
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:8083",
+      permissions: ["camera"],
+      viewport: { width: 390, height: 844 },
+    });
+    const page = await context.newPage();
+    await page.route(/zxing.*\.wasm/, (route) =>
+      route.fulfill({
+        path: "node_modules/zxing-wasm/dist/reader/zxing_reader.wasm",
+        contentType: "application/wasm",
+      }),
+    );
+    await backend(page);
+    await login(page);
+    await page
+      .getByRole("link", { name: "Lista de convidados", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Ler QR Code", exact: true })
+      .click();
+    const video = page.getByTestId("camera-preview").locator("video");
+    await video.waitFor({ state: "attached" });
+    await expect(video).toBeVisible();
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth))
+      .toBeGreaterThan(0);
+    await expect
+      .poll(() =>
+        video.evaluate((v: HTMLVideoElement) => v.readyState >= 2 && !v.paused),
+      )
+      .toBe(true);
+    const dimensions = await video.evaluate((v: HTMLVideoElement) => ({
+      box: v.getBoundingClientRect().toJSON(),
+      ready: v.readyState,
+      width: v.videoWidth,
+      height: v.videoHeight,
+      paused: v.paused,
+    }));
+    console.log("Camera preview dimensions", JSON.stringify(dimensions));
+    expect(dimensions.box.height).toBeGreaterThan(200);
+    await expect(video).toBeInViewport();
+    const before = snapshot().checkins.length;
+    const stream = await video.evaluateHandle(
+      (v: HTMLVideoElement) => v.srcObject as MediaStream,
+    );
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() =>
+        stream.evaluate((s) =>
+          s.getTracks().every((t) => t.readyState === "ended"),
+        ),
+      )
+      .toBe(true);
+    await expect(page.getByTestId("camera-preview")).toHaveCount(0);
+    await page.getByRole("link", { name: "Início", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Ler convite", exact: true })
+      .click();
+    await expect(
+      page.getByTestId("camera-preview").locator("video"),
+    ).toBeVisible();
+    expect(snapshot().checkins).toHaveLength(before);
+    await page.screenshot({ path: "/tmp/camera-preview-after.png" });
+    await context.close();
+  } finally {
+    await browser.close();
+  }
 });

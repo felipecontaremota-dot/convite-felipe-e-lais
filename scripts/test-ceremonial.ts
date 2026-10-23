@@ -4,11 +4,14 @@ import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { TestPostgres } from "../tests/support/postgres";
+import { verifyCheckinUpgrade } from "../tests/support/checkin-upgrade";
 async function main() {
+  await verifyCheckinUpgrade();
   const db = new TestPostgres();
   try {
     await db.start();
     console.log(db.sql(readFileSync("tests/ceremonial.sql", "utf8")));
+    console.log(db.sql(readFileSync("tests/checkin-reversal.sql", "utf8")));
     const event = "00000000-0000-4000-8000-000000000001",
       admin = "cd000000-0000-4000-8000-000000000001",
       staff = "cd000000-0000-4000-8000-000000000002",
@@ -75,9 +78,14 @@ async function main() {
     db.sql(
       `update qr_credentials set revoked_at=null where guest_id='${g.id}';`,
     );
-    const concurrent = (user: string, method: "QR" | "MANUAL") =>
+    const concurrent = (
+      user: string,
+      method: "QR" | "MANUAL" | "REVERT",
+      id?: string,
+      mutation = randomUUID(),
+    ) =>
       new Promise<any>((resolve, reject) => {
-        const sql = `begin;set local role authenticated;set local request.jwt.claim.sub='${user}';select app_mutate('${event}','${randomUUID()}','CHECKIN_CREATE','${JSON.stringify(method === "QR" ? { method, token_hash: hash } : manual)}'::jsonb);select pg_sleep(0.2);commit;`;
+        const sql = `begin;set local role authenticated;set local request.jwt.claim.sub='${user}';select app_mutate('${event}','${mutation}','${method === "REVERT" ? "CHECKIN_REVERT" : "CHECKIN_CREATE"}','${JSON.stringify(method === "REVERT" ? { id } : method === "QR" ? { method, token_hash: hash } : manual)}'::jsonb);select pg_sleep(0.2);commit;`;
         const args = db.ci
           ? [
               "-u",
@@ -134,6 +142,61 @@ async function main() {
     assert.equal(
       db.sql(`select status from rsvps where guest_id='${g.id}';`).trim(),
       "CONFIRMED",
+    );
+    const removalId = randomUUID();
+    const removed = await Promise.all([
+      concurrent(staff, "REVERT", results[0].id, removalId),
+      concurrent(second, "REVERT", results[0].id),
+    ]);
+    assert.equal(removed.filter((r) => !r.duplicate).length, 1);
+    assert.equal(
+      db.sql(`select count(*) from checkins where guest_id='${g.id}';`).trim(),
+      "0",
+    );
+    assert.equal(
+      db
+        .sql(
+          `select count(*) from audit_logs where entity='checkins' and entity_id='${results[0].id}' and action='DELETE';`,
+        )
+        .trim(),
+      "1",
+    );
+    const fresh = register(staff, { method: "QR", token_hash: hash });
+    await concurrent(staff, "REVERT", results[0].id, removalId);
+    assert.equal(
+      db.sql(`select id from checkins where guest_id='${g.id}';`).trim(),
+      fresh.id,
+    );
+    await Promise.all([
+      concurrent(staff, "REVERT", fresh.id),
+      concurrent(second, "QR"),
+    ]);
+    const active = Number(
+      db.sql(`select count(*) from checkins where guest_id='${g.id}';`).trim(),
+    );
+    assert.ok(active === 0 || active === 1);
+    assert.equal(
+      db
+        .sql(
+          `select count(*) from audit_logs where entity='checkins' and entity_id='${fresh.id}' and action='DELETE';`,
+        )
+        .trim(),
+      "1",
+    );
+    assert.equal(
+      db.sql(`select status from rsvps where guest_id='${g.id}';`).trim(),
+      "CONFIRMED",
+    );
+    assert.equal(
+      db
+        .sql(
+          `select count(*) from qr_credentials where guest_id='${g.id}' and token_hash='${hash}' and revoked_at is null;`,
+        )
+        .trim(),
+      "1",
+    );
+    console.log(
+      "Independent connections: remove/remove, stale retry after reentry, remove/register races passed; original QR and RSVP preserved.",
     );
     console.log(
       "Inactive/archived/negative/pending/cross-event/revoked/mismatched QR denied; concurrent QR+manual inserts exactly one audited check-in.",

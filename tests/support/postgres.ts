@@ -49,7 +49,11 @@ export class TestPostgres {
   }
   async start(
     baseline:
-      "main" | "prod-profile" | "pre-confirmation" | "pre-admin-guest" = "main",
+      | "main"
+      | "prod-profile"
+      | "pre-confirmation"
+      | "pre-admin-guest"
+      | "pre-checkin-reversal" = "main",
   ) {
     if (this.ci) {
       this.run("sudo", ["systemctl", "start", "postgresql.service"]);
@@ -96,11 +100,13 @@ export class TestPostgres {
           (f) =>
             f.endsWith(".sql") &&
             (baseline === "main" ||
-              (baseline === "pre-admin-guest"
-                ? f < adminGuestCutoff!
-                : baseline === "prod-profile"
-                  ? f < "20261013204105"
-                  : f < "20261015033043")),
+              (baseline === "pre-checkin-reversal"
+                ? f < "20261023115359"
+                : baseline === "pre-admin-guest"
+                  ? f < adminGuestCutoff!
+                  : baseline === "prod-profile"
+                    ? f < "20261013204105"
+                    : f < "20261015033043")),
         )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));

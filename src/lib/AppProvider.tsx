@@ -14,6 +14,7 @@ import { AppState, Platform } from "react-native";
 import type {
   Snapshot,
   CheckinResult,
+  CheckinRemoval,
   Role,
   OfflineMutation,
   MutationType,
@@ -28,6 +29,7 @@ import { storage, readCache, writeCache } from "../storage/driver";
 import { AppError, SyncError } from "./errors";
 import { getDeviceTicket } from "../repositories/tickets";
 interface ContextValue {
+  removeCheckin: (id: string, mutationId: string) => Promise<CheckinRemoval>;
   checkin: (
     payload: Record<string, unknown>,
     mutationId: string,
@@ -255,9 +257,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [online, sync]);
   const refetch = query.refetch;
   const liveRole = (query.data || cached)?.role;
+  const liveUserId = user;
   useEffect(() => {
     if (
       !supabase ||
+      !liveUserId ||
       !online ||
       !["ADMIN", "CEREMONIALIST"].includes(liveRole || "")
     )
@@ -278,10 +282,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
       )
       .subscribe();
+    // DELETE events are not filterable in every Realtime configuration. Keep
+    // all operational lists consistent with a bounded, visible-page fallback.
+    const timer = setInterval(() => {
+      if (Platform.OS !== "web" || document.visibilityState === "visible")
+        void refetch().catch(() => undefined);
+    }, 5000);
     return () => {
+      clearInterval(timer);
       void liveClient.removeChannel(channel);
     };
-  }, [scope, liveRole, online, refetch]);
+  }, [scope, liveRole, liveUserId, online, refetch]);
   const credentialState = JSON.stringify(
     (query.data || cached)?.credentials || [],
   );
@@ -577,6 +588,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       client.clear();
     },
+    removeCheckin: async (id, mutationId) => {
+      if (!online)
+        throw new AppError(
+          "Conecte-se para remover o registro de entrada. Nenhuma alteração foi enviada.",
+        );
+      if (
+        !["ADMIN", "CEREMONIALIST"].includes((query.data || cached)?.role || "")
+      )
+        throw new AppError("Acesso restrito.");
+      const item: OfflineMutation = {
+        mutationId,
+        type: "CHECKIN_REVERT",
+        payload: { id },
+        createdAt: new Date().toISOString(),
+        attempts: 0,
+        lastError: null,
+      };
+      const result = (
+        demoRole
+          ? await demo.demoMutate(item, demoRole)
+          : await api.mutate(item)
+      ) as CheckinRemoval;
+      if (
+        !result?.removed_at ||
+        result.id !== id ||
+        result.event_id !==
+          (demoRole ? (query.data || cached)?.event.id : eventId)
+      )
+        throw new AppError(
+          "Não foi possível verificar a remoção. Atualize os dados antes de tentar novamente.",
+        );
+      await query.refetch({ throwOnError: true });
+      return result;
+    },
     checkin: async (payload, mutationId) => {
       if (!online)
         throw new AppError(
@@ -597,7 +642,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let result: CheckinResult;
       if (demoRole) {
         const before = (await demo.demoSnapshot(demoRole)).checkins;
-        const checkin = await demo.demoMutate(item, demoRole);
+        const checkin = (await demo.demoMutate(item, demoRole)) as
+          CheckinResult | undefined;
         if (!checkin)
           throw new AppError("Não foi possível confirmar a entrada.");
         result = {

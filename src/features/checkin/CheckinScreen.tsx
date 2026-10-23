@@ -1,8 +1,12 @@
-import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Crypto from "expo-crypto";
-import { useFocusEffect, useIsFocused } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, Text, View } from "react-native";
+import {
+  useFocusEffect,
+  useIsFocused,
+  useLocalSearchParams,
+} from "expo-router";
+import { CameraScanner } from "./CameraScanner";
+import { useCallback, useRef, useState } from "react";
+import { Text, View } from "react-native";
 import { Confirmation, Select } from "../../components/adminUi";
 import {
   Button,
@@ -16,7 +20,7 @@ import {
 import { useApp } from "../../lib/AppProvider";
 import { AppError } from "../../lib/errors";
 import { hashToken } from "../../repositories/demo";
-import type { CheckinResult, Guest } from "../../types/domain";
+import type { CheckinResult, Guest, Checkin } from "../../types/domain";
 import { ticketToken } from "../../utils/security";
 import {
   operationalGuests,
@@ -28,7 +32,9 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
   const app = useApp(),
     feedback = useFeedback(),
     focused = useIsFocused();
-  const [permission, request] = useCameraPermissions();
+  const { scanner } = useLocalSearchParams<{ scanner?: string }>();
+  const [consumedScanner, setConsumedScanner] = useState<string | undefined>();
+  const [removal, setRemoval] = useState<Checkin | null>(null);
   const [camera, setCamera] = useState(false),
     [busy, setBusy] = useState(false);
   const [search, setSearch] = useState(""),
@@ -47,26 +53,15 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
       : admin || role === "ADMIN"
         ? "admin"
         : "ceremonial";
-  const refresh = useRef(app.refresh);
-  useEffect(() => {
-    refresh.current = app.refresh;
-  });
-  // Postgres Changes is primary; bounded polling also covers reconnects and deployments
-  // where realtime has not yet subscribed. Never poll while hidden or off this route.
-  useEffect(() => {
-    if (
-      !focused ||
-      !app.online ||
-      !["ADMIN", "CEREMONIALIST"].includes(role || "")
-    )
-      return;
-    const timer = setInterval(() => {
-      if (Platform.OS !== "web" || document.visibilityState === "visible")
-        void refresh.current().catch(() => undefined);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [focused, app.online, role]);
   useFocusEffect(useCallback(() => () => setCamera(false), []));
+  const closeScanner = () => {
+    setCamera(false);
+    setConsumedScanner(scanner);
+  };
+  const scannerOpen =
+    focused &&
+    (camera || (!!scanner && scanner !== consumedScanner)) &&
+    ["ADMIN", "CEREMONIALIST"].includes(role || "");
   const entries = s?.checkins.filter((c) => !c.local) || [];
   const people = operationalGuests(s, search, filter);
   const confirmed = operationalGuests(s, "", "CONFIRMED");
@@ -89,7 +84,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
   const scan = async (value: string) => {
     if (scanning.current || lock.current) return "";
     scanning.current = true;
-    setCamera(false);
+    closeScanner();
     setResult(null);
     try {
       const parsed = ticketToken(value);
@@ -105,7 +100,10 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
     }
   };
   return (
-    <Screen section={section} title="Dia do evento">
+    <Screen
+      section={section}
+      title={role === "CEREMONIALIST" ? "Lista de convidados" : "Dia do evento"}
+    >
       <Card>
         <Text style={styles.title}>{entries.length} check-ins</Text>
         <Text style={styles.text}>
@@ -141,52 +139,17 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
         <Button
           title="Ler QR Code"
           disabled={busy || !app.online}
-          onPress={() =>
-            feedback.run(async () => {
-              let allowed = permission;
-              if (!allowed?.granted) {
-                try {
-                  allowed = await request();
-                } catch {
-                  throw new AppError(
-                    "Câmera indisponível. Verifique a permissão e o dispositivo, ou use a busca manual.",
-                  );
-                }
-              }
-              if (!allowed.granted)
-                throw new AppError(
-                  "Câmera não autorizada ou indisponível. Libere o acesso nas configurações do navegador ou use a busca manual.",
-                );
-              setResult(null);
-              setCamera(true);
-              return "Aponte a câmera para o QR Code individual.";
-            })
-          }
+          onPress={() => {
+            setResult(null);
+            feedback.clear();
+            setCamera(true);
+          }}
         />
-        {camera ? (
-          <View>
-            <CameraView
-              facing="back"
-              style={{ height: 280, width: "100%" }}
-              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-              onBarcodeScanned={(value) =>
-                void feedback.run(() => scan(value.data))
-              }
-              onMountError={() => {
-                setCamera(false);
-                void feedback.run(async () => {
-                  throw new AppError(
-                    "Não foi possível iniciar a câmera ou o leitor. Verifique a permissão e tente novamente, ou use a busca manual.",
-                  );
-                });
-              }}
-            />
-            <Button
-              secondary
-              title="Fechar câmera e usar busca manual"
-              onPress={() => setCamera(false)}
-            />
-          </View>
+        {scannerOpen ? (
+          <CameraScanner
+            onClose={closeScanner}
+            onScan={(value) => void feedback.run(() => scan(value))}
+          />
         ) : null}
         <Field
           label="Token ou conteúdo do QR (entrada acessível)"
@@ -258,14 +221,19 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
               ) : null}
               <Button
                 secondary
-                title={`Registrar entrada manualmente: ${g.name}`}
+                title={
+                  existing
+                    ? `Remover o registro de entrada: ${g.name}`
+                    : `Registrar entrada manualmente: ${g.name}`
+                }
                 disabled={
-                  busy || !!existing || !confirmed.some((p) => p.id === g.id)
+                  busy || (!existing && !confirmed.some((p) => p.id === g.id))
                 }
                 onPress={() => {
                   feedback.clear();
                   setResult(null);
-                  setManual(g);
+                  if (existing) setRemoval(existing);
+                  else setManual(g);
                 }}
               />
             </View>
@@ -291,24 +259,57 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           }}
         />
       ) : null}
+      {removal ? (
+        <Confirmation
+          title="Remover registro de entrada"
+          text={`Deseja remover o registro de entrada de ${s?.guests.find((g) => g.id === removal.guest_id)?.name || "Convidado"}?`}
+          confirmLabel="Remover registro"
+          onCancel={() => setRemoval(null)}
+          onConfirm={async () => {
+            const key = `REMOVE:${removal.id}`;
+            const request = requests.current.get(key) || Crypto.randomUUID();
+            requests.current.set(key, request);
+            await app.removeCheckin(removal.id, request);
+            requests.current.delete(key);
+            setResult(null);
+            setRemoval(null);
+          }}
+        />
+      ) : null}
       <Text style={styles.heading}>Últimas entradas</Text>
-      {entries
+      {(
+        s?.checkin_history ||
+        entries.map((c) => ({
+          ...c,
+          checkin_id: c.id,
+          guest_name:
+            s?.guests.find((g) => g.id === c.guest_id)?.name || "Convidado",
+          action: "ENTRY" as const,
+        }))
+      )
         .slice()
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .slice(0, 15)
         .map((c) => (
           <Card key={c.id}>
             <Text style={styles.text}>
-              {s?.guests.find((g) => g.id === c.guest_id)?.name || "Convidado"}{" "}
-              · {time(c.created_at)} · {c.method}
+              {c.action === "REMOVAL"
+                ? "Entrada removida"
+                : "Entrada registrada"}{" "}
+              — {c.guest_name} · {time(c.created_at)} · {c.method} · Operador:{" "}
+              {c.actor_id}
             </Text>
-            {role === "ADMIN" ? (
+            {role === "ADMIN" &&
+            c.action === "ENTRY" &&
+            entries.some((e) => e.id === c.checkin_id) ? (
               <Button
                 secondary
                 title="Reverter entrada (corrigir registro)"
-                onPress={() =>
-                  feedback.run(() => app.admin("CHECKIN_REVERT", { id: c.id }))
-                }
+                onPress={() => {
+                  feedback.clear();
+                  setResult(null);
+                  setRemoval(entries.find((e) => e.id === c.checkin_id)!);
+                }}
               />
             ) : null}
           </Card>

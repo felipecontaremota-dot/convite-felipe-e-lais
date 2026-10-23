@@ -308,7 +308,7 @@ const nav = {
     ["Informações", "/informacoes"],
     ["Local", "/como-chegar"],
     ["Padrinhos", "/padrinhos"],
-    ["Dia do evento", "/dia-do-evento"],
+    ["Lista de convidados", "/dia-do-evento"],
   ],
 };
 export function Screen({

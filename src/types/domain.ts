@@ -202,6 +202,7 @@ export interface Snapshot {
   rules: Rule[];
   credentials: Credential[];
   checkins: Checkin[];
+  checkin_history?: CheckinHistory[];
   notification_jobs: DeliveryJob[];
   sheet_jobs: SheetJob[];
   invitation_deliveries?: {
@@ -224,6 +225,7 @@ export type MutationType =
   | "RSVP_UPDATE"
   | "CONTACT_UPDATE"
   | "CHECKIN_CREATE"
+  | "CHECKIN_REVERT"
   | "MESSAGE_SEND"
   | "MESSAGE_SEND_TO_GUESTS"
   | "MESSAGE_REPLY"
@@ -242,3 +244,22 @@ export interface OfflineMutation {
 export type ProfileMutationType = "PROFILE_IDENTIFY" | "PROFILE_CONFIRM";
 
 export type CheckinResult = Checkin & { duplicate: boolean };
+
+export interface CheckinHistory {
+  id: string;
+  checkin_id: string;
+  guest_id: string;
+  guest_name: string;
+  action: "ENTRY" | "REMOVAL";
+  created_at: string;
+  actor_id: string;
+  method: "QR" | "MANUAL";
+}
+export interface CheckinRemoval {
+  id: string;
+  event_id: string;
+  guest_id: string;
+  removed_at: string;
+  removed_by: string;
+  duplicate: boolean;
+}

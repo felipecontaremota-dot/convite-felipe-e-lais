@@ -27,7 +27,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     )
       throw new NetworkError();
     const checkinMessage =
-      args.p_type === "CHECKIN_CREATE"
+      args.p_type === "CHECKIN_CREATE" || args.p_type === "CHECKIN_REVERT"
         ? error.message.includes("not confirmed")
           ? "Este convidado não está confirmado para entrada. O RSVP não foi alterado."
           : error.message.includes("inactive invitation")

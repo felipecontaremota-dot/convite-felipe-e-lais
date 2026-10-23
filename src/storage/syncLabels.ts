@@ -8,6 +8,7 @@ export function mutationAction(type: MutationType) {
     RSVP_UPDATE: "Falha ao atualizar presença.",
     CONTACT_UPDATE: "Falha ao atualizar contato.",
     CHECKIN_CREATE: "Falha ao registrar check-in.",
+    CHECKIN_REVERT: "Falha ao remover registro de entrada.",
     GIFT_SELECT: "Falha ao atualizar presente.",
     PUSH_REGISTER: "Falha ao registrar dispositivo.",
   };
