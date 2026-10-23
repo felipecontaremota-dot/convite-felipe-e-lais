@@ -203,12 +203,12 @@ test("ADMIN password login, persistent session, own password update", async ({
   );
   await expect(page.getByLabel("Nova senha", { exact: true })).toHaveValue("");
 });
-test("CEREMONIALIST password routes to check-in", async ({ page }) => {
+test("CEREMONIALIST password routes to its own home", async ({ page }) => {
   await backend(page, "CEREMONIALIST");
   await login(page);
-  await expect(page).toHaveURL(/\/checkin$/);
+  await expect(page).toHaveURL(/\/inicio$/);
   await expect(
-    page.getByRole("heading", { name: "Check-in", exact: true }),
+    page.getByRole("heading", { name: "Bem-vindo ao nosso dia", exact: true }),
   ).toBeVisible();
 });
 test("wrong password and staff without role cannot enter", async ({ page }) => {

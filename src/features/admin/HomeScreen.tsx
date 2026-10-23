@@ -52,7 +52,7 @@ export function AdminHome() {
       "Mensagens não lidas",
       s?.messages.filter((m) => !m.from_admin && !m.read_at).length,
     ],
-    ["Check-ins", s?.checkins.length],
+    ["Check-ins", s?.checkins.filter((c) => !c.local).length],
     ["Convites não enviados", details.counts.unsent],
     [
       "Famílias já ativadas",

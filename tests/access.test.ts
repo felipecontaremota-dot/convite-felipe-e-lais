@@ -28,7 +28,7 @@ function client(role: string | null, badPassword = false) {
 describe("password access verified against backend role", () => {
   it.each([
     ["ADMIN", "/painel"],
-    ["CEREMONIALIST", "/checkin"],
+    ["CEREMONIALIST", "/inicio"],
   ])("%s uses password and routes to %s", async (role, path) => {
     const c = client(role);
     const actual = await passwordLogin(

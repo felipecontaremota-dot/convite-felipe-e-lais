@@ -202,20 +202,12 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
   );
   await page.getByRole("button", { name: "Sair deste dispositivo" }).click();
   await start(page, "cerimonial");
+  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
   await page
     .getByLabel("Token ou conteúdo do QR (entrada acessível)")
     .fill(`wedding://ticket/${token}`);
   await page
     .getByRole("button", { name: "Validar convite", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Confirmar entrada", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("0 / 1 presentes", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Confirmar entrada", exact: true })
     .click();
   await expect(
     page.getByText("1 / 1 presentes", { exact: true }),
@@ -224,7 +216,9 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     .getByRole("button", { name: "Validar convite", exact: true })
     .click();
   await expect(
-    page.getByText("CONVIDADO JÁ REGISTRADO", { exact: true }),
+    page.getByText("Este convidado já teve sua entrada registrada.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Confirmar entrada", exact: true }),
@@ -239,40 +233,40 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     }),
   ).toBeVisible();
 });
-test("offline: check-in manual persiste e sincroniza ao reconectar", async ({
+test("offline: consulta continua disponível sem inventar uma entrada persistida", async ({
   page,
   context,
 }) => {
   await start(page, "cerimonial");
-  await page
-    .getByRole("button", { name: "Preparar / atualizar cache offline" })
-    .click();
+  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
   await context.setOffline(true);
-  await expect(page.getByText(/Sem conexão/)).toBeVisible();
+  await expect(
+    page
+      .getByText(/Sem conexão/)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
   await page
     .getByRole("button", {
       name: "Registrar entrada manualmente: Convidado Um",
       exact: true,
     })
     .click();
-  await page
-    .getByRole("button", { name: "Confirmar entrada", exact: true })
-    .click();
+  const dialog = page.locator("[data-admin-modal]");
+  await dialog.getByRole("button", { name: "Confirmar", exact: true }).click();
   await expect(
-    page.getByText(
-      "Salvo neste dispositivo. Será sincronizado quando houver conexão.",
-      { exact: true },
-    ),
+    dialog.getByText(/Conecte-se para confirmar a entrada/),
   ).toBeVisible();
   await expect(
-    page.getByText("1 / 1 presentes", { exact: true }),
+    page.getByText("0 / 1 presentes", { exact: true }),
   ).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
   await context.setOffline(false);
-  await expect(page.getByText(/aguardando sincronização/)).toHaveCount(0);
   await expect(
-    page.getByText("1 / 1 presentes", { exact: true }),
+    page.getByText("0 / 1 presentes", { exact: true }),
   ).toBeVisible();
 });
+
 test("uma sessão existente não autoriza um novo código inválido", async ({
   page,
 }) => {

@@ -51,7 +51,13 @@ function InfoLink({
   external?: boolean;
 }) {
   const app = useApp();
-  if (!external && !canAccess(app.data?.role || null, "guest"))
+  const allowedStaffLink =
+    app.data?.role === "CEREMONIALIST" && href === "/como-chegar";
+  if (
+    !external &&
+    !allowedStaffLink &&
+    !canAccess(app.data?.role || null, "guest")
+  )
     return <Bold>{children}</Bold>;
   return (
     <Link href={href} asChild>
@@ -72,8 +78,12 @@ function Topic({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 export function InfoScreen() {
+  const role = useApp().data?.role;
   return (
-    <Screen section="guest" title="Informações">
+    <Screen
+      section={role === "CEREMONIALIST" ? "ceremonial" : "guest"}
+      title="Informações"
+    >
       {Platform.OS === "web" ? (
         <style>{`
         [data-testid="wedding-information"] a { transition: color 180ms ease; }

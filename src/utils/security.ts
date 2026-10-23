@@ -75,6 +75,6 @@ export function staffDestination(role: Role | null) {
   return role === "ADMIN"
     ? "/painel"
     : role === "CEREMONIALIST"
-      ? "/checkin"
+      ? "/inicio"
       : null;
 }

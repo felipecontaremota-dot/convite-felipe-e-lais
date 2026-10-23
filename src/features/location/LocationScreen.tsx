@@ -10,12 +10,15 @@ import { GuestLocationActions } from "./GuestLocationActions";
 export function LocationScreen({
   section = "guest",
 }: {
-  section?: "guest" | "admin";
+  section?: "guest" | "admin" | "ceremonial";
 }) {
   const app = useApp();
   const toast = useFxToast();
   return (
-    <Screen section={section} title="Local">
+    <Screen
+      section={app.data?.role === "CEREMONIALIST" ? "ceremonial" : section}
+      title="Local"
+    >
       <LocationCard
         event={app.data?.event}
         onCopied={() => toast.notify("Endereço copiado")}

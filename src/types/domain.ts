@@ -33,6 +33,7 @@ export interface Invitation {
   version: number;
 }
 export interface Guest {
+  party_role?: "PADRINHO" | "MADRINHA" | null;
   invitation_sent?: boolean;
   profile_confirmed_at?: string | null;
   greeting_form?: "MASCULINE" | "FEMININE" | null;
@@ -184,6 +185,7 @@ export interface Snapshot {
     messaging_v2?: boolean;
     notification_schedules?: boolean;
     admin_guest_controls?: boolean;
+    ceremonial_portal?: boolean;
   };
   notification_schedules?: NotificationSchedule[];
   current_invitation_id?: string | null;
@@ -238,3 +240,5 @@ export interface OfflineMutation {
 }
 
 export type ProfileMutationType = "PROFILE_IDENTIFY" | "PROFILE_CONFIRM";
+
+export type CheckinResult = Checkin & { duplicate: boolean };

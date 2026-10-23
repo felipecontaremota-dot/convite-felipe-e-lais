@@ -26,15 +26,28 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
       error.message.includes("Network")
     )
       throw new NetworkError();
+    const checkinMessage =
+      args.p_type === "CHECKIN_CREATE"
+        ? error.message.includes("not confirmed")
+          ? "Este convidado não está confirmado para entrada. O RSVP não foi alterado."
+          : error.message.includes("inactive invitation")
+            ? "Este convite está inativo ou arquivado."
+            : error.message.includes("invalid QR")
+              ? "QR Code inválido, revogado ou não reconhecido."
+              : error.message.includes("checkin request")
+                ? "Esta tentativa não pode ser reutilizada. Atualize os dados antes de registrar a entrada."
+                : null
+        : null;
     throw new AppError(
-      error.message.includes("unauthorized")
-        ? "Acesso não autorizado."
-        : error.message.includes("family access required")
-          ? "Configure a senha e gere o link da família antes de adicionar membros."
-          : error.message.includes("ticket_exists")
-            ? "Já existe um convite. Escolha Emitir novo convite para substituir a versão anterior."
-            : administrativeError(error.message) ||
-              "Não foi possível concluir a operação.",
+      checkinMessage ||
+        (error.message.includes("unauthorized")
+          ? "Acesso não autorizado."
+          : error.message.includes("family access required")
+            ? "Configure a senha e gere o link da família antes de adicionar membros."
+            : error.message.includes("ticket_exists")
+              ? "Já existe um convite. Escolha Emitir novo convite para substituir a versão anterior."
+              : administrativeError(error.message) ||
+                "Não foi possível concluir a operação."),
       error.code,
     );
   }

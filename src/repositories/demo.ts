@@ -227,7 +227,17 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       s.gifts = [];
       s.gift_selections = [];
       s.rules = [];
-      s.rsvps = s.rsvps.map((r) => ({ ...r, dietary: "", note: "" }));
+      s.credentials = [];
+      s.announcements = [];
+      s.invitation_deliveries = [];
+    }
+    if (role === "ADMIN" || role === "CEREMONIALIST") {
+      s.capabilities = { ...s.capabilities, ceremonial_portal: true };
+      s.guests.forEach((g) => {
+        g.party_role =
+          db.weddingParty?.find((p) => p.active && p.guest_id === g.id)?.role ||
+          null;
+      });
     }
     if (role === "ADMIN") {
       s.capabilities = { ...s.capabilities, admin_guest_controls: true };
@@ -241,7 +251,7 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
         delete i.sharing_code;
       });
       s.guests.forEach((g) => {
-        delete g.admin_notes;
+        if (role !== "CEREMONIALIST") delete g.admin_notes;
         delete g.invitation_sent;
       });
     }
@@ -250,10 +260,23 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
 }
 export async function demoMutate(m: OfflineMutation, role: Role) {
   return transaction((db) => {
-    if (db.applied.includes(m.mutationId)) return;
+    if (db.applied.includes(m.mutationId) && m.type !== "CHECKIN_CREATE")
+      return;
     const s = db.snapshot,
       p = m.payload,
-      g = s.guests.find((g) => g.id === p.guest_id);
+      g = s.guests.find(
+        (g) =>
+          g.id === p.guest_id ||
+          (m.type === "CHECKIN_CREATE" &&
+            p.method === "QR" &&
+            !p.guest_id &&
+            s.credentials.some(
+              (c) =>
+                c.guest_id === g.id &&
+                c.token_hash === p.token_hash &&
+                !c.revoked_at,
+            )),
+      );
     if (m.type !== "CHECKIN_CREATE" && role === "CEREMONIALIST")
       throw Error("Acesso restrito");
     if (g && role === "GUEST" && g.invitation_id !== demoFamily)
@@ -451,6 +474,12 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
       }
       case "CHECKIN_CREATE": {
         if (
+          !s.invitations.some(
+            (i) => i.id === g?.invitation_id && i.active && !i.archived_at,
+          )
+        )
+          throw Error("Convite inativo");
+        if (
           role === "GUEST" ||
           !g ||
           !s.rsvps.some((r) => r.guest_id === g.id && r.status === "CONFIRMED")
@@ -476,7 +505,8 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             actor_id: "demo",
             created_at: stamp(),
           });
-        break;
+        if (!db.applied.includes(m.mutationId)) db.applied.push(m.mutationId);
+        return s.checkins.find((c) => c.guest_id === g.id)!;
       }
       case "GIFT_SELECT": {
         if (!g || !s.gifts.some((x) => x.id === p.gift_id && x.active))

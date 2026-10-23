@@ -295,6 +295,7 @@ const nav = {
     ["Painel", "/painel"],
     ["Famílias", "/familias"],
     ["Convidados", "/convidados"],
+    ["Padrinhos", "/padrinhos"],
     ["Presentes", "/gestao-presentes"],
     ["Mensagens", "/gestao-mensagens"],
     ["Notificações", "/notificacoes"],
@@ -303,8 +304,11 @@ const nav = {
     ["Minha conta", "/conta"],
   ],
   ceremonial: [
-    ["Check-in", "/checkin"],
-    ["Minha conta", "/conta"],
+    ["Início", "/inicio"],
+    ["Informações", "/informacoes"],
+    ["Local", "/como-chegar"],
+    ["Padrinhos", "/padrinhos"],
+    ["Dia do evento", "/dia-do-evento"],
   ],
 };
 export function Screen({
@@ -419,7 +423,15 @@ export function Screen({
                   messageCenter.show();
                 else router.push(path as never);
               }}
-              style={[styles.nav, pathname === path && styles.selected]}
+              style={[
+                styles.nav,
+                section === "ceremonial" &&
+                  path === "/dia-do-evento" && {
+                    borderColor: theme.colors.primary,
+                    backgroundColor: theme.colors.wash,
+                  },
+                pathname === path && styles.selected,
+              ]}
             >
               <Text
                 style={[
@@ -435,7 +447,7 @@ export function Screen({
               ) : null}
             </Pressable>
           ))}
-          {section === "guest" ? (
+          {section === "guest" || section === "ceremonial" ? (
             <InstallAppButton navStyle={styles.nav} textStyle={styles.small} />
           ) : null}
         </View>

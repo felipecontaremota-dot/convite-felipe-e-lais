@@ -632,6 +632,9 @@ export function GuestsScreen() {
                   !
                 </Text>
               ) : null}
+              {data?.checkins.some((c) => c.guest_id === g.id && !c.local) ? (
+                <Tag tone="confirmed">Presente</Tag>
+              ) : null}
               <GuestRsvpControl guest={g} />
               <GuestSendingControl guest={g} />
               <GuestInvitationActions

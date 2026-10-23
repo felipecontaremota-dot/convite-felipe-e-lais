@@ -24,7 +24,6 @@ export function GuestHome() {
   const [presenceTrigger, setPresenceTrigger] = useState<HTMLElement | null>(
     null,
   );
-  const [highlight, setHighlight] = useState(false);
   const app = useApp(),
     s = app.data;
   return (
@@ -33,49 +32,7 @@ export function GuestHome() {
       title={homeGreeting(s?.invitations[0], s?.guests ?? [])}
     >
       <Card>
-        {s ? <WeddingCountdown startsAt={s.event.starts_at} /> : null}
-        <Image
-          source={require("../../../assets/branding/icon.png")}
-          accessibilityLabel="Monograma Felipe & Laís"
-          accessible
-          resizeMode="contain"
-          style={{
-            width: 210,
-            height: 210,
-            maxWidth: "100%",
-            alignSelf: "center",
-            marginVertical: 16,
-          }}
-        />
-        <WeddingDetail
-          icon="M7 3v4m10-4v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2"
-          text="15 de dezembro de 2026"
-        />
-        <WeddingDetail
-          icon="M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"
-          text="Às 16h"
-        />
-        <Pressable
-          accessibilityRole="link"
-          accessibilityLabel="Villarejo"
-          onPress={() => router.push("/como-chegar")}
-          onHoverIn={() => setHighlight(true)}
-          onHoverOut={() => setHighlight(false)}
-          onFocus={() => setHighlight(true)}
-          onBlur={() => setHighlight(false)}
-          style={({ pressed }) => ({
-            minHeight: 48,
-            justifyContent: "center",
-            borderRadius: 8,
-            backgroundColor:
-              highlight || pressed ? theme.colors.wash : "transparent",
-          })}
-        >
-          <WeddingDetail
-            icon="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0"
-            text="Villarejo"
-          />
-        </Pressable>
+        <WeddingOverview startsAt={s?.event.starts_at} />
         <Button
           secondary
           title="Ver informações"
@@ -151,5 +108,56 @@ function WeddingDetail({ icon, text }: { icon: string; text: string }) {
         · {text}
       </Text>
     </View>
+  );
+}
+
+export function WeddingOverview({ startsAt }: { startsAt?: string }) {
+  const [highlight, setHighlight] = useState(false);
+  return (
+    <>
+      {startsAt ? <WeddingCountdown startsAt={startsAt} /> : null}
+      <Image
+        source={require("../../../assets/branding/icon.png")}
+        accessibilityLabel="Monograma Felipe & Laís"
+        accessible
+        resizeMode="contain"
+        style={{
+          width: 210,
+          height: 210,
+          maxWidth: "100%",
+          alignSelf: "center",
+          marginVertical: 16,
+        }}
+      />
+      <WeddingDetail
+        icon="M7 3v4m10-4v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2"
+        text="15 de dezembro de 2026"
+      />
+      <WeddingDetail
+        icon="M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"
+        text="Às 16h"
+      />
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel="Villarejo"
+        onPress={() => router.push("/como-chegar")}
+        onHoverIn={() => setHighlight(true)}
+        onHoverOut={() => setHighlight(false)}
+        onFocus={() => setHighlight(true)}
+        onBlur={() => setHighlight(false)}
+        style={({ pressed }) => ({
+          minHeight: 48,
+          justifyContent: "center",
+          borderRadius: 8,
+          backgroundColor:
+            highlight || pressed ? theme.colors.wash : "transparent",
+        })}
+      >
+        <WeddingDetail
+          icon="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0"
+          text="Villarejo"
+        />
+      </Pressable>
+    </>
   );
 }

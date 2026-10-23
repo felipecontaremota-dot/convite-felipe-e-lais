@@ -22,6 +22,7 @@ export default defineConfig({
         "access-stabilization.spec.ts",
         "profile-confirmation.spec.ts",
         "admin-guest-controls.spec.ts",
+        "ceremonial-portal.spec.ts",
       ],
     },
     {
@@ -32,6 +33,7 @@ export default defineConfig({
         "access-stabilization.spec.ts",
         "profile-confirmation.spec.ts",
         "admin-guest-controls.spec.ts",
+        "ceremonial-portal.spec.ts",
       ],
       use: { baseURL: "http://127.0.0.1:8083" },
     },

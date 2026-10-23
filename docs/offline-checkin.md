@@ -1,17 +1,16 @@
-# Operação offline do cerimonial
+# Consulta offline e confirmação de entrada
 
-1. Faça login autorizado com conexão e abra Check-in/Dia do evento.
-2. Toque em Preparar / atualizar cache offline. Verifique a quantidade de confirmados e entre no local com a base atualizada.
-3. O snapshot salva nomes, famílias ativas, status confirmado, hashes de QR válidos e entradas conhecidas. Contatos, conversas e restrições alimentares não são enviados ao cerimonial.
-4. Sem conexão, escaneie o QR ou busque pelo nome/família. A entrada acessível aceita o conteúdo do QR e valida exatamente como o scanner.
-5. O app extrai o token opaco, calcula SHA-256 e procura no cache. Exibe a pessoa antes de registrar. Entrada manual é alternativa para pessoas confirmadas.
-6. Confirmar entrada gera UUID de mutação, grava na fila e mostra o registro local. A UI diz “Salvo neste dispositivo. Será sincronizado quando houver conexão.”
-7. Ao reconectar, a fila reenvia com o mesmo UUID. PostgreSQL deduplica por mutation_id e evento/convidado. Snapshot atualizado substitui a entrada local e a outbox registra a projeção para Sheets.
+1. Faça login autorizado com conexão e abra **Dia do evento**.
+2. Use **Preparar / atualizar cache offline** para salvar a base de consulta atualizada neste dispositivo.
+3. O cerimonial recebe nomes, famílias ativas, classificações reais de padrinhos, RSVP, observações gerais/alimentares/de RSVP e entradas persistidas. Não recebe contatos, conversas, valores financeiros, senhas, links exclusivos ou hashes de credenciais QR.
+4. Sem conexão, busque por nome/família e consulte o último estado conhecido. **Uma entrada nova exige confirmação do servidor.** O scanner fica indisponível offline; uma tentativa manual informa que é preciso conectar antes de confirmar. Nenhuma entrada local pendente recebe a tag Presente ou aumenta o contador.
+5. Com conexão, o scanner extrai o token do QR existente e calcula SHA-256. O backend autentica o operador, valida evento, credencial não revogada, unidade ativa e RSVP confirmado e registra automaticamente. O token não é salvo em logs.
+6. A entrada manual exige o modal **Deseja confirmar a entrada de [Nome]?**. Cancelar não envia mutação. Erro mantém o modal aberto; a repetição conserva o UUID para recuperar o resultado com segurança.
+7. A confirmação e o horário vêm da tabela `checkins`, com método QR/MANUAL e usuário responsável. Os índices únicos existentes e o bloqueio transacional impedem duplicidade entre dispositivos. A auditoria e a projeção para Sheets existentes são preservadas.
+8. Postgres Changes avisa dispositivos autorizados. Há também atualização periódica/foco e, na tela operacional visível e online, fallback de cinco segundos. Sem rede não é possível conhecer entradas registradas em outro aparelho.
 
-Não é possível conhecer entradas feitas por outro celular enquanto ambos estão completamente offline. Revogações/mudanças após o último cache também não são conhecidas offline: sincronize próximo ao início e mantenha procedimento humano para situações divergentes. O servidor revalida confirmação e validade atual do hash ao receber QR; uma revogação retém o item com erro, sem declarar a entrada como sincronizada. Entradas manuais registram método MANUAL, actor e horário do servidor.
+A fila genérica preexistente continua atendendo os demais fluxos autorizados; registros antigos nela não são prova de entrada. A reconexão não inventa um novo registro de check-in pela interface operacional.
 
-O horário canônico de check-in é o de aceitação server-side. O timestamp local é exibido enquanto pendente; não é prova de horário físico. O job de planilha pode concluir depois da entrada e nunca bloqueia a fila principal. Se houver duplicidade entre aparelhos, vale o registro já existente no backend; a UI mostra responsável e horário originais na nova leitura.
+AsyncStorage mantém cache separado por conta/evento. Auth usa SecureStore no nativo e storage da origem no web. O cache operacional contém dados pessoais necessários ao evento, não é criptografado por esse driver e deve ficar em aparelho protegido e individual. Sair remove o cache da conta; a saída segura preserva o tratamento existente de pendências. Revogações só podem ser revalidadas com rede.
 
-AsyncStorage é o driver persistente multiplataforma, isolado por conta/evento. Auth usa SecureStore no nativo e storage de origem no web. Evite aparelhos compartilhados sem bloqueio; dados offline não são cifrados por este driver. Planeje driver criptografado/SQLite e expiração automática de cache conforme política final de retenção antes da distribuição ao público. Sair remove o cache/ingressos da conta; pendências requerem descarte explícito. Tokens do ingresso estão no cache local, nunca no QR hash exportado ao cerimonial.
-
-Web offline depende de primeiro acesso online e de export/hosting com service worker/HTTPS. Expo dev não registra o service worker. Shell estático e cache de dados são separados; APIs Supabase e URLs de convites não são cacheadas pelo worker. No primeiro acesso sem conexão não há como validar um código novo.
+Web offline depende de primeiro acesso online, exportação com service worker e HTTPS. O shell e o cache operacional são separados. O worker e o manifest não foram alterados pelo Portal do Cerimonialista.

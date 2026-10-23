@@ -13,6 +13,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { AppState, Platform } from "react-native";
 import type {
   Snapshot,
+  CheckinResult,
   Role,
   OfflineMutation,
   MutationType,
@@ -27,6 +28,10 @@ import { storage, readCache, writeCache } from "../storage/driver";
 import { AppError, SyncError } from "./errors";
 import { getDeviceTicket } from "../repositories/tickets";
 interface ContextValue {
+  checkin: (
+    payload: Record<string, unknown>,
+    mutationId: string,
+  ) => Promise<CheckinResult>;
   data: Snapshot | null;
   loading: boolean;
   error: unknown;
@@ -249,6 +254,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => listener.remove();
   }, [online, sync]);
   const refetch = query.refetch;
+  const liveRole = (query.data || cached)?.role;
+  useEffect(() => {
+    if (
+      !supabase ||
+      !online ||
+      !["ADMIN", "CEREMONIALIST"].includes(liveRole || "")
+    )
+      return;
+    const liveClient = supabase;
+    const channel = liveClient
+      .channel(`checkins:${scope}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "checkins",
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          void refetch().catch(() => undefined);
+        },
+      )
+      .subscribe();
+    return () => {
+      void liveClient.removeChannel(channel);
+    };
+  }, [scope, liveRole, online, refetch]);
   const credentialState = JSON.stringify(
     (query.data || cached)?.credentials || [],
   );
@@ -543,6 +576,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (supabase) await supabase.auth.signOut();
       setUser(null);
       client.clear();
+    },
+    checkin: async (payload, mutationId) => {
+      if (!online)
+        throw new AppError(
+          "Conecte-se para confirmar a entrada. Nenhum registro foi enviado.",
+        );
+      if (
+        !["ADMIN", "CEREMONIALIST"].includes((query.data || cached)?.role || "")
+      )
+        throw new AppError("Acesso restrito.");
+      const item: OfflineMutation = {
+        mutationId,
+        type: "CHECKIN_CREATE",
+        payload,
+        createdAt: new Date().toISOString(),
+        attempts: 0,
+        lastError: null,
+      };
+      let result: CheckinResult;
+      if (demoRole) {
+        const before = (await demo.demoSnapshot(demoRole)).checkins;
+        const checkin = await demo.demoMutate(item, demoRole);
+        if (!checkin)
+          throw new AppError("Não foi possível confirmar a entrada.");
+        result = {
+          ...checkin,
+          duplicate: before.some((c) => c.id === checkin.id),
+        };
+      } else result = (await api.mutate(item)) as CheckinResult;
+      if (
+        !result?.id ||
+        !result.guest_id ||
+        !result.created_at ||
+        result.event_id !==
+          (demoRole ? (query.data || cached)?.event.id : eventId)
+      )
+        throw new AppError(
+          "Não foi possível verificar o registro. Atualize os dados antes de tentar novamente.",
+        );
+      await query.refetch({ throwOnError: true });
+      return result;
     },
     send: async (type, payload) => {
       if (!demoRole && !user) throw new AppError("Abra seu convite primeiro.");
