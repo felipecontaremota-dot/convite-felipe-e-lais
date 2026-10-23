@@ -22,7 +22,7 @@ const frame = Buffer.concat([Buffer.from("FRAME\n"), y, uv, uv]);
 writeFileSync(
   process.argv[2],
   Buffer.concat([
-    Buffer.from(`YUV4MPEG2 W${width} H${height} F5:1 Ip A1:1 C420jpeg\n`),
-    ...Array(5).fill(frame),
+    Buffer.from(`YUV4MPEG2 W${width} H${height} F30:1 Ip A1:1 C420jpeg\n`),
+    ...Array(60).fill(frame),
   ]),
 );

@@ -276,6 +276,9 @@ test("real QR decoding through simulated camera, automatic registration and dupl
     `wedding://ticket/${ticket.token}`,
   ]);
   const browser = await chromium.launch({
+    // Full Chromium/new headless, matching real browser media APIs. The default
+    // Playwright Headless Shell is a different executable from the local browser.
+    channel: "chromium",
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH,
     args: [
       "--no-sandbox",
@@ -306,9 +309,31 @@ test("real QR decoding through simulated camera, automatic registration and dupl
     await page
       .getByRole("button", { name: "Ler QR Code", exact: true })
       .click();
-    await expect(
-      page.getByText("Entrada confirmada.", { exact: true }),
-    ).toBeVisible({ timeout: 30000 });
+    try {
+      await expect(
+        page.getByText("Entrada confirmada.", { exact: true }),
+      ).toBeVisible({ timeout: 30000 });
+    } catch (cause) {
+      // Media metadata and UI errors only; never log QR contents or credentials.
+      const media = await page.evaluate(() => {
+        const v = document.querySelector("video");
+        return v
+          ? {
+              readyState: v.readyState,
+              width: v.videoWidth,
+              height: v.videoHeight,
+              paused: v.paused,
+              currentTime: v.currentTime,
+              mediaError: v.error?.code,
+            }
+          : null;
+      });
+      const alerts = await page.getByRole("alert").allTextContents();
+      throw new Error(
+        `Camera QR validation failed: ${JSON.stringify({ media, alerts })}`,
+        { cause },
+      );
+    }
     expect(
       snapshot().checkins.filter(
         (c: { guest_id: string }) => c.guest_id === g.id,
