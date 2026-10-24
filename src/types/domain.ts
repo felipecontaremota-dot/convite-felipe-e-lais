@@ -243,7 +243,10 @@ export interface OfflineMutation {
 
 export type ProfileMutationType = "PROFILE_IDENTIFY" | "PROFILE_CONFIRM";
 
-export type CheckinResult = Checkin & { duplicate: boolean };
+export type CheckinResult = Checkin & {
+  duplicate: boolean;
+  guest_name?: string;
+};
 
 export interface CheckinHistory {
   id: string;
@@ -253,6 +256,7 @@ export interface CheckinHistory {
   action: "ENTRY" | "REMOVAL";
   created_at: string;
   actor_id: string;
+  actor_role?: "ADMIN" | "CEREMONIALIST" | null;
   method: "QR" | "MANUAL";
 }
 export interface CheckinRemoval {

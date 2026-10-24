@@ -212,6 +212,13 @@ test("cerimonial: QR de demonstração, conferência, check-in idempotente e iso
     .getByRole("button", { name: "Validar convite", exact: true })
     .click();
   await expect(
+    page.getByRole("dialog", {
+      name: "Entrada de Convidado Um registrada",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Ok", exact: true }).click();
+  await expect(
     page.getByText("1 / 1 presentes", { exact: true }),
   ).toBeVisible();
   await page

@@ -53,6 +53,7 @@ export class TestPostgres {
       | "prod-profile"
       | "pre-confirmation"
       | "pre-admin-guest"
+      | "pre-checkin-actor-role"
       | "pre-checkin-reversal" = "main",
   ) {
     if (this.ci) {
@@ -100,13 +101,15 @@ export class TestPostgres {
           (f) =>
             f.endsWith(".sql") &&
             (baseline === "main" ||
-              (baseline === "pre-checkin-reversal"
-                ? f < "20261023115359"
-                : baseline === "pre-admin-guest"
-                  ? f < adminGuestCutoff!
-                  : baseline === "prod-profile"
-                    ? f < "20261013204105"
-                    : f < "20261015033043")),
+              (baseline === "pre-checkin-actor-role"
+                ? f < "20261024004410"
+                : baseline === "pre-checkin-reversal"
+                  ? f < "20261023115359"
+                  : baseline === "pre-admin-guest"
+                    ? f < adminGuestCutoff!
+                    : baseline === "prod-profile"
+                      ? f < "20261013204105"
+                      : f < "20261015033043")),
         )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));

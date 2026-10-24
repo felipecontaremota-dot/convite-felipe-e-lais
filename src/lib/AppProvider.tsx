@@ -661,8 +661,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw new AppError(
           "Não foi possível verificar o registro. Atualize os dados antes de tentar novamente.",
         );
-      await query.refetch({ throwOnError: true });
-      return result;
+      const refreshed = await query.refetch({ throwOnError: true });
+      return {
+        ...result,
+        guest_name: refreshed.data?.guests.find((g) => g.id === result.guest_id)
+          ?.name,
+      };
     },
     send: async (type, payload) => {
       if (!demoRole && !user) throw new AppError("Abra seu convite primeiro.");

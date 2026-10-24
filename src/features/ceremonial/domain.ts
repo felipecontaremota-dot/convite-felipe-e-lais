@@ -33,3 +33,9 @@ export function operationalGuests(
       a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
     );
 }
+
+export function checkinOperatorLabel(role: unknown) {
+  if (role === "CEREMONIALIST") return "Cerimonialista";
+  if (role === "ADMIN") return "Noivos";
+  return "Operador não identificado";
+}

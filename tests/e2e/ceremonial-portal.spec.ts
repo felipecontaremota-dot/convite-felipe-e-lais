@@ -50,7 +50,7 @@ function person(
 async function backend(
   page: Page,
   uid = staff,
-  options: { fail?: boolean } = {},
+  options: { fail?: boolean; beforeCheckin?: () => Promise<void> } = {},
 ) {
   const enc = (v: unknown) =>
       Buffer.from(JSON.stringify(v)).toString("base64url"),
@@ -83,6 +83,7 @@ async function backend(
         data = path.endsWith("/user") ? user : session;
       else if (path.startsWith("/rest/v1/rpc/")) {
         if (args.p_type) calls.push(args);
+        if (args.p_type === "CHECKIN_CREATE") await options.beforeCheckin?.();
         if (
           options.fail &&
           ["CHECKIN_CREATE", "CHECKIN_REVERT"].includes(args.p_type)
@@ -317,6 +318,25 @@ for (const width of [320, 1280])
       .click();
     await expect(dialog).toHaveCount(0);
     await expect(remove).toBeVisible();
+    await expect(
+      page
+        .getByText(
+          new RegExp(`Entrada removida — ${g.name}.*Operador: Cerimonialista`),
+        )
+        .filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByText(
+          new RegExp(
+            `Entrada registrada — ${g.name}.*Operador: Cerimonialista`,
+          ),
+        )
+        .filter({ visible: true }),
+    ).toHaveCount(2);
+    await expect(page.getByText(new RegExp(`Operador: ${staff}`))).toHaveCount(
+      0,
+    );
     const history = snapshot().checkin_history.filter(
       (c: { guest_id: string }) => c.guest_id === g.id,
     );
@@ -413,7 +433,10 @@ test("real QR decoding through simulated camera, automatic registration and dupl
       .click();
     try {
       await expect(
-        page.getByText("Entrada confirmada.", { exact: true }),
+        page.getByRole("dialog", {
+          name: `Entrada de ${g.name} registrada`,
+          exact: true,
+        }),
       ).toBeVisible({ timeout: 30000 });
     } catch (cause) {
       // Media metadata and UI errors only; never log QR contents or credentials.
@@ -441,6 +464,13 @@ test("real QR decoding through simulated camera, automatic registration and dupl
         (c: { guest_id: string }) => c.guest_id === g.id,
       ),
     ).toHaveLength(1);
+    await page.getByRole("button", { name: "Ok", exact: true }).click();
+    await page
+      .getByRole("button", {
+        name: "Fechar câmera e usar busca manual",
+        exact: true,
+      })
+      .click();
     await page
       .getByLabel("Token ou conteúdo do QR (entrada acessível)")
       .fill(`wedding://ticket/${ticket.token}`);
@@ -480,8 +510,18 @@ test("real QR decoding through simulated camera, automatic registration and dupl
       .getByRole("button", { name: "Ler QR Code", exact: true })
       .click();
     await expect(
-      page.getByText("Entrada confirmada.", { exact: true }),
+      page.getByRole("dialog", {
+        name: `Entrada de ${g.name} registrada`,
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 30000 });
+    await page.getByRole("button", { name: "Ok", exact: true }).click();
+    await page
+      .getByRole("button", {
+        name: "Fechar câmera e usar busca manual",
+        exact: true,
+      })
+      .click();
     const reentry = snapshot().checkins.filter(
       (c: { guest_id: string }) => c.guest_id === g.id,
     );
@@ -508,6 +548,259 @@ test("real QR decoding through simulated camera, automatic registration and dupl
     await browser.close();
     unlinkSync(video);
   }
+});
+
+for (const scenario of [
+  { uid: staff, width: 320 },
+  { uid: admin, width: 1280 },
+])
+  test(`QR confirmation waits for backend, pauses reads and continues without restarting at ${scenario.width}px`, async () => {
+    test.setTimeout(120000);
+    const first = person(`Primeira leitura ${scenario.width}`),
+      second = person(`Segunda leitura ${scenario.width}`);
+    const tickets = [first, second].map((g) =>
+      db.rpc(admin, "issue_ticket", {
+        p_event: event,
+        p_guest: g.id,
+        p_regenerate: false,
+      }),
+    );
+    const videoFile = `/tmp/ceremonial-sequence-${randomUUID()}.y4m`;
+    execFileSync(process.execPath, [
+      "tests/support/qr-video.mjs",
+      videoFile,
+      ...tickets.map((t) => `wedding://ticket/${t.token}`),
+    ]);
+    const browser = await chromium.launch({
+      channel: "chromium",
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH,
+      args: [
+        "--no-sandbox",
+        "--use-fake-device-for-media-stream",
+        `--use-file-for-fake-video-capture=${videoFile}`,
+      ],
+    });
+    let release = () => {};
+    try {
+      const context = await browser.newContext({
+        baseURL: "http://127.0.0.1:8083",
+        permissions: ["camera"],
+        viewport: { width: scenario.width, height: 900 },
+      });
+      const page = await context.newPage();
+      await page.route(/zxing.*\.wasm/, (route) =>
+        route.fulfill({
+          path: "node_modules/zxing-wasm/dist/reader/zxing_reader.wasm",
+          contentType: "application/wasm",
+        }),
+      );
+      const options: { fail?: boolean; beforeCheckin?: () => Promise<void> } = {
+        fail: true,
+      };
+      const calls = await backend(page, scenario.uid, options);
+      await login(page);
+      await page
+        .getByRole("link", {
+          name:
+            scenario.uid === admin ? "Dia do evento" : "Lista de convidados",
+          exact: true,
+        })
+        .click();
+      // Neither invalid content nor a failed real mutation may show success.
+      await page
+        .getByLabel("Token ou conteúdo do QR (entrada acessível)")
+        .fill("invalid");
+      await page
+        .getByRole("button", { name: "Validar convite", exact: true })
+        .click();
+      await expect(page.getByText(/QR Code inválido/)).toBeVisible();
+      expect(calls).toHaveLength(0);
+      await page
+        .getByLabel("Token ou conteúdo do QR (entrada acessível)")
+        .fill(`wedding://ticket/${tickets[0].token}`);
+      await page
+        .getByRole("button", { name: "Validar convite", exact: true })
+        .click();
+      await expect(
+        page.getByRole("alert").filter({ hasText: /Não foi possível/ }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("dialog", { name: /^Entrada de/ }),
+      ).toHaveCount(0);
+      expect(
+        snapshot().checkins.some(
+          (c: { guest_id: string }) => c.guest_id === first.id,
+        ),
+      ).toBe(false);
+      options.fail = false;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let waiting = true;
+      options.beforeCheckin = async () => {
+        if (waiting) {
+          waiting = false;
+          await gate;
+        }
+      };
+      await page
+        .getByRole("button", { name: "Ler QR Code", exact: true })
+        .click();
+      await expect.poll(() => calls.length).toBe(2);
+      await expect(
+        page.getByRole("dialog", { name: /^Entrada de/ }),
+      ).toHaveCount(0);
+      expect(
+        snapshot().checkins.some(
+          (c: { guest_id: string }) => c.guest_id === first.id,
+        ),
+      ).toBe(false);
+      const video = page.getByTestId("camera-preview").locator("video");
+      const stream = await video.evaluateHandle(
+        (v: HTMLVideoElement) => v.srcObject as MediaStream,
+      );
+      release();
+      const confirmation = page.getByRole("dialog", {
+        name: `Entrada de ${first.name} registrada`,
+        exact: true,
+      });
+      await expect(confirmation).toBeVisible({ timeout: 30000 });
+      await expect(confirmation.getByRole("button")).toHaveCount(1);
+      await expect(
+        confirmation.getByRole("button", { name: "Ok", exact: true }),
+      ).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(confirmation).toBeVisible();
+      // The live camera now presents another QR; no mutation is allowed until Ok.
+      await page.waitForTimeout(7000);
+      expect(calls).toHaveLength(2);
+      expect(
+        snapshot().checkins.some(
+          (c: { guest_id: string }) => c.guest_id === second.id,
+        ),
+      ).toBe(false);
+      await page.screenshot({
+        path: `/tmp/qr-confirmation-${scenario.width}.png`,
+        animations: "disabled",
+      });
+      await confirmation
+        .getByRole("button", { name: "Ok", exact: true })
+        .click();
+      const next = page.getByRole("dialog", {
+        name: `Entrada de ${second.name} registrada`,
+        exact: true,
+      });
+      await expect(next).toBeVisible({ timeout: 30000 });
+      expect(calls).toHaveLength(3);
+      expect(
+        await stream.evaluate((s) =>
+          s.getTracks().every((t) => t.readyState === "live"),
+        ),
+      ).toBe(true);
+      expect(
+        await video.evaluate(
+          (v: HTMLVideoElement, s: MediaStream) => v.srcObject === s,
+          stream,
+        ),
+      ).toBe(true);
+      expect(
+        snapshot().checkins.filter((c: { guest_id: string }) =>
+          [first.id, second.id].includes(c.guest_id),
+        ),
+      ).toHaveLength(2);
+      await next.getByRole("button", { name: "Ok", exact: true }).click();
+      await page
+        .getByRole("button", {
+          name: "Fechar câmera e usar busca manual",
+          exact: true,
+        })
+        .click();
+      await expect(
+        page.getByRole("dialog", { name: /^Entrada de/ }),
+      ).toHaveCount(0);
+      const row = page
+        .getByTestId("operational-guest")
+        .filter({ visible: true })
+        .filter({ hasText: first.name });
+      await expect(row.getByText("Presente", { exact: true })).toBeVisible();
+      await page
+        .getByRole("button", {
+          name: `Remover o registro de entrada: ${first.name}`,
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("button", { name: "Remover registro", exact: true })
+        .click();
+      const operator = scenario.uid === admin ? "Noivos" : "Cerimonialista";
+      await expect(
+        page
+          .getByText(
+            new RegExp(
+              `Entrada registrada — ${first.name}.*Operador: ${operator}`,
+            ),
+          )
+          .filter({ visible: true }),
+      ).toBeVisible();
+      await expect(
+        page
+          .getByText(
+            new RegExp(
+              `Entrada removida — ${first.name}.*Operador: ${operator}`,
+            ),
+          )
+          .filter({ visible: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(new RegExp(`Operador: ${scenario.uid}`)),
+      ).toHaveCount(0);
+      await context.close();
+    } finally {
+      release();
+      await browser.close();
+      unlinkSync(videoFile);
+    }
+  });
+
+test("historical operator without a recognized event role never exposes its UUID", async ({
+  page,
+}) => {
+  const operator = randomUUID(),
+    g = person("Histórico sem papel atual");
+  db.sql(
+    `insert into auth.users(id) values('${operator}');insert into user_roles(event_id,user_id,role) values('${event}','${operator}','CEREMONIALIST');`,
+  );
+  const created = db.rpc(operator, "app_mutate", {
+    p_event: event,
+    p_mutation: randomUUID(),
+    p_type: "CHECKIN_CREATE",
+    p_payload: { guest_id: g.id, method: "MANUAL" },
+  });
+  db.rpc(operator, "app_mutate", {
+    p_event: event,
+    p_mutation: randomUUID(),
+    p_type: "CHECKIN_REVERT",
+    p_payload: { id: created.id },
+  });
+  db.sql(
+    `delete from user_roles where event_id='${event}' and user_id='${operator}';`,
+  );
+  await backend(page, admin);
+  await login(page);
+  await page.getByRole("link", { name: "Dia do evento", exact: true }).click();
+  for (const label of ["Entrada registrada", "Entrada removida"])
+    await expect(
+      page
+        .getByText(
+          new RegExp(
+            `${label} — ${g.name}.*Operador: Operador não identificado`,
+          ),
+        )
+        .filter({ visible: true }),
+    ).toBeVisible();
+  await expect(page.getByText(new RegExp(`Operador: ${operator}`))).toHaveCount(
+    0,
+  );
 });
 
 test("camera denial has a manual fallback and never records an entry", async ({

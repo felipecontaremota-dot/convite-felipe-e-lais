@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkinOperatorLabel,
   operationalGuests,
   operationalName,
 } from "../src/features/ceremonial/domain";
@@ -48,5 +49,18 @@ describe("ceremonial operations", () => {
     ]);
     expect(operationalGuests(fixture(), "", "PENDING")).toHaveLength(0);
     expect(operationalGuests(null)).toHaveLength(0);
+  });
+});
+
+describe("check-in operator labels", () => {
+  it.each([
+    ["ADMIN", "Noivos"],
+    ["CEREMONIALIST", "Cerimonialista"],
+    [null, "Operador não identificado"],
+    [undefined, "Operador não identificado"],
+    ["GUEST", "Operador não identificado"],
+    ["unknown-uuid", "Operador não identificado"],
+  ])("maps %s without displaying identity", (role, label) => {
+    expect(checkinOperatorLabel(role)).toBe(label);
   });
 });

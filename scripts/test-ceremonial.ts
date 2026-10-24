@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { TestPostgres } from "../tests/support/postgres";
 import { verifyCheckinUpgrade } from "../tests/support/checkin-upgrade";
+import { verifyCheckinRoleUpgrade } from "../tests/support/checkin-role-upgrade";
 async function main() {
   await verifyCheckinUpgrade();
+  await verifyCheckinRoleUpgrade();
   const db = new TestPostgres();
   try {
     await db.start();

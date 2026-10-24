@@ -4,6 +4,8 @@ import {
   useIsFocused,
   useLocalSearchParams,
 } from "expo-router";
+import { AdminModal } from "../../components/AdminModal";
+import { checkinOperatorLabel } from "../ceremonial/domain";
 import { CameraScanner } from "./CameraScanner";
 import { useCallback, useRef, useState } from "react";
 import { Text, View } from "react-native";
@@ -34,6 +36,9 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
     focused = useIsFocused();
   const { scanner } = useLocalSearchParams<{ scanner?: string }>();
   const [consumedScanner, setConsumedScanner] = useState<string | undefined>();
+  const [qrSuccess, setQrSuccess] = useState<string | null>(null);
+  const successPending = useRef(false),
+    lastCameraCode = useRef<string | null>(null);
   const [removal, setRemoval] = useState<Checkin | null>(null);
   const [camera, setCamera] = useState(false),
     [busy, setBusy] = useState(false);
@@ -56,6 +61,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
   useFocusEffect(useCallback(() => () => setCamera(false), []));
   const closeScanner = () => {
     setCamera(false);
+    lastCameraCode.current = null;
     setConsumedScanner(scanner);
   };
   const scannerOpen =
@@ -81,10 +87,14 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
       setBusy(false);
     }
   };
-  const scan = async (value: string) => {
-    if (scanning.current || lock.current) return "";
+  const scan = async (value: string, fromCamera = false) => {
+    if (scanning.current || lock.current || successPending.current) return "";
+    // Keep an unchanged camera frame from immediately re-submitting after Ok.
+    // Another QR (or explicitly reopening the scanner) starts a new attempt.
+    if (fromCamera && lastCameraCode.current === value) return "";
+    if (fromCamera) lastCameraCode.current = value;
     scanning.current = true;
-    closeScanner();
+    if (!fromCamera) closeScanner();
     setResult(null);
     try {
       const parsed = ticketToken(value);
@@ -93,8 +103,24 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           "QR Code inválido. Use o convite individual ou a busca manual.",
         );
       const hash = await hashToken(parsed);
-      await record({ method: "QR", token_hash: hash }, `QR:${hash}`);
+      const saved = await record(
+        { method: "QR", token_hash: hash },
+        `QR:${hash}`,
+      );
+      if (saved.duplicate === false) {
+        // Resolve the backend-confirmed guest, never a name encoded in the QR.
+        const name = saved.guest_name;
+        if (!name)
+          throw new AppError(
+            "Entrada registrada, mas não foi possível carregar o nome. Atualize os dados.",
+          );
+        successPending.current = true;
+        setQrSuccess(name);
+      } else closeScanner();
       return "";
+    } catch (error) {
+      closeScanner();
+      throw error;
     } finally {
       scanning.current = false;
     }
@@ -142,13 +168,19 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           onPress={() => {
             setResult(null);
             feedback.clear();
+            lastCameraCode.current = null;
             setCamera(true);
           }}
         />
         {scannerOpen ? (
           <CameraScanner
-            onClose={closeScanner}
-            onScan={(value) => void feedback.run(() => scan(value))}
+            onClose={() => {
+              // Native/web modal dismissal must not close the live camera
+              // underneath the one-button success confirmation.
+              if (!successPending.current) closeScanner();
+            }}
+            paused={busy || !!qrSuccess}
+            onScan={(value) => void feedback.run(() => scan(value, true))}
           />
         ) : null}
         <Field
@@ -276,6 +308,24 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           }}
         />
       ) : null}
+      {qrSuccess ? (
+        <AdminModal
+          title={`Entrada de ${qrSuccess} registrada`}
+          onClose={() => undefined}
+          dismissible={false}
+          closeOnOutside={false}
+          hideClose
+          captureKeyboard
+        >
+          <Button
+            title="Ok"
+            onPress={() => {
+              successPending.current = false;
+              setQrSuccess(null);
+            }}
+          />
+        </AdminModal>
+      ) : null}
       <Text style={styles.heading}>Últimas entradas</Text>
       {(
         s?.checkin_history ||
@@ -285,6 +335,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
           guest_name:
             s?.guests.find((g) => g.id === c.guest_id)?.name || "Convidado",
           action: "ENTRY" as const,
+          actor_role: undefined,
         }))
       )
         .slice()
@@ -297,7 +348,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
                 ? "Entrada removida"
                 : "Entrada registrada"}{" "}
               — {c.guest_name} · {time(c.created_at)} · {c.method} · Operador:{" "}
-              {c.actor_id}
+              {checkinOperatorLabel(c.actor_role)}
             </Text>
             {role === "ADMIN" &&
             c.action === "ENTRY" &&

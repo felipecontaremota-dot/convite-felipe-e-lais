@@ -6,9 +6,11 @@ import { Button, styles } from "../../components/ui";
 export function CameraScanner({
   onScan,
   onClose,
+  paused = false,
 }: {
   onScan: (value: string) => void;
   onClose: () => void;
+  paused?: boolean;
 }) {
   const [permission, request] = useCameraPermissions();
   const [granted, setGranted] = useState(false),
@@ -82,7 +84,9 @@ export function CameraScanner({
             }}
             barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
             onCameraReady={() => setReady(true)}
-            onBarcodeScanned={(event) => onScan(event.data)}
+            onBarcodeScanned={
+              paused ? undefined : (event) => onScan(event.data)
+            }
             onMountError={() => {
               setGranted(false);
               setReady(false);

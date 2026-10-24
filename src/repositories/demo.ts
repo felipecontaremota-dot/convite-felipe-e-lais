@@ -509,6 +509,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             action: "REMOVAL",
             created_at: stamp(),
             actor_id: "demo",
+            actor_role: role === "ADMIN" ? "ADMIN" : "CEREMONIALIST",
             method: c.method,
           });
         }
@@ -566,6 +567,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
             action: "ENTRY",
             created_at: c.created_at,
             actor_id: c.actor_id,
+            actor_role: role === "ADMIN" ? "ADMIN" : "CEREMONIALIST",
             method: c.method,
           });
         }
