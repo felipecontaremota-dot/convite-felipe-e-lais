@@ -53,6 +53,7 @@ export class TestPostgres {
       | "prod-profile"
       | "pre-confirmation"
       | "pre-admin-guest"
+      | "pre-ticket-replacement"
       | "pre-checkin-actor-role"
       | "pre-checkin-reversal" = "main",
   ) {
@@ -101,15 +102,17 @@ export class TestPostgres {
           (f) =>
             f.endsWith(".sql") &&
             (baseline === "main" ||
-              (baseline === "pre-checkin-actor-role"
-                ? f < "20261024004410"
-                : baseline === "pre-checkin-reversal"
-                  ? f < "20261023115359"
-                  : baseline === "pre-admin-guest"
-                    ? f < adminGuestCutoff!
-                    : baseline === "prod-profile"
-                      ? f < "20261013204105"
-                      : f < "20261015033043")),
+              (baseline === "pre-ticket-replacement"
+                ? f < "20261024052358"
+                : baseline === "pre-checkin-actor-role"
+                  ? f < "20261024004410"
+                  : baseline === "pre-checkin-reversal"
+                    ? f < "20261023115359"
+                    : baseline === "pre-admin-guest"
+                      ? f < adminGuestCutoff!
+                      : baseline === "prod-profile"
+                        ? f < "20261013204105"
+                        : f < "20261015033043")),
         )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));
@@ -147,6 +150,7 @@ export class TestPostgres {
       wedding_party_admin_get: `wedding_party_admin_get(${event},${literal(args.p_guest)}::uuid)`,
       wedding_party_admin_set: `wedding_party_admin_set(${event},${literal(args.p_guest)}::uuid,${args.p_role == null ? "null" : literal(args.p_role)},${args.p_expected_cycle == null ? "null" : literal(args.p_expected_cycle)}::uuid)`,
       wedding_party_respond: `wedding_party_respond(${event},${literal(args.p_cycle)}::uuid,${literal(args.p_action)})`,
+      replace_ticket: `replace_ticket(${event},${literal(args.p_guest)}::uuid,${args.p_expected_credential == null ? "null" : literal(args.p_expected_credential)}::uuid)`,
       issue_ticket: `issue_ticket(${event},${literal(args.p_guest)}::uuid,${args.p_regenerate === true})`,
       app_snapshot: `app_snapshot(${event})`,
       admin_action: `admin_action(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,

@@ -26,6 +26,16 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
       error.message.includes("Network")
     )
       throw new NetworkError();
+    if (error.message.includes("ticket_exists"))
+      throw new AppError(
+        "Seu QR Code já foi emitido em outro dispositivo. Para utilizá-lo neste aparelho, será necessário substituir o código anterior.",
+        "TICKET_REPLACEMENT_REQUIRED",
+      );
+    if (error.message.includes("ticket_changed"))
+      throw new AppError(
+        "O QR Code foi alterado em outro dispositivo. Atualize os dados e confirme novamente antes de substituir.",
+        "TICKET_CHANGED",
+      );
     const checkinMessage =
       args.p_type === "CHECKIN_CREATE" || args.p_type === "CHECKIN_REVERT"
         ? error.message.includes("not confirmed")
@@ -85,6 +95,12 @@ export const issueTicket = (guest: string, regenerate = false) =>
     p_event: eventId,
     p_guest: guest,
     p_regenerate: regenerate,
+  });
+export const replaceTicket = (guest: string, expected: string) =>
+  rpc<Ticket>("replace_ticket", {
+    p_event: eventId,
+    p_guest: guest,
+    p_expected_credential: expected,
   });
 export const accessMessages = {
   link: "Este link de convite é inválido ou não está mais ativo.",

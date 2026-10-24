@@ -9,9 +9,10 @@ export function getDeviceTicket(
   credentials: Credential[],
   online: boolean,
   regenerate: boolean,
-  issue: (regenerate: boolean) => Promise<Ticket>,
+  issue: (regenerate: boolean, expected?: string) => Promise<Ticket>,
+  expectedCredential?: string,
 ): Promise<Ticket> {
-  const flightKey = `${scope}:${guest}`;
+  const flightKey = `${scope}:${guest}:${regenerate ? expectedCredential || "replace" : "read"}`;
   const running = inflight.get(flightKey);
   if (running) return running;
   const request = (async () => {
@@ -31,9 +32,25 @@ export function getDeviceTicket(
         (items || []).filter((t) => t.guest_id !== guest),
       );
     }
+    const active = credentials.filter(
+      (c) => c.guest_id === guest && !c.revoked_at,
+    );
+    if (!regenerate && active.length)
+      throw new AppError(
+        "Seu QR Code já foi emitido em outro dispositivo. Para utilizá-lo neste aparelho, será necessário substituir o código anterior.",
+        "TICKET_REPLACEMENT_REQUIRED",
+      );
+    if (
+      regenerate &&
+      (active.length !== 1 || active[0]!.id !== expectedCredential)
+    )
+      throw new AppError(
+        "O QR Code foi alterado. Atualize os dados e confirme novamente antes de substituir.",
+        "TICKET_CHANGED",
+      );
     if (!online)
       throw new AppError("Conecte-se para emitir ou atualizar este convite.");
-    const next = await issue(regenerate);
+    const next = await issue(regenerate, expectedCredential);
     await updateCache<Ticket[]>(key, (items) => [
       ...(items || []).filter((t) => t.guest_id !== guest),
       next,

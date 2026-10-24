@@ -57,7 +57,11 @@ interface ContextValue {
     action: string,
     payload: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
-  ticket: (guest: string, regenerate?: boolean) => Promise<Ticket>;
+  ticket: (
+    guest: string,
+    regenerate?: boolean,
+    expectedCredential?: string,
+  ) => Promise<Ticket>;
   sync: () => Promise<SyncResult>;
   syncNow: (messageMutationId?: string) => Promise<string>;
   profileMutation: (
@@ -297,18 +301,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (query.data || cached)?.credentials || [],
   );
   const ticket = useCallback(
-    async (guest: string, regenerate = false): Promise<Ticket> => {
+    async (
+      guest: string,
+      regenerate = false,
+      expectedCredential?: string,
+    ): Promise<Ticket> => {
       const result = await getDeviceTicket(
         scope,
         guest,
         JSON.parse(credentialState),
         online,
         regenerate,
-        async (rotate) =>
-          demoRole
-            ? demo.demoTicket(guest, rotate)
-            : api.issueTicket(guest, rotate),
-      );
+        async (rotate, expected) => {
+          if (rotate && !expected)
+            throw new AppError(
+              "Atualize os dados antes de substituir o QR Code.",
+              "TICKET_CHANGED",
+            );
+          return demoRole
+            ? demo.demoTicket(guest, rotate, expected)
+            : rotate
+              ? api.replaceTicket(guest, expected!)
+              : api.issueTicket(guest, false);
+        },
+        expectedCredential,
+      ).catch(async (error) => {
+        if (
+          online &&
+          error instanceof AppError &&
+          ["TICKET_CHANGED", "TICKET_REPLACEMENT_REQUIRED"].includes(error.code)
+        )
+          await refetch();
+        throw error;
+      });
       if (online) await refetch();
       return result;
     },

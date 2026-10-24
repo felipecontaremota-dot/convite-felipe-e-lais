@@ -11,6 +11,7 @@ import {
 } from "../../components/ui";
 import { Confirmation } from "../../components/adminUi";
 import { useApp } from "../../lib/AppProvider";
+import { AppError, friendlyError } from "../../lib/errors";
 import type { Guest, Ticket } from "../../types/domain";
 
 function TicketCard({ guest }: { guest: Guest }) {
@@ -19,24 +20,51 @@ function TicketCard({ guest }: { guest: Guest }) {
   const issueTicket = app.ticket;
   const opener = useRef<HTMLElement | null>(null);
   const closeConfirmation = () => {
-    setConfirm(false);
+    setConfirm(null);
     if (Platform.OS === "web") setTimeout(() => opener.current?.focus(), 0);
   };
-  const [confirm, setConfirm] = useState(false);
-  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [result, setResult] = useState<{
+    source: typeof issueTicket;
+    attempt: number;
+    ticket: Ticket | null;
+    error: { message: string; code: string } | null;
+  } | null>(null);
+  const loaded =
+    result?.source === issueTicket && result.attempt === retry ? result : null;
+  const loading = !loaded,
+    ticket = loaded?.ticket || null,
+    error = loaded?.error || null;
   useEffect(() => {
     let active = true;
     void issueTicket(guest.id)
-      .then((t) => {
-        if (active) setTicket(t);
+      .then((ticket) => {
+        if (active)
+          setResult({
+            source: issueTicket,
+            attempt: retry,
+            ticket,
+            error: null,
+          });
       })
-      .catch(() => {
-        if (active) setTicket(null);
+      .catch((cause) => {
+        if (active)
+          setResult({
+            source: issueTicket,
+            attempt: retry,
+            ticket: null,
+            error: {
+              message: friendlyError(cause),
+              code: cause instanceof AppError ? cause.code : "ERROR",
+            },
+          });
       });
     return () => {
       active = false;
     };
-  }, [guest.id, issueTicket]);
+  }, [guest.id, issueTicket, retry]);
+  const replacementRequired = error?.code === "TICKET_REPLACEMENT_REQUIRED";
   return (
     <Card>
       <Text style={styles.heading}>{guest.name}</Text>
@@ -48,26 +76,43 @@ function TicketCard({ guest }: { guest: Guest }) {
           <QRCode value={`wedding://ticket/${ticket.token}`} size={190} />
         </View>
       ) : null}
+      {loading ? (
+        <Text style={styles.small} accessibilityLiveRegion="polite">
+          Carregando QR Code...
+        </Text>
+      ) : null}
+      {error ? (
+        <Text
+          style={replacementRequired ? styles.notice : styles.error}
+          accessibilityRole={replacementRequired ? undefined : "alert"}
+          accessibilityLiveRegion="polite"
+        >
+          {error.message}
+        </Text>
+      ) : null}
       <Text style={styles.small}>
         O convite é individual. Gerar um novo invalida o anterior.
       </Text>
       <Button
-        title={ticket ? "Emitir novo convite" : "Emitir neste dispositivo"}
+        title={
+          replacementRequired
+            ? "Substituir meu QR Code"
+            : ticket
+              ? "Emitir novo convite"
+              : "Tentar novamente"
+        }
+        disabled={loading || (!app.online && !ticket)}
         onPress={() => {
           if (Platform.OS === "web")
             opener.current = document.activeElement as HTMLElement;
-          if (
-            ticket ||
-            app.data?.credentials.some(
-              (c) => c.guest_id === guest.id && !c.revoked_at,
-            )
-          )
-            setConfirm(true);
-          else
-            feedback.run(async () => {
-              setTicket(await issueTicket(guest.id));
-              return "Convite salvo";
-            });
+          if (replacementRequired || ticket) {
+            const active =
+              app.data?.credentials.filter(
+                (c) => c.guest_id === guest.id && !c.revoked_at,
+              ) || [];
+            if (active.length === 1) setConfirm(active[0]!.id);
+            else setRetry((n) => n + 1);
+          } else setRetry((n) => n + 1);
         }}
       />
       {confirm ? (
@@ -77,7 +122,13 @@ function TicketCard({ guest }: { guest: Guest }) {
           destructive={false}
           onCancel={closeConfirmation}
           onConfirm={async () => {
-            setTicket(await issueTicket(guest.id, true));
+            const next = await issueTicket(guest.id, true, confirm);
+            setResult({
+              source: issueTicket,
+              attempt: retry,
+              ticket: next,
+              error: null,
+            });
             closeConfirmation();
             feedback.run(async () => "Convite salvo");
           }}

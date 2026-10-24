@@ -596,6 +596,7 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
 export async function demoTicket(
   guestId: string,
   regenerate = false,
+  expectedCredential?: string,
 ): Promise<Ticket> {
   return transaction(async (db) => {
     if (
@@ -612,6 +613,15 @@ export async function demoTicket(
     )
       throw Error(
         "Convite existente; emissão explícita de novo convite necessária",
+      );
+    if (
+      regenerate &&
+      db.snapshot.credentials.find(
+        (c) => c.guest_id === guestId && !c.revoked_at,
+      )?.id !== expectedCredential
+    )
+      throw new Error(
+        "O QR Code foi alterado. Atualize os dados e confirme novamente.",
       );
     db.snapshot.credentials.forEach((c) => {
       if (c.guest_id === guestId) c.revoked_at = stamp();

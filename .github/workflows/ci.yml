@@ -28,7 +28,7 @@ jobs:
       - run: npm run build:web
       - run: npx playwright install --with-deps chromium
       - run: npm run test:export
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --project=demo --project=auth
       - name: Build custom domain at root
         run: npm run build:web
         env:
@@ -48,3 +48,25 @@ jobs:
         run: npm run test:export
         env:
           EXPO_PUBLIC_WEB_BASE_PATH: /convite-felipe-e-lais
+
+  webkit-tickets:
+    runs-on: ubuntu-24.04
+    env:
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_NO_CACHE: "1"
+      EXPO_PUBLIC_DEMO_MODE: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - run: npm run test:e2e -- --project=webkit-tickets
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qr-webkit-evidence
+          path: /tmp/qr-webkit-*.png
+          if-no-files-found: ignore

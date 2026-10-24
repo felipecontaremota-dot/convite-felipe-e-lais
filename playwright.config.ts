@@ -23,6 +23,7 @@ export default defineConfig({
         "profile-confirmation.spec.ts",
         "admin-guest-controls.spec.ts",
         "ceremonial-portal.spec.ts",
+        "ticket-devices.spec.ts",
       ],
     },
     {
@@ -34,8 +35,18 @@ export default defineConfig({
         "profile-confirmation.spec.ts",
         "admin-guest-controls.spec.ts",
         "ceremonial-portal.spec.ts",
+        "ticket-devices.spec.ts",
       ],
       use: { baseURL: "http://127.0.0.1:8083" },
+    },
+    {
+      name: "webkit-tickets",
+      testMatch: ["ticket-devices.spec.ts"],
+      use: {
+        browserName: "webkit",
+        baseURL: "http://127.0.0.1:8083",
+        launchOptions: {},
+      },
     },
   ],
   webServer: [
