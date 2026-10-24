@@ -38,7 +38,7 @@ export function Letter({
  [data-party-paper]::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:3px;box-shadow:inset 2px 0 5px #787b7012,inset -2px 0 4px #787b7010;clip-path:polygon(0 .2%,25% 0,50% .15%,75% 0,100% .2%,99.8% 25%,100% 50%,99.7% 75%,100% 99.8%,75% 100%,50% 99.9%,25% 100%,0 99.8%,.2% 75%,0 50%,.25% 25%);}
  [data-party-paper]:focus{outline:none;}[data-party-paper]:focus-visible{outline:3px solid #D6BC78;outline-offset:5px;}
  [data-party-paper] h2{font:600 clamp(36px,5vw,48px)/1.35 PartyHand,"Segoe Script",cursive;text-align:center;margin:0 0 38px;}
- [data-letter-paragraph]{font:400 clamp(25px,3vw,30px)/1.65 PartyHand,"Segoe Script",cursive;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 30px;opacity:1;transform:none;}
+ [data-letter-paragraph]{font:400 clamp(25px,3vw,30px)/1.65 PartyHand,"Segoe Script",cursive;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;hyphens:auto;-webkit-hyphens:auto;text-align:justify;text-align-last:start;margin:0 0 30px;opacity:1;transform:none;}
  [data-reading-ready] [data-letter-paragraph]{transition:opacity ${PARAGRAPH_REVEAL_MS}ms ease,transform ${PARAGRAPH_REVEAL_MS}ms ease;}
  [data-reading-ready] [data-read-state="hidden"]{opacity:0;transform:translateY(12px);}
  [data-letter-paragraph] strong{font-weight:700;}
@@ -46,6 +46,7 @@ export function Letter({
  [data-paper-handoff]{position:fixed;inset:0;z-index:10001;background:#fff;pointer-events:none;opacity:0;animation:paper-unveil 640ms ease-out both;}
  @keyframes paper-unveil{0%,18.75%{opacity:1}100%{opacity:0}}
  @media(prefers-reduced-motion:reduce){[data-paper-handoff]{animation:none;}[data-reading-ready] [data-letter-paragraph]{opacity:1;transform:none;transition:none;}}
+ @media(max-width:430px){[data-letter-paragraph]{text-align:left;}}
  @media print{[data-reading-ready] [data-letter-paragraph]{opacity:1;transform:none;}}
  `}</style>
       {arriving &&
@@ -58,6 +59,7 @@ export function Letter({
           ref={root}
           tabIndex={-1}
           data-party-paper
+          lang="pt-BR"
           aria-label="Carta especial de Felipe e Laís"
         >
           <h2>Um pedido de coração</h2>

@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import type { WeddingEvent } from "../../types/domain";
 import { useFeedback } from "../../components/ui";
-import { openPartyMap, partyMapLink } from "./content";
+import { openPartyMap, partyMapLink, partyAddress } from "./content";
 
 export function PartyVenueAddress({
   event,
@@ -28,7 +28,7 @@ export function PartyVenueAddress({
   const url = event ? partyMapLink(event, apple) : null;
   const text = (
     <Text style={style}>
-      {event?.address ||
+      {partyAddress(event?.address) ||
         "O endereço será informado aqui quando estiver confirmado."}
     </Text>
   );
@@ -42,7 +42,12 @@ export function PartyVenueAddress({
         target: "_blank",
         rel: "noopener noreferrer",
         "aria-label": label,
-        style: { color: "inherit", textDecoration: "none", display: "block" },
+        style: {
+          color: "inherit",
+          textDecoration: "none",
+          display: "block",
+          textAlign: "center",
+        },
       },
       text,
     );

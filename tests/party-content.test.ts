@@ -7,12 +7,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import {
   ceremonyCopy,
+  partyAddress,
+  approvedPartyAddress,
   partyMapLink,
   openPartyMap,
 } from "../src/features/weddingParty/content";
 import type { PartyRole } from "../src/features/weddingParty/types";
 import type { WeddingEvent } from "../src/types/domain";
 vi.mock("react-native", () => ({
+  Platform: { OS: "web" },
+  useWindowDimensions: () => ({ width: 1280, height: 900 }),
   Text: ({ children }: { children?: ReactNode }) =>
     createElement("p", null, children),
 }));
@@ -162,4 +166,18 @@ it("opens the official destination without app inspection on every platform", as
     await openPartyMap(mapEvent, os, open);
     expect(open).toHaveBeenCalledExactlyOnceWith(mapEvent.gps_url);
   }
+});
+
+it("formats only the known venue presentation and preserves its original GPS/event data", () => {
+  const address =
+    "Av. Dr. Joaquim Craveiro de Sá, 1000 - Expansul, Aparecida de Goiânia - GO, 74986-320";
+  const event = { ...mapEvent, address };
+  expect(partyAddress(address)).toBe(approvedPartyAddress);
+  expect(partyAddress(approvedPartyAddress)).toBe(approvedPartyAddress);
+  expect(event.address).toBe(address);
+  expect(partyMapLink(event)).toBe(event.gps_url);
+  expect(partyAddress("Outro endereço cadastrado")).toBe(
+    "Outro endereço cadastrado",
+  );
+  expect(partyAddress(null)).toBeNull();
 });

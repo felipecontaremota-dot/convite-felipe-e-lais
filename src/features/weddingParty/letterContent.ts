@@ -10,7 +10,7 @@ export const storyParagraphs = [
   "É aquela surpresa que você não espera quando acorda pela manhã.",
   "É a mudança na sua vida que você não planejava.",
   "É a decisão tomada inconscientemente. É onde a emoção substitui a razão, você querendo ou não.",
-  'E é curioso como algumas pessoas aparecem nas vidas uma das outras. Em um primeiro momento pare ser sem motivo, parece que aquele contato vai ser passageiro. É só mais um "alguém" até deixar de ser.',
+  'E é curioso como algumas pessoas aparecem nas vidas uma das outras. Em um primeiro momento parece ser sem motivo, parece que aquele contato vai ser passageiro. É só mais um "alguém" até deixar de ser.',
   "Contudo, o tempo, senhor da razão, nos mostra que essas pessoas têm importância para nossas vidas. Elas possuem significados indescritíveis. Não há como adjetivá-las. Faltam palavras para descrever quão especial são. Cada uma, do seu modo, no seu devido momento, se revela digna de fazer parte da nossa história.",
   "Assim foi na vida da Laís, quando o Felipe apareceu. Assim foi na vida do Felipe, quando a Laís apareceu.",
 ] as const;

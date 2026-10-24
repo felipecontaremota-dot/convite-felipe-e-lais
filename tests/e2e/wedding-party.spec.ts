@@ -988,3 +988,169 @@ test("Ceremony with an inconsistent promotion role uses neutral copy", async ({
   ).toBeVisible();
   await expect(page.getByText(/Você foi escolhid[oa]/)).toHaveCount(0);
 });
+
+for (const width of [320, 390, 768, 1280])
+  for (const role of ["PADRINHO", "MADRINHA"] as const) {
+    test(`Editorial typography ${role} at ${width}px`, async ({
+      page,
+      browserName,
+    }) => {
+      test.setTimeout(120000);
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await fixture(page, role);
+      await page
+        .getByRole("button", { name: "Abrir convite especial", exact: true })
+        .click();
+      const letter = page.getByRole("article", {
+        name: "Carta especial de Felipe e Laís",
+      });
+      await expect(letter).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      const paragraph = letter.locator("[data-letter-paragraph]").nth(5);
+      await expect(paragraph).toHaveText(
+        'E é curioso como algumas pessoas aparecem nas vidas uma das outras. Em um primeiro momento parece ser sem motivo, parece que aquele contato vai ser passageiro. É só mais um "alguém" até deixar de ser.',
+      );
+      await expect(letter.locator("h2")).toHaveCSS("text-align", "center");
+      await expect(paragraph).toHaveCSS("text-align-last", "start");
+      await expect(paragraph).toHaveCSS(
+        "text-align",
+        width <= 430 ? "left" : "justify",
+      );
+      expect(
+        await paragraph.evaluate((el) => getComputedStyle(el).fontFamily),
+      ).toContain("PartyHand");
+      await paragraph.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: `/tmp/party-content-type-${browserName}-${role}-${width}-letter.png`,
+        animations: "disabled",
+      });
+      await page
+        .getByRole("button", { name: "💙 É claro que aceito!", exact: true })
+        .click();
+      await page
+        .getByRole("button", {
+          name: "Conhecer minha área especial →",
+          exact: true,
+        })
+        .click();
+      await page.evaluate(() => {
+        const db = JSON.parse(localStorage.getItem("demo-db")!);
+        db.snapshot.event.address =
+          "Av. Dr. Joaquim Craveiro de Sá, 1000 - Expansul, Aparecida de Goiânia - GO, 74986-320";
+        db.snapshot.event.gps_url = "https://maps.test/destino-preservado";
+        localStorage.setItem("demo-db", JSON.stringify(db));
+      });
+      await page.goto("/padrinhos?pagina=dia");
+      const address = page.getByText(
+        "Av. Dr. Joaquim Craveiro de Sá, 1000, Expansul, Aparecida de Goiânia-GO, CEP 74986-320",
+        { exact: true },
+      );
+      await expect(address).toHaveCSS("text-align", "center");
+      await expect(address).toHaveCSS("color", "rgb(244, 230, 189)");
+      await page.screenshot({
+        path: `/tmp/party-content-type-${browserName}-${role}-${width}-address.png`,
+        animations: "disabled",
+      });
+      const centers = await address.evaluate((el) => {
+        const outer = el.closest("a")!.getBoundingClientRect();
+        const lines = new Map<number, { left: number; right: number }>();
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          const value = node.textContent || "";
+          for (let i = 0; i < value.length; i++) {
+            if (/\s/.test(value[i]!)) continue;
+            const range = document.createRange();
+            range.setStart(node, i);
+            range.setEnd(node, i + 1);
+            const r = range.getBoundingClientRect();
+            if (!r.width || !r.height) continue;
+            const key = Math.round(r.top);
+            const line = lines.get(key);
+            lines.set(key, {
+              left: Math.min(line?.left ?? r.left, r.left),
+              right: Math.max(line?.right ?? r.right, r.right),
+            });
+          }
+        }
+        return [...lines.values()].map((r) =>
+          Math.abs((r.left + r.right) / 2 - (outer.left + outer.right) / 2),
+        );
+      });
+      expect(centers.length).toBeGreaterThan(0);
+      expect(Math.max(...centers)).toBeLessThan(6);
+
+      await expect(
+        page.getByRole("link", {
+          name: "Abrir localização do Villarejo",
+          exact: true,
+        }),
+      ).toHaveAttribute("href", "https://maps.test/destino-preservado");
+      await page.screenshot({
+        path: `/tmp/party-content-type-${browserName}-${role}-${width}-address.png`,
+        animations: "disabled",
+      });
+      for (const section of ["traje", "cerimonia"]) {
+        await page.goto(`/padrinhos?pagina=${section}`);
+        const body = page.locator("[data-party-body]");
+        await expect(body.first()).toBeVisible();
+        await expect(body.first()).toHaveCSS(
+          "text-align",
+          width <= 350 ? "left" : "justify",
+        );
+        await expect(body.first()).toHaveCSS("text-align-last", "start");
+        await expect(body.first()).toHaveCSS("word-break", "normal");
+        if (section === "cerimonia")
+          await expect(
+            page.getByText(
+              role === "PADRINHO"
+                ? /recebê-lo e conduzi-lo/
+                : /recebê-la e conduzi-la/,
+            ),
+          ).toBeVisible();
+        await body.last().scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: `/tmp/party-content-type-${browserName}-${role}-${width}-${section}.png`,
+          animations: "disabled",
+        });
+      }
+      const messages = [
+        "Com carinho! 💙",
+        "Primeiro parágrafo.\n\nSegundo parágrafo preservado.",
+        "Uma mensagem longa para você, com carinho e muitas boas lembranças da nossa história. ".repeat(
+          14,
+        ),
+        "Palavraextensa".repeat(30),
+      ];
+      for (const [i, note] of messages.entries()) {
+        await page.evaluate((note) => {
+          const db = JSON.parse(localStorage.getItem("demo-db")!);
+          db.weddingParty[0].couples_note = note;
+          localStorage.setItem("demo-db", JSON.stringify(db));
+        }, note);
+        await page.goto("/padrinhos?pagina=recado");
+        const body = page.locator("[data-party-body]");
+        await expect(body).toHaveText(note);
+        expect(await body.textContent()).toBe(note);
+        await expect(body).toHaveCSS("text-align-last", "start");
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await page.screenshot({
+          path: `/tmp/party-content-type-${browserName}-${role}-${width}-note-${i}.png`,
+          animations: "disabled",
+        });
+      }
+      const stored = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("demo-db")!),
+      );
+      expect(stored.snapshot.event.address).toBe(
+        "Av. Dr. Joaquim Craveiro de Sá, 1000 - Expansul, Aparecida de Goiânia - GO, 74986-320",
+      );
+      expect(stored.weddingParty[0].accepted_at).toBeTruthy();
+      expect(stored.weddingParty[0].completed_at).toBeTruthy();
+    });
+  }

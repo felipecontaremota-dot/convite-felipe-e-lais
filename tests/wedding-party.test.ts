@@ -123,3 +123,9 @@ it("waits for completed flap and extraction before light, never advancing on rer
   pending.shift()!();
   await running;
 });
+
+it("corrects the original shared story without visually replacing rendered text", () => {
+  expect(storyParagraphs[5]).toBe(
+    'E é curioso como algumas pessoas aparecem nas vidas uma das outras. Em um primeiro momento parece ser sem motivo, parece que aquele contato vai ser passageiro. É só mais um "alguém" até deixar de ser.',
+  );
+});

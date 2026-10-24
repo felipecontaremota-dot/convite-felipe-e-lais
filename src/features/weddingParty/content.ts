@@ -53,3 +53,16 @@ export async function openPartyMap(
   await openUrl(url);
   return true;
 }
+
+export const approvedPartyAddress =
+  "Av. Dr. Joaquim Craveiro de Sá, 1000, Expansul, Aparecida de Goiânia-GO, CEP 74986-320";
+const previousPartyAddress =
+  "Av. Dr. Joaquim Craveiro de Sá, 1000 - Expansul, Aparecida de Goiânia - GO, 74986-320";
+// Presentation only: never changes event.address or the destination used by maps/Local.
+export function partyAddress(address?: string | null) {
+  const normalized = address?.normalize("NFC").trim().replace(/\s+/g, " ");
+  return normalized === previousPartyAddress ||
+    normalized === approvedPartyAddress
+    ? approvedPartyAddress
+    : address;
+}

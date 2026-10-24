@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 import { Button } from "../../components/ui";
 import { letterParagraphs } from "./letterContent";
 import type { PartyRole } from "./types";
@@ -19,6 +19,7 @@ export function Letter({
   onAccept,
   onThink,
 }: LetterProps) {
+  const narrow = useWindowDimensions().width <= 430;
   return (
     <View
       style={{
@@ -37,6 +38,7 @@ export function Letter({
             fontFamily: "Georgia",
             fontSize: 24,
             lineHeight: 36,
+            textAlign: narrow ? "left" : "justify",
           }}
         >
           {p.before}

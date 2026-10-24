@@ -10,6 +10,7 @@ import { useParty } from "./PartyProvider";
 import type { Promotion } from "./types";
 import { Envelope } from "./Envelope";
 import { Letter } from "./Letter";
+import { partyParagraphCss } from "./PartyParagraph";
 import { PartyContent } from "./PartyContent";
 import { partyName } from "./letterContent";
 import { theme } from "../../theme/tokens";
@@ -160,6 +161,7 @@ function PartyExperience({
           "style",
           null,
           `
+    ${partyParagraphCss}
     [data-party-stage] { animation: party-enter 500ms ease-out both; }
     [data-party-card] { transition:background-color 180ms ease-out; }
     [data-party-celebration] { animation: party-enter 700ms ease-out both; }

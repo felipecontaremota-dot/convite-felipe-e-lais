@@ -33,3 +33,15 @@ O advisor 0029 identifica a nova RPC SECURITY DEFINER executável por authentica
 O endereço da área especial mantém sua aparência e passa a ser um link acessível. O destino prioritário é o GPS HTTPS já cadastrado na tela Local. Sem ele, utiliza somente coordenadas válidas existentes ou o endereço cadastrado, com Apple Maps no iOS e Google Maps como alternativa web. Em execução nativa, reutiliza a delegação ao sistema operacional e oferece HTTPS se não houver handler. Não consulta aplicativos instalados nem solicita geolocalização; a escolha/handoff depende do sistema operacional.
 
 A redação de Organização da cerimônia utiliza exclusivamente o papel PADRINHO/MADRINHA recebido na promoção, com texto neutro quando ele está ausente ou inválido. Não infere gênero por nome. O placeholder administrativo foi corrigido para “Digite um recado carinhoso e personalizado”, sem outra alteração no modal.
+
+## Refinamento editorial
+
+A frase “Em um primeiro momento parece ser sem motivo” foi corrigida na fonte compartilhada letterContent.ts. Nenhum outro trecho da história foi revisado. O endereço aprovado é formatado somente na apresentação de O grande dia, reconhecendo a redação anterior do Villarejo; outros endereços futuros passam intactos. O objeto do evento, a tela Local e o destino GPS não são alterados.
+
+A carta conserva Dancing Script (PartyHand), tamanho, papel, margens e animações. Os corpos usam text-align:justify, text-align-last:start, word-break:normal e hifenização automática em pt-BR. Não há espaços manuais ou text-align-last:justify. Títulos e controles não recebem esses estilos. O recado conserva o texto literal e as quebras de parágrafo.
+
+A inspeção identificou lacunas excessivas com a fonte manuscrita em leitura estreita. A carta utiliza alinhamento natural até 430 px; os outros corpos fazem o mesmo até 350 px. Acima desses limites, permanecem justificados. A fonte não foi reduzida e as margens originais foram preservadas. A regra text-wrap:pretty foi descartada após a comparação visual, pois deslocava palavras para a última linha e aumentava os vazios. Overflow-wrap:break-word funciona apenas como proteção para tokens excepcionalmente longos, sem word-break:break-all.
+
+A suíte editorial cobre padrinho/madrinha em 320, 390, 768 e 1280 px, mensagens curtas/longas, vários parágrafos e tokens extensos. As capturas finais usam party-content-type-*.png e são publicadas no artefato party-webkit-evidence pelo workflow existente. Capturas locais anteriores foram preservadas em /tmp/party-typography-before para comparação. Não há migration ou alteração de dados, aceites, destinatários ou permissões.
+
+A centralização do endereço foi aplicada também ao contêiner HTML do link: apenas text-align no elemento interno não centralizava efetivamente as linhas. A suíte mede o centro dos caracteres visíveis de cada linha (sem espaços pendentes) em relação ao link, além de conferir o estilo, o texto aprovado e o GPS preservado.
