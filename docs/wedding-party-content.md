@@ -27,3 +27,9 @@ Aplicada no projeto de produção pelo mecanismo gerenciado, versão 20261024215
 Uma reversão do frontend pode manter a coluna e a RPC aditivas: os clientes anteriores continuam compatíveis. Não remover registros, mensagens ou colunas para reverter a publicação.
 
 O advisor 0029 identifica a nova RPC SECURITY DEFINER executável por authenticated. Esse endpoint administrativo é intencional: a função exige ADMIN no evento e os testes negam GUEST, CEREMONIALIST e usuários sem papel; anon não possui EXECUTE. Não ampliar acessos nem remover verificações para silenciar esse aviso. Referência: https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+
+## Ajustes de localização e concordância
+
+O endereço da área especial mantém sua aparência e passa a ser um link acessível. O destino prioritário é o GPS HTTPS já cadastrado na tela Local. Sem ele, utiliza somente coordenadas válidas existentes ou o endereço cadastrado, com Apple Maps no iOS e Google Maps como alternativa web. Em execução nativa, reutiliza a delegação ao sistema operacional e oferece HTTPS se não houver handler. Não consulta aplicativos instalados nem solicita geolocalização; a escolha/handoff depende do sistema operacional.
+
+A redação de Organização da cerimônia utiliza exclusivamente o papel PADRINHO/MADRINHA recebido na promoção, com texto neutro quando ele está ausente ou inválido. Não infere gênero por nome. O placeholder administrativo foi corrigido para “Digite um recado carinhoso e personalizado”, sem outra alteração no modal.

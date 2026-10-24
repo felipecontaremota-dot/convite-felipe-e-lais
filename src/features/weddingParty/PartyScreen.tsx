@@ -226,6 +226,7 @@ function PartyExperience({
                 page={exclusivePage}
                 event={app.data?.event}
                 note={promotion.couples_note}
+                role={promotion.role}
               />
               <Pressable
                 accessibilityRole="button"

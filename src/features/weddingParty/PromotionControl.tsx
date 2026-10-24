@@ -234,7 +234,7 @@ export function PromotionControl({
           />
           <Field
             label="Recado personalizado"
-            placeholder="Digite um recado carinho e personalizado"
+            placeholder="Digite um recado carinhoso e personalizado"
             value={note}
             onChangeText={setNote}
             multiline

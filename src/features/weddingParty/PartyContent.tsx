@@ -1,5 +1,8 @@
 import { Text } from "react-native";
 import type { WeddingEvent } from "../../types/domain";
+import { ceremonyCopy } from "./content";
+import { PartyVenueAddress } from "./PartyVenueAddress";
+import type { PartyRole } from "./types";
 import { VenueLogo } from "../location/VenueLogo";
 const text = {
   color: "#F4E6BD",
@@ -13,10 +16,12 @@ export function PartyContent({
   page,
   event,
   note,
+  role,
 }: {
   page: string;
   event?: WeddingEvent;
   note?: string | null;
+  role?: PartyRole | null;
 }) {
   if (page === "dia")
     return (
@@ -25,10 +30,10 @@ export function PartyContent({
           Falta pouco para você estar conosco no Villarejo.
         </Text>
         <VenueLogo />
-        <Text style={[text, { textAlign: "center" }]}>
-          {event?.address ||
-            "O endereço será informado aqui quando estiver confirmado."}
-        </Text>
+        <PartyVenueAddress
+          event={event}
+          style={[text, { textAlign: "center" }]}
+        />
       </>
     );
   if (page === "traje")
@@ -85,15 +90,10 @@ export function PartyContent({
           cerimonial.
         </Text>
         <Text style={text}>
-          <Text style={bold}>✨ Orientações:</Text> Ao chegarem, procurem nossa
-          equipe de cerimonial, liderada pelo Gustavo Morais, que estará à
-          disposição para recebê-los e conduzi-los.
+          <Text style={bold}>✨ Orientações:</Text>{" "}
+          {ceremonyCopy(role).guidance}
         </Text>
-        <Text style={text}>
-          Acima de tudo, queremos que aproveitem cada instante! Vocês foram
-          escolhidos porque fazem parte da nossa história, e ter vocês pertinho
-          de nós tornará esse momento ainda mais inesquecível! 💙
-        </Text>
+        <Text style={text}>{ceremonyCopy(role).closing}</Text>
       </>
     );
   return <Text style={text}>{note?.trim() ? note : emptyCouplesNote}</Text>;

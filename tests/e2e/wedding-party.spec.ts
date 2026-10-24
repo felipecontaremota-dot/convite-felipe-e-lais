@@ -300,6 +300,12 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
     await messageDialog
       .getByLabel("Nome ou apelido carinhoso", { exact: true })
       .fill("Minha querida amiga");
+    await expect(
+      messageDialog.getByLabel("Recado personalizado", { exact: true }),
+    ).toHaveAttribute(
+      "placeholder",
+      "Digite um recado carinhoso e personalizado",
+    );
     await messageDialog
       .getByLabel("Recado personalizado", { exact: true })
       .fill("Recado separado da carta.\n\nCom carinho, Felipe & Laís!");
@@ -829,3 +835,156 @@ for (const width of [320, 390, 1280]) {
     expect(errors).toEqual([]);
   });
 }
+
+for (const scenario of [
+  {
+    name: "desktop",
+    role: "PADRINHO",
+    width: 1280,
+    ua: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+    apple: false,
+  },
+  {
+    name: "Android",
+    role: "MADRINHA",
+    width: 390,
+    ua: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36",
+    apple: false,
+  },
+  {
+    name: "iPhone",
+    role: "MADRINHA",
+    width: 320,
+    ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    apple: true,
+  },
+] as const) {
+  test(`Party address and individual ceremony on ${scenario.name}`, async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      baseURL,
+      viewport: { width: scenario.width, height: 900 },
+      userAgent: scenario.ua,
+    });
+    try {
+      await context.route("https://maps.test/**", (route) =>
+        route.fulfill({ body: "Local de teste", contentType: "text/html" }),
+      );
+      const page = await context.newPage();
+      await fixture(page, scenario.role, true);
+      await page.evaluate(() => {
+        const db = JSON.parse(localStorage.getItem("demo-db")!);
+        db.snapshot.event.address = "Endereço cadastrado do Villarejo";
+        db.snapshot.event.gps_url = "https://maps.test/villarejo-oficial";
+        db.weddingParty[0].couples_note = "Recado individual preservado";
+        localStorage.setItem("demo-db", JSON.stringify(db));
+      });
+      await page.goto("/padrinhos?pagina=dia");
+      const link = page.getByRole("link", {
+        name: "Abrir localização do Villarejo",
+        exact: true,
+      });
+      await expect(link).toHaveAttribute(
+        "href",
+        "https://maps.test/villarejo-oficial",
+      );
+      await expect(link).toHaveCSS("text-decoration-line", "none");
+      const address = page.getByText("Endereço cadastrado do Villarejo", {
+        exact: true,
+      });
+      await expect(address).toHaveCSS("text-align", "center");
+      await expect(address).toHaveCSS("font-size", "18px");
+      await expect(address).toHaveCSS("line-height", "29px");
+      await expect(address).toHaveCSS("color", "rgb(244, 230, 189)");
+      await link.focus();
+      await expect(link).toBeFocused();
+      const popup = context.waitForEvent("page");
+      await link.press("Enter");
+      const opened = await popup;
+      await opened.waitForURL("https://maps.test/villarejo-oficial");
+      await opened.close();
+      await page.screenshot({
+        path: `/tmp/party-content-address-${scenario.name}.png`,
+        animations: "disabled",
+      });
+      await page
+        .getByRole("button", {
+          name: "Voltar ao Espaço dos Padrinhos",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("button", { name: "Organização da cerimônia", exact: true })
+        .click();
+      const ending = scenario.role === "PADRINHO" ? "lo" : "la";
+      await expect(
+        page.getByText(new RegExp(`recebê-${ending} e conduzi-${ending}`)),
+      ).toBeVisible();
+      await expect(
+        page.getByText(
+          new RegExp(
+            scenario.role === "PADRINHO"
+              ? "Você foi escolhido porque"
+              : "Você foi escolhida porque",
+          ),
+        ),
+      ).toBeVisible();
+      await expect(
+        page.getByText(
+          new RegExp(scenario.role === "PADRINHO" ? "recebê-la" : "recebê-lo"),
+        ),
+      ).toHaveCount(0);
+      await expect(
+        page.getByText(/30 minutos de antecedência ao horário da cerimônia/),
+      ).toBeVisible();
+      await page.screenshot({
+        path: `/tmp/party-content-personal-${scenario.name}.png`,
+        animations: "disabled",
+      });
+      await page.evaluate(() => {
+        const db = JSON.parse(localStorage.getItem("demo-db")!);
+        db.snapshot.event.gps_url = null;
+        db.snapshot.event.latitude = null;
+        db.snapshot.event.longitude = null;
+        localStorage.setItem("demo-db", JSON.stringify(db));
+      });
+      await page.goto("/padrinhos?pagina=dia");
+      await expect(link).toHaveAttribute(
+        "href",
+        `${scenario.apple ? "https://maps.apple.com/?daddr=" : "https://www.google.com/maps/dir/?api=1&destination="}${encodeURIComponent("Endereço cadastrado do Villarejo")}`,
+      );
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      const db = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("demo-db")!),
+      );
+      expect(db.weddingParty[0].completed_at).toBe("2026-01-01");
+      expect(db.weddingParty[0].couples_note).toBe(
+        "Recado individual preservado",
+      );
+    } finally {
+      await context.close();
+    }
+  });
+}
+test("Ceremony with an inconsistent promotion role uses neutral copy", async ({
+  page,
+}) => {
+  await fixture(page, "MADRINHA", true);
+  await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("demo-db")!);
+    db.weddingParty[0].role = "UNKNOWN";
+    localStorage.setItem("demo-db", JSON.stringify(db));
+  });
+  await page.goto("/padrinhos?pagina=cerimonia");
+  await expect(page.getByText(/receber você e conduzir você/)).toBeVisible();
+  await expect(
+    page.getByText(/Você faz parte da nossa história, e ter você/),
+  ).toBeVisible();
+  await expect(page.getByText(/Você foi escolhid[oa]/)).toHaveCount(0);
+});
