@@ -4,6 +4,7 @@ export interface Promotion {
   guest_id: string;
   role: PartyRole;
   personal_message?: string | null;
+  couples_note?: string | null;
   display_name?: string | null;
   accepted_at: string | null;
   completed_at: string | null;

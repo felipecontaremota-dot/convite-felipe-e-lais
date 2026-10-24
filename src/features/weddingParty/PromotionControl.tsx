@@ -25,11 +25,13 @@ export function PromotionControl({
     [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
+  const [note, setNote] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [editVersion, setEditVersion] = useState<{
     cycle: string | null;
     message: string | null;
     displayName: string | null;
+    note: string | null;
     role: PartyRole;
   } | null>(null);
   const beginEdit = () => {
@@ -39,9 +41,11 @@ export function PromotionControl({
       cycle: query.data?.cycle_id || null,
       message: query.data?.personal_message ?? null,
       displayName: query.data?.display_name ?? null,
+      note: query.data?.couples_note ?? null,
       role: selected,
     });
     setMessage(query.data?.personal_message || "");
+    setNote(query.data?.couples_note || "");
     setDisplayName(query.data?.display_name || "");
     setError("");
     setEditing(true);
@@ -106,8 +110,10 @@ export function PromotionControl({
             version.message,
             displayName,
             version.displayName,
+            note,
+            version.note,
           )
-        : api.weddingPartyAdminSaveDetails(
+        : api.weddingPartyAdminSaveContent(
             guest.id,
             version.role,
             version.cycle,
@@ -115,6 +121,8 @@ export function PromotionControl({
             version.message,
             displayName,
             version.displayName,
+            note,
+            version.note,
           ));
       client.setQueryData(key, result);
       await client.invalidateQueries({ queryKey: ["party-state"] });
@@ -224,17 +232,27 @@ export function PromotionControl({
             style={[styles.input, { minHeight: 200, textAlignVertical: "top" }]}
             editable={!busy}
           />
+          <Field
+            label="Recado personalizado"
+            placeholder="Digite um recado carinho e personalizado"
+            value={note}
+            onChangeText={setNote}
+            multiline
+            maxLength={12000}
+            style={[styles.input, { minHeight: 160, textAlignVertical: "top" }]}
+            editable={!busy}
+          />
+          <Text style={styles.small}>
+            Esse recado aparece em “Recado dos noivos”, separado da carta
+            especial.
+          </Text>
           {!!error && (
             <Text accessibilityRole="alert" style={styles.error}>
               {error}
             </Text>
           )}
           <Button
-            title={
-              editVersion?.cycle
-                ? "Salvar mensagem"
-                : "Salvar mensagem e promover"
-            }
+            title={editVersion?.cycle ? "Salvar mensagem" : "Salvar e promover"}
             disabled={
               busy ||
               (!message.trim() &&

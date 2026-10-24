@@ -135,3 +135,5 @@ npx --no-install tsx scripts/test-admin-guest-status.ts
 npx tsx scripts/test-ceremonial.ts
 
 npx tsx scripts/test-ticket-replacement.ts
+
+npx tsx scripts/test-party-content.ts

@@ -130,12 +130,22 @@ for (const [width, role] of [
       "Recado dos noivos",
     ]) {
       await page.getByRole("button", { name: title, exact: true }).click();
-      await expect(
-        page.getByRole("heading", { name: title, exact: true }),
-      ).toBeVisible();
+      if (title === "O grande dia") {
+        await expect(
+          page.getByRole("heading", { name: title, exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          page.getByText("Falta pouco para você estar conosco no Villarejo.", {
+            exact: true,
+          }),
+        ).toBeVisible();
+      } else
+        await expect(
+          page.getByRole("heading", { name: title, exact: true }),
+        ).toBeVisible();
       if (title === "Recado dos noivos")
         await expect(
-          page.getByText(/Obrigado por fazer parte deste capítulo/),
+          page.getByText(/Estamos preparando um recado com carinho/),
         ).toBeVisible();
       await page
         .getByRole("button", {
@@ -215,7 +225,7 @@ test("Common family member cannot enter a promoted member's space; revocation re
   await page.goto("/padrinhos?pagina=recado");
   await expect(page).toHaveURL(/\/inicio$/);
   await expect(
-    page.getByText(/Obrigado por fazer parte deste capítulo/),
+    page.getByText(/Estamos preparando um recado com carinho/),
   ).toHaveCount(0);
   await page.evaluate(() => {
     const db = JSON.parse(localStorage.getItem("demo-db")!);
@@ -231,6 +241,10 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
   test(`Admin promotes and revokes ${gender} without modifying RSVP`, async ({
     page,
   }) => {
+    await page.setViewportSize({
+      width: gender === "MASCULINE" ? 1280 : gender === "FEMININE" ? 390 : 320,
+      height: 900,
+    });
     await page.goto("/");
     await page
       .getByRole("button", { name: "Demo noivos", exact: true })
@@ -287,7 +301,14 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
       .getByLabel("Nome ou apelido carinhoso", { exact: true })
       .fill("Minha querida amiga");
     await messageDialog
-      .getByRole("button", { name: "Salvar mensagem e promover", exact: true })
+      .getByLabel("Recado personalizado", { exact: true })
+      .fill("Recado separado da carta.\n\nCom carinho, Felipe & Laís!");
+    await page.screenshot({
+      path: `/tmp/party-admin-note-${gender || "unset"}.png`,
+      animations: "disabled",
+    });
+    await messageDialog
+      .getByRole("button", { name: "Salvar e promover", exact: true })
       .click();
     await expect(
       form.getByRole("button", { name: "Remover promoção", exact: true }),
@@ -305,6 +326,12 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
     await expect(
       messageDialog.getByLabel("Nome ou apelido carinhoso", { exact: true }),
     ).toHaveValue("Minha querida amiga");
+    await expect(
+      messageDialog.getByLabel("Recado personalizado", { exact: true }),
+    ).toHaveValue("Recado separado da carta.\n\nCom carinho, Felipe & Laís!");
+    await messageDialog
+      .getByLabel("Recado personalizado", { exact: true })
+      .fill("Novo recado individual.\n\nSegundo parágrafo.");
     await messageDialog
       .getByLabel("Nome ou apelido carinhoso", { exact: true })
       .fill("Meu bem");
@@ -340,6 +367,9 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
       () => JSON.parse(localStorage.getItem("demo-db")!).weddingParty[0],
     );
     expect(cleared.display_name).toBeNull();
+    expect(cleared.couples_note).toBe(
+      "Novo recado individual.\n\nSegundo parágrafo.",
+    );
     expect(cleared.cycle_id).toBe(first);
     expect(cleared.personal_message).toBe(
       "Mensagem revisada.\n\nSegundo parágrafo.",
@@ -360,7 +390,7 @@ for (const gender of ["MASCULINE", "FEMININE", null] as const) {
       .getByLabel("Trecho personalizado", { exact: true })
       .fill("Um novo convite especial.");
     await messageDialog
-      .getByRole("button", { name: "Salvar mensagem e promover", exact: true })
+      .getByRole("button", { name: "Salvar e promover", exact: true })
       .click();
     await expect(messageDialog).toHaveCount(0);
     const data = await page.evaluate(() =>
@@ -663,3 +693,139 @@ test("Missing Web Animations cannot strand the opening sequence", async ({
     ),
   ).toBeNull();
 });
+
+for (const width of [320, 390, 1280]) {
+  test(`Party content, individual note, history and shared venue at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await fixture(page, "MADRINHA", true);
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      db.weddingParty[0].personal_message = "Texto exclusivo da carta";
+      db.weddingParty[0].couples_note =
+        "Querida amiga, 💙\n\nEste recado é só seu. <b>Texto literal.</b>";
+      db.snapshot.event.address = "Endereço compartilhado do Villarejo";
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    });
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("/padrinhos");
+    const before = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("demo-db")!),
+    );
+    await page
+      .getByRole("button", { name: "O grande dia", exact: true })
+      .click();
+    const phrase = page.getByText(
+      "Falta pouco para você estar conosco no Villarejo.",
+      { exact: true },
+    );
+    await expect(phrase).toBeVisible();
+    expect(await phrase.evaluate((el) => getComputedStyle(el).textAlign)).toBe(
+      "center",
+    );
+    await expect(
+      page.getByRole("heading", { name: "O grande dia", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Endereço compartilhado do Villarejo", { exact: true }),
+    ).toBeVisible();
+    const logo = page.getByRole("link", {
+      name: "Visitar o Instagram do Villarejo Eventos",
+      exact: true,
+    });
+    await expect(logo).toHaveAttribute("target", "_blank");
+    await expect(logo).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(logo).toHaveAttribute(
+      "href",
+      "https://www.instagram.com/villarejoeventos?vrfl=M2tpa292Nzc5bDBz",
+    );
+    await expect(
+      page.getByLabel("Villarejo Eventos", { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `/tmp/party-content-dia-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page.goBack();
+    await expect(
+      page.getByRole("button", { name: "O grande dia", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Traje e orientações", exact: true })
+      .click();
+    await expect(
+      page.getByText(/O azul simboliza confiança, lealdade/),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Mais do que a combinação das cores/),
+    ).toBeVisible();
+    expect(
+      await page
+        .getByText("Madrinhas:", { exact: true })
+        .evaluate((el) => getComputedStyle(el).fontWeight),
+    ).toBe("700");
+    await page.screenshot({
+      path: `/tmp/party-content-traje-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page
+      .getByRole("button", {
+        name: "Voltar ao Espaço dos Padrinhos",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", { name: "Organização da cerimônia", exact: true })
+      .click();
+    await expect(
+      page.getByText(/30 minutos de antecedência ao horário da cerimônia/),
+    ).toBeVisible();
+    await expect(page.getByText(/liderada pelo Gustavo Morais/)).toBeVisible();
+    await page.screenshot({
+      path: `/tmp/party-content-cerimonia-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page
+      .getByRole("button", {
+        name: "Voltar ao Espaço dos Padrinhos",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", { name: "Recado dos noivos", exact: true })
+      .click();
+    const note = page.getByText(
+      "Querida amiga, 💙\n\nEste recado é só seu. <b>Texto literal.</b>",
+      { exact: true },
+    );
+    await expect(note).toBeVisible();
+    expect(await note.textContent()).toContain("\n\n");
+    await expect(note.locator("b")).toHaveCount(0);
+    await expect(
+      page.getByText("Texto exclusivo da carta", { exact: true }),
+    ).toHaveCount(0);
+    await page.reload();
+    await expect(note).toBeVisible();
+    await page.screenshot({
+      path: `/tmp/party-content-recado-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    const after = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("demo-db")!),
+    );
+    expect(after.weddingParty).toEqual(before.weddingParty);
+    expect(after.snapshot.rsvps).toEqual(before.snapshot.rsvps);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}

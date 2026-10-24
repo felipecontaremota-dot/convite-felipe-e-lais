@@ -10,6 +10,7 @@ import { useParty } from "./PartyProvider";
 import type { Promotion } from "./types";
 import { Envelope } from "./Envelope";
 import { Letter } from "./Letter";
+import { PartyContent } from "./PartyContent";
 import { partyName } from "./letterContent";
 import { theme } from "../../theme/tokens";
 const gold = "#D6BC78",
@@ -142,22 +143,6 @@ function PartyExperience({
     lineHeight: 29,
     textAlign: "center" as const,
   };
-  const event = app.data?.event;
-  const fullDate = event
-    ? new Intl.DateTimeFormat("pt-BR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        timeZone: event.timezone,
-      }).format(new Date(event.starts_at))
-    : "Data a confirmar";
-  const time = event
-    ? new Intl.DateTimeFormat("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: event.timezone,
-      }).format(new Date(event.starts_at))
-    : "Horário a confirmar";
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.ink }}
@@ -214,52 +199,34 @@ function PartyExperience({
             backgroundColor: theme.colors.primaryActive,
           }}
         >
-          <Text
-            style={{ color: gold, letterSpacing: 1.5, textAlign: "center" }}
-          >
-            {stage === "menu" ? "Acesso exclusivo" : "Um convite do coração"}
-          </Text>
-          <Text
-            accessibilityRole="header"
-            style={{
-              color: lightGold,
-              fontFamily: "Georgia",
-              fontSize: 30,
-              lineHeight: 39,
-              textAlign: "center",
-            }}
-          >
-            {exclusivePage ? pageTitles[exclusivePage] : heading}
-          </Text>
+          {exclusivePage !== "dia" && (
+            <Text
+              style={{ color: gold, letterSpacing: 1.5, textAlign: "center" }}
+            >
+              {stage === "menu" ? "Acesso exclusivo" : "Um convite do coração"}
+            </Text>
+          )}
+          {exclusivePage !== "dia" && (
+            <Text
+              accessibilityRole="header"
+              style={{
+                color: lightGold,
+                fontFamily: "Georgia",
+                fontSize: 30,
+                lineHeight: 39,
+                textAlign: "center",
+              }}
+            >
+              {exclusivePage ? pageTitles[exclusivePage] : heading}
+            </Text>
+          )}
           {exclusivePage ? (
             <>
-              {exclusivePage === "dia" ? (
-                <>
-                  <Text style={textStyle}>{fullDate}</Text>
-                  <Text style={textStyle}>{time}</Text>
-                  <Text style={textStyle}>
-                    {event?.venue_name || "Villarejo Eventos"}
-                  </Text>
-                  {event?.address && (
-                    <Text style={textStyle}>{event.address}</Text>
-                  )}
-                </>
-              ) : null}
-              {exclusivePage === "traje" ? (
-                <Text style={textStyle}>
-                  {party.state.attire ||
-                    "As orientações de traje serão compartilhadas aqui com carinho, assim que estiverem definidas."}
-                </Text>
-              ) : null}
-              {exclusivePage === "cerimonia" ? (
-                <Text style={textStyle}>
-                  {party.state.ceremony ||
-                    "Em breve, os noivos compartilharão as orientações sobre chegada, cortejo e organização da cerimônia."}
-                </Text>
-              ) : null}
-              {exclusivePage === "recado" ? (
-                <Text style={textStyle}>{party.state.message}</Text>
-              ) : null}
+              <PartyContent
+                page={exclusivePage}
+                event={app.data?.event}
+                note={promotion.couples_note}
+              />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Voltar ao Espaço dos Padrinhos"

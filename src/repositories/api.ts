@@ -415,3 +415,30 @@ export const weddingPartyAdminSaveDetails = (
       p_expected_display_name: expectedDisplayName,
     },
   );
+
+export const weddingPartyAdminSaveContent = (
+  guest: string,
+  role: import("../features/weddingParty/types").PartyRole,
+  cycle: string | null,
+  message: string,
+  expectedMessage: string | null,
+  displayName: string,
+  expectedDisplayName: string | null,
+  note: string,
+  expectedNote: string | null,
+) =>
+  rpc<import("../features/weddingParty/types").Promotion>(
+    "wedding_party_admin_save_content",
+    {
+      p_event: eventId,
+      p_guest: guest,
+      p_role: role,
+      p_expected_cycle: cycle,
+      p_message: message,
+      p_expected_message: expectedMessage,
+      p_display_name: displayName,
+      p_expected_display_name: expectedDisplayName,
+      p_note: note,
+      p_expected_note: expectedNote,
+    },
+  );

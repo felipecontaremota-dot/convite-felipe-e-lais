@@ -670,7 +670,7 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
   db.sql(
     `update guests set profile_confirmed_at=clock_timestamp() where id='${g.id}';`,
   );
-  const p = db.rpc(admin, "wedding_party_admin_save_details", {
+  const p = db.rpc(admin, "wedding_party_admin_save_content", {
     p_event: event,
     p_guest: g.id,
     p_role: "PADRINHO",
@@ -680,6 +680,8 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
     p_expected_message: null,
     p_display_name: "Meu querido amigo",
     p_expected_display_name: null,
+    p_note: "Um recado somente seu.\n\nMuito carinho! 💙",
+    p_expected_note: null,
   });
   const before = db.rpc(admin, "app_snapshot", { p_event: event }).rsvps;
   await backend(page, uid);
@@ -737,6 +739,15 @@ test("Wedding party uses real authenticated PostgreSQL RPCs and completion persi
       db.rpc(otherDevice, "wedding_party_state", { p_event: event }).promotion
         .completed_at,
     ).toBe(persisted.completed_at);
+    await second.goto("/padrinhos?pagina=recado");
+    await expect(
+      second.getByText("Um recado somente seu.\n\nMuito carinho! 💙", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      second.getByText("Mensagem individual do PostgreSQL.", { exact: true }),
+    ).toHaveCount(0);
     const edited = db.rpc(admin, "wedding_party_admin_save_details", {
       p_event: event,
       p_guest: g.id,

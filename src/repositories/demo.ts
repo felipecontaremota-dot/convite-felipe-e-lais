@@ -1091,11 +1091,20 @@ export function demoPartyAdminSave(
   expectedMessage: string | null,
   displayName?: string,
   expectedDisplayName?: string | null,
+  note?: string,
+  expectedNote?: string | null,
 ) {
   return transaction((db) => {
     const current = db.weddingParty?.find(
       (p) => p.active && p.guest_id === guest,
     );
+    if (
+      note !== undefined &&
+      ((current?.couples_note ?? null) !== (expectedNote ?? null) ||
+        note.length > 12000)
+    )
+      throw Error("Dados alterados. Atualize.");
+    const couplesNote = note?.trim() ? note : null;
     const keepEmpty =
       displayName !== undefined &&
       !!current &&
@@ -1120,6 +1129,7 @@ export function demoPartyAdminSave(
       throw Error("A classificação deve ser preservada.");
     if (current) {
       if (!keepEmpty) current.personal_message = message;
+      if (note !== undefined) current.couples_note = couplesNote;
       if (displayName !== undefined) current.display_name = nickname;
       return current;
     }
@@ -1133,6 +1143,7 @@ export function demoPartyAdminSave(
       completed_at: null,
       active: true,
       personal_message: message,
+      couples_note: couplesNote,
       display_name: nickname,
     };
     (db.weddingParty ??= []).push(promotion);
