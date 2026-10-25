@@ -105,3 +105,58 @@ for (const width of [320, 390, 1280])
       fullPage: true,
     });
   });
+
+test("a scheduled time expiring during review shows an error without publishing or crashing", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-10-25T12:00:00Z") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Demo noivos", exact: true }).click();
+  await page.getByRole("link", { name: "Notificações", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Nova notificação", exact: true })
+    .click();
+  const editor = page.getByRole("dialog", {
+    name: "Nova notificação",
+    exact: true,
+  });
+  await editor
+    .getByLabel("Título", { exact: true })
+    .fill("Agendamento vencido na revisão");
+  await editor
+    .getByLabel("Mensagem", { exact: true })
+    .fill("Não deve publicar.");
+  await editor
+    .getByRole("radio", { name: "Agendar envio", exact: true })
+    .click();
+  await editor.getByLabel("Data", { exact: true }).fill("2026-10-25");
+  await editor.getByLabel("Horário", { exact: true }).fill("09:01");
+  await editor
+    .getByRole("button", { name: "Revisar notificação", exact: true })
+    .click();
+  const review = page.getByRole("dialog", {
+    name: "Confirmar notificação",
+    exact: true,
+  });
+  await expect(review).toBeVisible();
+  await page.clock.setSystemTime(new Date("2026-10-25T12:02:00Z"));
+  await review
+    .getByRole("button", { name: "Salvar agendamento", exact: true })
+    .click();
+  await expect(review.getByRole("alert").last()).toContainText(
+    "Escolha uma data futura.",
+  );
+  await review.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Título", { exact: true })).toHaveValue(
+    "Agendamento vencido na revisão",
+  );
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("demo-db")!).snapshot
+          .notification_schedules?.length || 0,
+    ),
+  ).toBe(0);
+});

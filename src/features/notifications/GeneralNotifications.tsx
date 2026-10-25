@@ -10,6 +10,7 @@ import {
   useFeedback,
 } from "../../components/ui";
 import { AdminModal, ConfirmModal } from "../../components/AdminModal";
+import { AppError } from "../../lib/errors";
 import { useApp } from "../../lib/AppProvider";
 import { id } from "../../repositories/demo";
 import { notificationFeed, dispatchMessage } from "../../repositories/api";
@@ -213,6 +214,7 @@ function NotificationEditor({
     ),
     [active, setActive] = useState(record?.active ?? true),
     [review, setReview] = useState(false),
+    [reviewInstant, setReviewInstant] = useState(""),
     [busy, setBusy] = useState(false),
     [dateError, setDateError] = useState("");
   const count = (app.data?.guests || []).filter((g) =>
@@ -235,7 +237,15 @@ function NotificationEditor({
           audience: "GENERAL",
           active,
           ...(mode === "schedule"
-            ? { scheduled_at: scheduledInstant(date, time) }
+            ? {
+                scheduled_at: (() => {
+                  try {
+                    return scheduledInstant(date, time);
+                  } catch {
+                    throw new AppError("Escolha uma data futura.");
+                  }
+                })(),
+              }
             : {}),
         };
         await app.admin(
@@ -325,7 +335,9 @@ function NotificationEditor({
         }
         onPress={() => {
           try {
-            if (mode === "schedule") scheduledInstant(date, time);
+            setReviewInstant(
+              mode === "schedule" ? scheduledInstant(date, time) : "",
+            );
             setDateError("");
             setReview(true);
           } catch (e) {
@@ -338,7 +350,7 @@ function NotificationEditor({
           premium
           title="Confirmar notificação"
           destructive={false}
-          text={`${title}\n\n${body}\n\nCanais: ${channels.join(" · ")}\nDestinatários: todos os convidados elegíveis (${count} estimados)\n${mode === "now" ? "Enviar agora" : messageDate(scheduledInstant(date, time)) + " · Horário de Brasília"}`}
+          text={`${title}\n\n${body}\n\nCanais: ${channels.join(" · ")}\nDestinatários: todos os convidados elegíveis (${count} estimados)\n${mode === "now" ? "Enviar agora" : messageDate(reviewInstant) + " · Horário de Brasília"}`}
           confirmLabel={
             mode === "now" ? "Publicar e enviar" : "Salvar agendamento"
           }
