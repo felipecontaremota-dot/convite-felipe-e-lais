@@ -1,3 +1,4 @@
+import { adminRsvpStatus } from "./adminGuestStatus";
 import { invitationLink } from "../../utils/security";
 import type { Snapshot } from "../../types/domain";
 import { listGuests, RSVP_LABELS, formatPhone } from "./adminDomain";
@@ -51,7 +52,7 @@ export function guestExportRows(
   const rsvps = new Map(
     data.rsvps
       .filter((r) => r.event_id === event)
-      .map((r) => [r.guest_id, r.status]),
+      .map((r) => [r.guest_id, adminRsvpStatus(r)]),
   );
   return listGuests(data, search, filter)
     .filter((g) => g.event_id === event)
@@ -76,7 +77,11 @@ export function guestExportRows(
         unit?.pin || "",
         unit?.name || "",
         c?.email || "",
-        status ? RSVP_LABELS[status] || "" : RSVP_LABELS.PENDING,
+        status === "MAYBE"
+          ? "Talvez"
+          : status
+            ? RSVP_LABELS[status] || ""
+            : RSVP_LABELS.PENDING,
         g.is_child
           ? "Criança"
           : g.is_adolescent

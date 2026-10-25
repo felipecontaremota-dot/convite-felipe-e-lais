@@ -307,7 +307,7 @@ export function GuestsScreen() {
           closeDetail();
         }}
       />
-      <GuestExportButton search={search} filter={filter} />
+      <GuestExportButton />
       <Button
         secondary
         title="Enviar todos os convites"
