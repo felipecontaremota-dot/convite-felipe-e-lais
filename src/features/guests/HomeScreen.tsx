@@ -1,3 +1,4 @@
+import { GuestPublications } from "../notifications/GuestPublications";
 import { theme } from "../../theme/tokens";
 import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
@@ -71,6 +72,7 @@ export function GuestHome() {
         />
       ) : null}
       <Text style={styles.heading}>Recados com carinho</Text>
+      <GuestPublications key={app.scope} />
       {s?.announcements.length ? (
         s.announcements.map((a) => (
           <Card key={a.id}>
@@ -78,9 +80,9 @@ export function GuestHome() {
             <Text style={styles.text}>{a.content}</Text>
           </Card>
         ))
-      ) : (
+      ) : !s?.notification_publications?.length ? (
         <Empty text="Os próximos avisos aparecerão aqui." />
-      )}
+      ) : null}
     </Screen>
   );
 }

@@ -63,7 +63,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps webkit
-      - run: npm run test:e2e -- --project=webkit-tickets --project=webkit-party
+      - run: npm run test:e2e -- --project=webkit-tickets --project=webkit-party --project=webkit-notifications
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -78,4 +78,11 @@ jobs:
           path: |
             /tmp/party-content-*.png
             /tmp/party-admin-note-*.png
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: notifications-webkit-evidence
+          path: /tmp/general-notifications-webkit-*.png
           if-no-files-found: ignore

@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { Toggle, styles } from "../../components/ui";
 import type { Channel } from "../../types/domain";
 
-const channels: Channel[] = ["IN_APP", "PUSH", "EMAIL", "WHATSAPP"];
+const channels: Channel[] = ["IN_APP", "PUSH", "EMAIL"];
 
 export function ChannelChoices({
   value,

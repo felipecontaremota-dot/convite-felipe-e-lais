@@ -442,3 +442,20 @@ export const weddingPartyAdminSaveContent = (
       p_expected_note: expectedNote,
     },
   );
+
+export function notificationFeed(before?: string, id?: string) {
+  return rpc<import("../types/domain").NotificationPublication[]>(
+    "notification_feed",
+    { p_event: eventId, p_before: before || null, p_id: id || null },
+  );
+}
+export function notificationPreferences(
+  action: string,
+  payload: Record<string, unknown>,
+) {
+  return rpc("notification_preferences", {
+    p_event: eventId,
+    p_action: action,
+    p_payload: payload,
+  });
+}

@@ -47,3 +47,31 @@ self.addEventListener("fetch", (event) => {
       ),
   );
 });
+
+// Web Push is independent of the public-shell cache above.
+self.addEventListener("push", (event) => {
+  let payload;
+  try { payload = event.data?.json(); } catch { return; }
+  if (!payload || typeof payload.title !== "string") return;
+  event.waitUntil(self.registration.showNotification(payload.title, {
+    body: typeof payload.body === "string" ? payload.body : "",
+    tag: payload.tag, data: { url: "./inicio" },
+  }));
+});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL("./inicio", self.registration.scope).href;
+  event.waitUntil(self.clients.matchAll({type:"window",includeUncontrolled:true}).then(async (windows) => {
+    for (const client of windows) {
+      if (new URL(client.url).origin === self.location.origin) {
+        await client.navigate(target); return client.focus();
+      }
+    }
+    return self.clients.openWindow(target);
+  }));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "NOTIFICATION_CAPABILITIES")
+    event.ports?.[0]?.postMessage({ webPush: true });
+});

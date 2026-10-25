@@ -50,6 +50,7 @@ export class TestPostgres {
   async start(
     baseline:
       | "main"
+      | "pre-notifications"
       | "prod-profile"
       | "pre-confirmation"
       | "pre-admin-guest"
@@ -102,20 +103,23 @@ export class TestPostgres {
         .filter(
           (f) =>
             f.endsWith(".sql") &&
+            !f.endsWith("_notification_scheduler.sql") &&
             (baseline === "main" ||
-              (baseline === "pre-party-content"
-                ? f < "20261024215704"
-                : baseline === "pre-ticket-replacement"
-                  ? f < "20261024052358"
-                  : baseline === "pre-checkin-actor-role"
-                    ? f < "20261024004410"
-                    : baseline === "pre-checkin-reversal"
-                      ? f < "20261023115359"
-                      : baseline === "pre-admin-guest"
-                        ? f < adminGuestCutoff!
-                        : baseline === "prod-profile"
-                          ? f < "20261013204105"
-                          : f < "20261015033043")),
+              (baseline === "pre-notifications"
+                ? f < "20261025135720"
+                : baseline === "pre-party-content"
+                  ? f < "20261024215704"
+                  : baseline === "pre-ticket-replacement"
+                    ? f < "20261024052358"
+                    : baseline === "pre-checkin-actor-role"
+                      ? f < "20261024004410"
+                      : baseline === "pre-checkin-reversal"
+                        ? f < "20261023115359"
+                        : baseline === "pre-admin-guest"
+                          ? f < adminGuestCutoff!
+                          : baseline === "prod-profile"
+                            ? f < "20261013204105"
+                            : f < "20261015033043")),
         )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));
@@ -147,6 +151,8 @@ export class TestPostgres {
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
       event_role: `event_role(${event})`,
+      notification_feed: `notification_feed(${event},${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_id == null ? "null" : literal(args.p_id)}::uuid)`,
+      notification_preferences: `notification_preferences(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,
       wedding_party_admin_save_content: `wedding_party_admin_save_content(${event},${literal(args.p_guest)}::uuid,${literal(args.p_role)},${args.p_expected_cycle == null ? "null" : literal(args.p_expected_cycle)}::uuid,${literal(args.p_message)},${args.p_expected_message == null ? "null" : literal(args.p_expected_message)},${args.p_display_name == null ? "null" : literal(args.p_display_name)},${args.p_expected_display_name == null ? "null" : literal(args.p_expected_display_name)},${args.p_note == null ? "null" : literal(args.p_note)},${args.p_expected_note == null ? "null" : literal(args.p_expected_note)})`,
       wedding_party_admin_save_details: `wedding_party_admin_save_details(${event},${literal(args.p_guest)}::uuid,${literal(args.p_role)},${args.p_expected_cycle == null ? "null" : literal(args.p_expected_cycle)}::uuid,${literal(args.p_message)},${args.p_expected_message == null ? "null" : literal(args.p_expected_message)},${args.p_display_name == null ? "null" : literal(args.p_display_name)},${args.p_expected_display_name == null ? "null" : literal(args.p_expected_display_name)})`,
       wedding_party_admin_save: `wedding_party_admin_save(${event},${literal(args.p_guest)}::uuid,${literal(args.p_role)},${args.p_expected_cycle == null ? "null" : literal(args.p_expected_cycle)}::uuid,${literal(args.p_message)},${args.p_expected_message == null ? "null" : literal(args.p_expected_message)})`,

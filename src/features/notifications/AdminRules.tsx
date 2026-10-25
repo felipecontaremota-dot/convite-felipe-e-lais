@@ -13,6 +13,8 @@ import {
 import { useApp } from "../../lib/AppProvider";
 import type { Rule } from "../../types/domain";
 import { notificationTime } from "../notifications/domain";
+import { GeneralNotifications } from "./GeneralNotifications";
+import { deliveryLabel } from "./publication";
 import { ScheduledNotifications } from "./ScheduledNotifications";
 import { ChannelChoices } from "./ChannelChoices";
 function RuleEditor({ rule: r }: { rule: Rule }) {
@@ -21,7 +23,9 @@ function RuleEditor({ rule: r }: { rule: Rule }) {
   const [title, setTitle] = useState(r.title),
     [body, setBody] = useState(r.body),
     [active, setActive] = useState(r.active),
-    [selected, setSelected] = useState(r.channels);
+    [selected, setSelected] = useState<Rule["channels"]>(
+      r.channels.filter((c) => c !== "WHATSAPP"),
+    );
   return (
     <Card>
       <Text style={styles.heading}>
@@ -70,7 +74,11 @@ export function RulesScreen() {
   const app = useApp();
   return (
     <Screen section="admin" title="Lembretes do nosso dia">
-      <ScheduledNotifications />
+      {app.data?.capabilities?.general_notifications ? (
+        <GeneralNotifications />
+      ) : (
+        <ScheduledNotifications />
+      )}
       <Text style={styles.heading}>Lembretes relativos ao casamento</Text>
       {app.data?.rules.map((r) => (
         <RuleEditor key={r.id} rule={r} />
@@ -78,11 +86,26 @@ export function RulesScreen() {
       {!app.data?.rules.length ? (
         <Empty text="Aplique o seed do evento para criar as regras iniciais." />
       ) : null}
+      {app.data?.notification_expired_rules?.map((r) => (
+        <Card key={r.rule_id}>
+          <Text style={styles.small}>
+            Lembrete não publicado ·{" "}
+            {new Date(r.recorded_at).toLocaleString("pt-BR", {
+              timeZone: "America/Sao_Paulo",
+            })}
+          </Text>
+          <Text style={styles.text}>{r.reason}</Text>
+        </Card>
+      ))}
       <Text style={styles.heading}>Histórico de entregas</Text>
       {app.data?.notification_jobs.map((job) => (
         <Card key={job.id}>
           <Text style={styles.text}>
-            {job.channel} · {job.status} · {job.attempts} tentativa(s)
+            {job.channel} ·{" "}
+            {job.channel === "IN_APP" && job.status === "sent"
+              ? "Disponibilizada no convite"
+              : deliveryLabel(job.status)}{" "}
+            · {job.attempts} tentativa(s)
           </Text>
           {job.last_error ? (
             <Text style={styles.error}>{job.last_error}</Text>

@@ -226,9 +226,16 @@ test("notification date, channels, editing, pause and cancellation are persisted
   await modal
     .getByLabel("Mensagem", { exact: true })
     .fill("Remember our wonderful day");
+  await modal
+    .getByRole("radio", { name: "Agendar envio", exact: true })
+    .click();
   await modal.getByLabel("Data", { exact: true }).fill("2027-01-10");
   await modal.getByLabel("Horário", { exact: true }).fill("16:00");
   await modal
+    .getByRole("button", { name: "Revisar notificação", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Confirmar notificação", exact: true })
     .getByRole("button", { name: "Salvar agendamento", exact: true })
     .click();
   await expect(modal).toHaveCount(0);
@@ -245,6 +252,10 @@ test("notification date, channels, editing, pause and cancellation are persisted
     .getByRole("checkbox", { name: "Notificação ativa", exact: true })
     .click();
   await edit
+    .getByRole("button", { name: "Revisar notificação", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Confirmar notificação", exact: true })
     .getByRole("button", { name: "Salvar agendamento", exact: true })
     .click();
   await expect(page.getByText("Pausada", { exact: true })).toBeVisible();
@@ -280,6 +291,9 @@ test("calendar labels remain Portuguese even in an English browser", async ({
     name: "Nova notificação",
     exact: true,
   });
+  await modal
+    .getByRole("radio", { name: "Agendar envio", exact: true })
+    .click();
   await modal.getByLabel("Data", { exact: true }).fill("10/01/2027");
   await modal
     .getByRole("button", { name: "Escolher data", exact: true })
@@ -466,7 +480,7 @@ for (const width of [320, 1280])
         { exact: true },
       ),
     ).toBeVisible();
-    await expect(general.getByRole("checkbox")).toHaveCount(4);
+    await expect(general.getByRole("checkbox")).toHaveCount(3);
     await general
       .getByLabel("Mensagem para todos", { exact: true })
       .fill("Recado geral do novo balão");

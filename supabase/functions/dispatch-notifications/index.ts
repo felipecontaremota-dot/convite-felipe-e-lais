@@ -7,6 +7,8 @@ import {
   workerAuthorized,
 } from "../_shared/http.ts";
 import { provider, type ProviderResult } from "../_shared/providers.ts";
+import { notificationEmail } from "../_shared/notification-email.ts";
+import { sendWebPush } from "../_shared/web-push.ts";
 export function dispatchHandler(
   deps = { service, workerAuthorized, eventAdmin, provider },
 ) {
@@ -17,7 +19,13 @@ export function dispatchHandler(
     if (request.method !== "POST") {
       return json({ error: "unauthorized" }, 401);
     }
-    const worker = deps.workerAuthorized(request);
+    let worker = deps.workerAuthorized(request);
+    // Cron authenticates with a Vault-backed secret. It is never delivered to the app.
+    if (!worker && request.headers.has("x-worker-secret")) {
+      const auth = await deps.service().rpc("notification_worker_authorized", {p_secret: request.headers.get("x-worker-secret")});
+      worker = !auth.error && auth.data === true;
+      if (!worker) return json({error:"unauthorized"},401);
+    }
     let event: string | undefined, messageId: string | undefined;
     if (!worker) {
       try {
@@ -62,7 +70,14 @@ export function dispatchHandler(
     if (error) return json({ error: "claim failed" }, 500);
     const counts = { sent: 0, skipped: 0, failed: 0, uncertain: 0 };
     const results: { channel: string; status: string; reason?: string }[] = [];
-    for (const job of jobs || []) {
+    const budget = Date.now() + 85000;
+    const claimed = jobs || [];
+    for (let index = 0; index < claimed.length; index++) {
+      if (Date.now() >= budget) {
+        await db.rpc("release_notification_claims",{p_claims:claimed.slice(index).map((j:{id:string;attempts:number;locked_at:string})=>({id:j.id,attempts:j.attempts,locked_at:j.locked_at}))});
+        break;
+      }
+      const job = claimed[index];
       const lease = {
         p_event: job.event_id,
         p_job: job.id,
@@ -159,6 +174,10 @@ export function dispatchHandler(
                 .eq("active", true)
             : { data: [], error: null };
         if (tokenError) throw Error("Falha ao carregar dispositivos");
+        if (job.channel === "EMAIL" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact?.email || "")) {
+          await finish("skipped", "resend"); counts.skipped++;
+          results.push({channel:job.channel,status:"skipped",reason:"E-mail ausente ou inválido"}); continue;
+        }
         // Final SQL admission is immediately before the delivery operation.
         const admission = await authorize(true);
         if (!admission.authorized) {
@@ -177,7 +196,9 @@ export function dispatchHandler(
           throw Error("Admissão de entrega inválida");
         admissionToken = admission.admission;
         started = true;
-        if (job.channel === "IN_APP") {
+        if (job.channel === "PUSH" && message?.published_at) {
+          result = await sendWebPush(db, job, title, body);
+        } else if (job.channel === "IN_APP") {
           if (rule) {
             const { data: guest, error: gerr } = await db
               .from("guests")
@@ -241,6 +262,9 @@ export function dispatchHandler(
             key: job.idempotency_key,
             title,
             body,
+            ...(job.channel === "EMAIL" && message?.published_at
+              ? (() => { const mail = notificationEmail(title, body, Deno.env.get("WEB_BASE_URL") || "https://felipeelais2026.com.br"); return {body: mail.text, html: mail.html}; })()
+              : {}),
             email: contact?.email || "",
             whatsapp: contact?.whatsapp || "",
             tokens: (tokens || []).map((t) => t.token),

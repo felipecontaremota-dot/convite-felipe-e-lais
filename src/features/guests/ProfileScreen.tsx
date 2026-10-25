@@ -1,7 +1,8 @@
+import { NotificationPreferences } from "../notifications/NotificationPreferences";
 import * as Crypto from "expo-crypto";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { useEffect, useState } from "react";
+import { Fragment as ReactFragment, useEffect, useState } from "react";
 import { Platform, Text } from "react-native";
 import {
   Button,
@@ -233,7 +234,12 @@ export function ProfileScreen() {
         {feedback.node}
       </Card>
       {app.data?.guests.map((g) => (
-        <ContactForm key={g.id} guest={g} />
+        <ReactFragment key={g.id}>
+          <ContactForm guest={g} />
+          {app.data?.capabilities?.general_notifications ? (
+            <NotificationPreferences guestId={g.id} />
+          ) : null}
+        </ReactFragment>
       ))}
     </Screen>
   );

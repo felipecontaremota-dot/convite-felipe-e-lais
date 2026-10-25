@@ -23,6 +23,7 @@ export default defineConfig({
         "profile-confirmation.spec.ts",
         "admin-guest-controls.spec.ts",
         "ceremonial-portal.spec.ts",
+        "general-notifications-auth.spec.ts",
         "ticket-devices.spec.ts",
       ],
     },
@@ -35,6 +36,7 @@ export default defineConfig({
         "profile-confirmation.spec.ts",
         "admin-guest-controls.spec.ts",
         "ceremonial-portal.spec.ts",
+        "general-notifications-auth.spec.ts",
         "ticket-devices.spec.ts",
       ],
       use: { baseURL: "http://127.0.0.1:8083" },
@@ -45,6 +47,15 @@ export default defineConfig({
       use: {
         browserName: "webkit",
         baseURL: "http://127.0.0.1:8083",
+        launchOptions: {},
+      },
+    },
+    {
+      name: "webkit-notifications",
+      testMatch: ["general-notifications.spec.ts"],
+      use: {
+        browserName: "webkit",
+        baseURL: "http://127.0.0.1:8081",
         launchOptions: {},
       },
     },

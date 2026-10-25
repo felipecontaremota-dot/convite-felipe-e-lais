@@ -156,7 +156,11 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
   return transaction((db) => {
     const s = JSON.parse(JSON.stringify(db.snapshot)) as Snapshot;
     s.role = role;
-    s.capabilities = { messaging_v2: true, notification_schedules: true };
+    s.capabilities = {
+      messaging_v2: true,
+      notification_schedules: true,
+      general_notifications: true,
+    };
     s.messages = s.messages
       .filter((m) => !m.deleted_at)
       .map((m) => ({
@@ -165,6 +169,12 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
           db.reads?.[`${role === "ADMIN" ? "admin" : demoFamily}:${m.id}`] ||
           null,
       }));
+    s.notification_publications = s.notification_publications?.map((m) => ({
+      ...m,
+      viewer_read_at:
+        db.reads?.[`${role === "ADMIN" ? "admin" : demoFamily}:${m.id}`] ||
+        null,
+    }));
     if (role !== "ADMIN") s.notification_schedules = [];
     if (role === "GUEST") {
       s.invitations = s.invitations.filter((i) => i.id === demoFamily);
@@ -323,6 +333,16 @@ export async function demoMutate(m: OfflineMutation, role: Role) {
         break;
       }
       case "MESSAGE_READ": {
+        const publication = s.notification_publications?.find(
+          (m) => m.id === p.id,
+        );
+        if (publication) {
+          db.reads ??= {};
+          db.reads[
+            `${role === "ADMIN" ? "admin" : demoFamily}:${publication.id}`
+          ] = stamp();
+          break;
+        }
         const message = s.messages.find((m) => m.id === p.id && !m.deleted_at);
         if (
           !message ||
@@ -969,6 +989,19 @@ export async function demoAdmin(
           });
         break;
       }
+      case "NOTIFICATION_PUBLISH": {
+        s.notification_publications ??= [];
+        if (!s.notification_publications.some((m) => m.id === entity))
+          s.notification_publications.unshift({
+            id: entity,
+            title: String(p.title),
+            content: String(p.body),
+            published_at: stamp(),
+            origin: "MANUAL",
+            viewer_read_at: null,
+          });
+        break;
+      }
       case "NOTIFICATION_SAVE": {
         s.notification_schedules ??= [];
         const old = s.notification_schedules.find((n) => n.id === entity);
@@ -978,6 +1011,13 @@ export async function demoAdmin(
           throw Error("Data deve ser futura.");
         const schedule = {
           ...p,
+          recipient_guest_ids: s.guests
+            .filter((g) =>
+              s.invitations.some(
+                (i) => i.id === g.invitation_id && i.active && !i.archived_at,
+              ),
+            )
+            .map((g) => g.id),
           id: entity,
           event_id: event,
           status: "scheduled",

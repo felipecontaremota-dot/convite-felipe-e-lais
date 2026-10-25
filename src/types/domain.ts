@@ -184,10 +184,22 @@ export interface Snapshot {
   capabilities?: {
     messaging_v2?: boolean;
     notification_schedules?: boolean;
+    general_notifications?: boolean;
     admin_guest_controls?: boolean;
     ceremonial_portal?: boolean;
   };
   notification_schedules?: NotificationSchedule[];
+  notification_publications?: NotificationPublication[];
+  notification_expired_rules?: {
+    rule_id: string;
+    reason: string;
+    recorded_at: string;
+  }[];
+  notification_config?: {
+    email_enabled: boolean;
+    push_enabled: boolean;
+    vapid_public: string | null;
+  };
   current_invitation_id?: string | null;
   role: Role | null;
   event: WeddingEvent;
@@ -266,4 +278,15 @@ export interface CheckinRemoval {
   removed_at: string;
   removed_by: string;
   duplicate: boolean;
+}
+
+export interface NotificationPublication {
+  recipient_count?: number;
+  channels?: Channel[];
+  id: string;
+  title: string;
+  content: string;
+  published_at: string;
+  origin: "MANUAL" | "AUTOMATIC";
+  viewer_read_at: string | null;
 }
