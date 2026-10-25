@@ -87,13 +87,9 @@ for (const width of [320, 390, 1280])
     await page
       .getByRole("button", { name: "Marcar recado como lido", exact: true })
       .click();
-    await expect(
-      page.getByText("Lido pela sua unidade", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("Lido", { exact: true })).toBeVisible();
     await page.reload();
-    await expect(
-      page.getByText("Lido pela sua unidade", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("Lido", { exact: true })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -160,3 +156,87 @@ test("a scheduled time expiring during review shows an error without publishing 
     ),
   ).toBe(0);
 });
+
+for (const width of [320, 1280])
+  test(`ADMIN confirms or cancels soft deletion and GUEST cannot restore it at ${width}px`, async ({
+    page,
+    browserName,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+    await page
+      .getByRole("button", { name: "Demo noivos", exact: true })
+      .click();
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      db.snapshot.notification_publications = [
+        {
+          id: "publication-delete",
+          title: "Recado removível",
+          content: "Remover apenas este recado.",
+          published_at: new Date().toISOString(),
+          origin: "MANUAL",
+          viewer_read_at: null,
+        },
+        {
+          id: "publication-keep",
+          title: "Recado preservado",
+          content: "Manter.",
+          published_at: new Date().toISOString(),
+          origin: "MANUAL",
+          viewer_read_at: null,
+        },
+      ];
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    });
+    await page.getByRole("link", { name: "Notificações", exact: true }).click();
+    await page.reload();
+    const trash = page.getByRole("button", {
+      name: "Excluir notificação: Recado removível",
+      exact: true,
+    });
+    await trash.click();
+    let modal = page.getByRole("dialog", {
+      name: "Excluir notificação?",
+      exact: true,
+    });
+    await modal.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(trash).toBeVisible();
+    await trash.click();
+    modal = page.getByRole("dialog", {
+      name: "Excluir notificação?",
+      exact: true,
+    });
+    await modal
+      .getByRole("button", { name: "Excluir notificação", exact: true })
+      .click();
+    await expect(trash).toHaveCount(0);
+    await expect(page.getByText(/Excluída em /)).toBeVisible();
+    await page
+      .getByText("Recado removível", { exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `/tmp/notification-deletion-${browserName}-${width}.png`,
+      animations: "disabled",
+    });
+    await page
+      .getByRole("button", { name: "Sair deste dispositivo", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Demo convidado", exact: true })
+      .click();
+    await expect(
+      page.getByText("Recado removível", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Recado preservado", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Excluir notificação/ }),
+    ).toHaveCount(0);
+    await page.reload();
+    await expect(
+      page.getByText("Recado removível", { exact: true }),
+    ).toHaveCount(0);
+  });

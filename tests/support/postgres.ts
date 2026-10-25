@@ -51,6 +51,7 @@ export class TestPostgres {
     baseline:
       | "main"
       | "pre-notifications"
+      | "pre-notification-delete"
       | "prod-profile"
       | "pre-confirmation"
       | "pre-admin-guest"
@@ -105,21 +106,23 @@ export class TestPostgres {
             f.endsWith(".sql") &&
             !f.endsWith("_notification_scheduler.sql") &&
             (baseline === "main" ||
-              (baseline === "pre-notifications"
-                ? f < "20261025135720"
-                : baseline === "pre-party-content"
-                  ? f < "20261024215704"
-                  : baseline === "pre-ticket-replacement"
-                    ? f < "20261024052358"
-                    : baseline === "pre-checkin-actor-role"
-                      ? f < "20261024004410"
-                      : baseline === "pre-checkin-reversal"
-                        ? f < "20261023115359"
-                        : baseline === "pre-admin-guest"
-                          ? f < adminGuestCutoff!
-                          : baseline === "prod-profile"
-                            ? f < "20261013204105"
-                            : f < "20261015033043")),
+              (baseline === "pre-notification-delete"
+                ? f < "20261025201300"
+                : baseline === "pre-notifications"
+                  ? f < "20261025135720"
+                  : baseline === "pre-party-content"
+                    ? f < "20261024215704"
+                    : baseline === "pre-ticket-replacement"
+                      ? f < "20261024052358"
+                      : baseline === "pre-checkin-actor-role"
+                        ? f < "20261024004410"
+                        : baseline === "pre-checkin-reversal"
+                          ? f < "20261023115359"
+                          : baseline === "pre-admin-guest"
+                            ? f < adminGuestCutoff!
+                            : baseline === "prod-profile"
+                              ? f < "20261013204105"
+                              : f < "20261015033043")),
         )
         .sort())
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));

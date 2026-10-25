@@ -160,6 +160,7 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
       messaging_v2: true,
       notification_schedules: true,
       general_notifications: true,
+      notification_deletion: true,
     };
     s.messages = s.messages
       .filter((m) => !m.deleted_at)
@@ -169,6 +170,13 @@ export async function demoSnapshot(role: Role): Promise<Snapshot> {
           db.reads?.[`${role === "ADMIN" ? "admin" : demoFamily}:${m.id}`] ||
           null,
       }));
+    s.notification_feed_revision = (s.notification_publications || []).filter(
+      (p) => p.deleted_at,
+    ).length;
+    if (role !== "ADMIN")
+      s.notification_publications = s.notification_publications?.filter(
+        (p) => !p.deleted_at,
+      );
     s.notification_publications = s.notification_publications?.map((m) => ({
       ...m,
       viewer_read_at:
@@ -987,6 +995,14 @@ export async function demoAdmin(
             j.status = "skipped";
             j.last_error = "Mensagem excluída";
           });
+        break;
+      }
+      case "NOTIFICATION_DELETE": {
+        const publication = s.notification_publications?.find(
+          (m) => m.id === entity,
+        );
+        if (!publication) throw Error("invalid general publication");
+        publication.deleted_at ??= stamp();
         break;
       }
       case "NOTIFICATION_PUBLISH": {

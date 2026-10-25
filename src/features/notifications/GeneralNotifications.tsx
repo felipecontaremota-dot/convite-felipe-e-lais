@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import {
   Button,
   Card,
@@ -13,7 +13,7 @@ import { AdminModal, ConfirmModal } from "../../components/AdminModal";
 import { AppError } from "../../lib/errors";
 import { useApp } from "../../lib/AppProvider";
 import { id } from "../../repositories/demo";
-import { notificationFeed, dispatchMessage } from "../../repositories/api";
+import { dispatchMessage } from "../../repositories/api";
 import type {
   NotificationPublication,
   Channel,
@@ -27,24 +27,24 @@ import {
   scheduledContentError,
 } from "./scheduling";
 import { messageDate, scheduleState } from "../messages/conversations";
+import { IconButton } from "../../components/adminUi";
+import { usePublicationPages } from "./usePublicationPages";
 import { publicationCaption } from "./publication";
 export function GeneralNotifications() {
   const app = useApp(),
     feedback = useFeedback();
-  const [older, setOlder] = useState<NotificationPublication[]>([]),
-    [end, setEnd] = useState(false);
+  const [deleting, setDeleting] = useState<NotificationPublication | null>(
+    null,
+  );
   const [editor, setEditor] = useState<
       NotificationSchedule | null | undefined
     >(),
     [cancel, setCancel] = useState<NotificationSchedule | null>(null);
-  const publications = [
-    ...new Map(
-      [...(app.data?.notification_publications || []), ...older].map((p) => [
-        p.id,
-        p,
-      ]),
-    ).values(),
-  ];
+  const pages = usePublicationPages(
+    app.data?.notification_publications || [],
+    app.data?.notification_feed_revision,
+  );
+  const publications = pages.items;
   return (
     <>
       <Text style={styles.small}>
@@ -108,9 +108,26 @@ export function GeneralNotifications() {
           <Text style={styles.heading}>{p.title}</Text>
           <Text style={styles.small}>
             {publicationCaption(p.published_at)} ·{" "}
-            {p.origin === "AUTOMATIC" ? "Automática" : "Manual"} · Publicada
+            {p.origin === "AUTOMATIC" ? "Automática" : "Manual"} ·{" "}
+            {p.deleted_at ? "Excluída" : "Publicada"}
           </Text>
+          {p.deleted_at ? (
+            <Text style={styles.small}>
+              Excluída em {messageDate(p.deleted_at).replace(", ", " às ")}
+            </Text>
+          ) : null}
           <Text style={styles.text}>{p.content}</Text>
+          {app.data?.role === "ADMIN" &&
+          app.data.capabilities?.notification_deletion &&
+          !p.deleted_at ? (
+            <View style={styles.row}>
+              <IconButton
+                icon="delete"
+                label={`Excluir notificação: ${p.title}`}
+                onPress={() => setDeleting(p)}
+              />
+            </View>
+          ) : null}
           <Text style={styles.small}>
             {p.recipient_count ?? "—"} destinatários ·{" "}
             {p.channels?.join(" · ") || "Canais históricos"}
@@ -155,16 +172,13 @@ export function GeneralNotifications() {
             ))}
         </Card>
       ))}
-      {!end && app.data?.notification_publications?.length === 20 ? (
+      {pages.canLoadMore ? (
         <Button
           secondary
           title="Carregar publicações anteriores"
           onPress={() =>
             feedback.run(async () => {
-              const last = publications[publications.length - 1]!;
-              const rows = await notificationFeed(last.published_at, last.id);
-              setOlder((v) => [...v, ...rows]);
-              setEnd(rows.length < 20);
+              await pages.loadMore();
               return "";
             })
           }
@@ -188,6 +202,19 @@ export function GeneralNotifications() {
               version: cancel.version,
             });
             setCancel(null);
+          }}
+        />
+      ) : null}
+      {deleting ? (
+        <ConfirmModal
+          premium
+          title="Excluir notificação?"
+          text="Esta notificação será removida de 'Recados com carinho' para todos os convidados e não poderá ser restaurada por esta tela. Deseja continuar?"
+          confirmLabel="Excluir notificação"
+          onCancel={() => setDeleting(null)}
+          onConfirm={async () => {
+            await app.admin("NOTIFICATION_DELETE", { id: deleting.id });
+            setDeleting(null);
           }}
         />
       ) : null}

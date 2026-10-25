@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import { TestPostgres } from "../support/postgres";
 import { ticketFixture } from "../support/ticket-fixture";
 const db = new TestPostgres();
@@ -76,6 +77,7 @@ test("real PostgreSQL publication, external-only feed, consent and family read p
   browser,
 }) => {
   test.setTimeout(120000);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await backend(page, f.admin, { loseReply: true });
   await page.goto("/login");
@@ -147,9 +149,7 @@ test("real PostgreSQL publication, external-only feed, consent and family read p
       .getByRole("button", { name: "Marcar recado como lido", exact: true })
       .click();
     await guest.reload();
-    await expect(
-      guest.getByText("Lido pela sua unidade", { exact: true }),
-    ).toBeVisible();
+    await expect(guest.getByText("Lido", { exact: true })).toBeVisible();
     expect(
       db
         .sql(
@@ -157,6 +157,127 @@ test("real PostgreSQL publication, external-only feed, consent and family read p
         )
         .trim(),
     ).toBe("1");
+    const keep = randomUUID();
+    f.action("NOTIFICATION_PUBLISH", {
+      id: keep,
+      audience: "GENERAL",
+      title: "Outra notificação preservada",
+      body: "Não remover.",
+      channels: ["IN_APP"],
+    });
+    await page.reload();
+    const trash = page.getByRole("button", {
+      name: "Excluir notificação: Publicação real SQL 💙",
+      exact: true,
+    });
+    await trash.click();
+    let confirmation = page.getByRole("dialog", {
+      name: "Excluir notificação?",
+      exact: true,
+    });
+    await confirmation
+      .getByRole("button", { name: "Cancelar", exact: true })
+      .click();
+    await expect(trash).toBeVisible();
+    await trash.click();
+    confirmation = page.getByRole("dialog", {
+      name: "Excluir notificação?",
+      exact: true,
+    });
+    await confirmation
+      .getByRole("button", { name: "Excluir notificação", exact: true })
+      .click();
+    await expect(trash).toHaveCount(0);
+    await expect(page.getByText(/Excluída em /)).toBeVisible();
+    await guest.reload();
+    await expect(
+      guest.getByText("Publicação real SQL 💙", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      guest.getByText("Outra notificação preservada", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      guest.getByRole("button", { name: /Excluir notificação/ }),
+    ).toHaveCount(0);
+    await page.screenshot({
+      path: "/tmp/notification-deleted-admin.png",
+      fullPage: true,
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("deletion invalidates already loaded older pages and never returns through pagination", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120000);
+  const target = randomUUID();
+  f.action("NOTIFICATION_PUBLISH", {
+    id: target,
+    audience: "GENERAL",
+    title: "Recado antigo para excluir",
+    body: "Histórico paginado.",
+    channels: ["IN_APP"],
+  });
+  db.sql(
+    `update messages set published_at=now()-interval '2 days' where id='${target}';insert into messages(event_id,thread_id,from_admin,content,notification_title,audience,published_at,notification_origin) select '${f.event}',(select id from message_threads limit 1),true,'Página preservada','Página '||n,'GENERAL',now()+n*interval '1 second','MANUAL' from generate_series(1,25)n;`,
+  );
+  await backend(page, f.owner);
+  await page.goto("/");
+  await page.getByLabel("Nome do convidado", { exact: true }).fill(f.a.name);
+  await page.getByLabel("Senha do convite", { exact: true }).fill("1234");
+  await page
+    .getByRole("button", { name: "Abrir convite", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await page
+    .getByRole("button", { name: "Carregar recados anteriores", exact: true })
+    .click();
+  await expect(
+    page.getByText("Recado antigo para excluir", { exact: true }),
+  ).toBeVisible();
+  f.action("NOTIFICATION_DELETE", { id: target });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    page.getByText("Recado antigo para excluir", { exact: true }),
+  ).toHaveCount(0, { timeout: 15000 });
+  await page
+    .getByRole("button", { name: "Carregar recados anteriores", exact: true })
+    .click();
+  await expect(
+    page.getByText("Recado antigo para excluir", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Outra notificação preservada", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Carregar recados anteriores", exact: true })
+    .click();
+  await expect(
+    page.getByText("Recado antigo para excluir", { exact: true }),
+  ).toHaveCount(0);
+  const context = await browser.newContext();
+  try {
+    const second = await context.newPage();
+    await backend(second, f.secondDevice);
+    await second.goto("http://127.0.0.1:8083/");
+    await second
+      .getByLabel("Nome do convidado", { exact: true })
+      .fill(f.a.name);
+    await second.getByLabel("Senha do convite", { exact: true }).fill("1234");
+    await second
+      .getByRole("button", { name: "Abrir convite", exact: true })
+      .click();
+    await expect(second).toHaveURL(/\/inicio$/);
+    await second
+      .getByRole("button", { name: "Carregar recados anteriores", exact: true })
+      .click();
+    await expect(
+      second.getByText("Recado antigo para excluir", { exact: true }),
+    ).toHaveCount(0);
   } finally {
     await context.close();
   }

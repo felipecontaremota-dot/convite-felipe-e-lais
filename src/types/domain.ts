@@ -185,10 +185,12 @@ export interface Snapshot {
     messaging_v2?: boolean;
     notification_schedules?: boolean;
     general_notifications?: boolean;
+    notification_deletion?: boolean;
     admin_guest_controls?: boolean;
     ceremonial_portal?: boolean;
   };
   notification_schedules?: NotificationSchedule[];
+  notification_feed_revision?: number;
   notification_publications?: NotificationPublication[];
   notification_expired_rules?: {
     rule_id: string;
@@ -281,6 +283,8 @@ export interface CheckinRemoval {
 }
 
 export interface NotificationPublication {
+  deleted_at?: string | null;
+  deleted_by?: string | null;
   recipient_count?: number;
   channels?: Channel[];
   id: string;
