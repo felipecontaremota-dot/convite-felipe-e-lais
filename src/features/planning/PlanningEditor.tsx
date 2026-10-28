@@ -5,6 +5,7 @@ import { Button, Choice, Field, Toggle, styles } from "../../components/ui";
 import { Select } from "../../components/adminUi";
 import { id } from "../../repositories/demo";
 import { formatPhone } from "../guests/adminDomain";
+import { supplierPixCandidate, updateSupplierPix } from "./supplierPix";
 import {
   cents,
   contractStates,
@@ -121,6 +122,8 @@ export function PlanningEditor({
     [overpay, setOverpay] = useState(false);
   const lock = useRef(false),
     request = useRef({ body: "", id: id() });
+  // Persisted keys may belong to a third party: never infer their provenance.
+  const manualPix = useRef(Boolean(record?.pix_key));
   const fields =
     kind === "SUPPLIER"
       ? supplierFields
@@ -149,7 +152,7 @@ export function PlanningEditor({
               ? day(String(record[key]))
               : ""
             : String(record?.[key] || "");
-    return {
+    const initial: Record<string, string> = {
       ...out,
       kind: String(record?.kind || "SERVICE"),
       status: String(record?.status || "PLANNED"),
@@ -161,9 +164,18 @@ export function PlanningEditor({
       paid_on: record?.paid_on ? day(String(record.paid_on)) : day(todaySP()),
       quantity: "1",
     };
+    if (kind === "SUPPLIER" && !initial.pix_key)
+      initial.pix_key = supplierPixCandidate(initial) || "";
+    return initial;
   });
-  const set = (key: string, value: string) =>
-    setValues((v) => ({ ...v, [key]: value }));
+  const set = (key: string, value: string, manual = false) => {
+    if (key === "pix_key" && manual) manualPix.current = true;
+    setValues((v) =>
+      kind === "SUPPLIER"
+        ? updateSupplierPix(v, key, value, manualPix.current)
+        : { ...v, [key]: value },
+    );
+  };
   const choose = (
     key: string,
     label: string,
@@ -175,6 +187,9 @@ export function PlanningEditor({
       label={label}
       value={values[key] || ""}
       onChange={(v) => {
+        // A new type resumes autofill, keeping the old key until its source is valid.
+        if (key === "pix_type" && v !== values.pix_type)
+          manualPix.current = false;
         set(key, v);
         if (key === "entry_id") set("installment_id", "");
       }}
@@ -379,7 +394,9 @@ export function PlanningEditor({
           key={key}
           label={type === "date" ? `${label} (DD/MM/AAAA)` : label}
           value={values[key] || ""}
-          onChangeText={(v) => set(key, type === "date" ? maskDate(v) : v)}
+          onChangeText={(v) =>
+            set(key, type === "date" ? maskDate(v) : v, true)
+          }
           editable={!busy}
           multiline={type === "multiline"}
           keyboardType={
