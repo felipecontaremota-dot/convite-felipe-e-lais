@@ -21,3 +21,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.send-invitations]
 verify_jwt = false
+[functions.planning-documents]
+verify_jwt = true

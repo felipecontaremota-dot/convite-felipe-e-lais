@@ -49,6 +49,7 @@ export class TestPostgres {
   }
   async start(
     baseline:
+      | "pre-planning"
       | "main"
       | "pre-notifications"
       | "pre-notification-delete"
@@ -106,26 +107,31 @@ export class TestPostgres {
             f.endsWith(".sql") &&
             !f.endsWith("_notification_scheduler.sql") &&
             (baseline === "main" ||
-              (baseline === "pre-notification-delete"
-                ? f < "20261025201300"
-                : baseline === "pre-notifications"
-                  ? f < "20261025135720"
-                  : baseline === "pre-party-content"
-                    ? f < "20261024215704"
-                    : baseline === "pre-ticket-replacement"
-                      ? f < "20261024052358"
-                      : baseline === "pre-checkin-actor-role"
-                        ? f < "20261024004410"
-                        : baseline === "pre-checkin-reversal"
-                          ? f < "20261023115359"
-                          : baseline === "pre-admin-guest"
-                            ? f < adminGuestCutoff!
-                            : baseline === "prod-profile"
-                              ? f < "20261013204105"
-                              : f < "20261015033043")),
+              (baseline === "pre-planning"
+                ? f < "20261028192221"
+                : baseline === "pre-notification-delete"
+                  ? f < "20261025201300"
+                  : baseline === "pre-notifications"
+                    ? f < "20261025135720"
+                    : baseline === "pre-party-content"
+                      ? f < "20261024215704"
+                      : baseline === "pre-ticket-replacement"
+                        ? f < "20261024052358"
+                        : baseline === "pre-checkin-actor-role"
+                          ? f < "20261024004410"
+                          : baseline === "pre-checkin-reversal"
+                            ? f < "20261023115359"
+                            : baseline === "pre-admin-guest"
+                              ? f < adminGuestCutoff!
+                              : baseline === "prod-profile"
+                                ? f < "20261013204105"
+                                : f < "20261015033043")),
         )
-        .sort())
+        .sort()) {
+        if (file.endsWith("_wedding_planning.sql"))
+          this.sql(readFileSync("tests/storage-bootstrap.sql", "utf8"));
         this.sql(readFileSync(`supabase/migrations/${file}`, "utf8"));
+      }
       this.sql(readFileSync("supabase/seed.sql", "utf8"));
       if (baseline === "prod-profile") {
         this.sql(
@@ -153,6 +159,9 @@ export class TestPostgres {
       `'${String(value).replaceAll("'", "''")}'`;
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
+      planning_history: `planning_history(${event},${args.p_entity == null ? "null" : literal(args.p_entity)}::uuid,${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_cursor == null ? "null" : literal(args.p_cursor)}::uuid)`,
+      planning_snapshot: `planning_snapshot(${event})`,
+      planning_action: `planning_action(${event},${literal(args.p_kind)},${literal(args.p_id)}::uuid,${args.p_version == null ? "null" : literal(args.p_version)}::integer,${literal(JSON.stringify(args.p_values))}::jsonb,${literal(args.p_request)}::uuid)`,
       event_role: `event_role(${event})`,
       notification_feed: `notification_feed(${event},${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_id == null ? "null" : literal(args.p_id)}::uuid)`,
       notification_preferences: `notification_preferences(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,

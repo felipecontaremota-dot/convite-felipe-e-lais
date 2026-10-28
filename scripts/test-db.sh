@@ -17,7 +17,7 @@ else
  run_sql() { docker exec -i "$container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1; }
 fi
 for source in tests/db-bootstrap.sql $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' ! -name '20261013230000_production_consolidation.sql' | sort) supabase/seed.sql tests/database.sql tests/access-database.sql tests/access-units.sql tests/message-recipients.sql tests/message-retry.sql tests/invitation-deliveries.sql tests/message-dispatch.sql tests/message-announcements.sql tests/invitation-retry.sql tests/profile-consent.sql tests/password-entry.sql tests/password-allocation.sql; do
- if [[ "$source" == *notification_soft_delete.sql || "$source" == *notification_scheduler.sql || "$source" == *general_notifications.sql || "$source" == supabase/migrations/20261013204105_name_pin_access.sql || "$source" == *replace_ticket_compare_and_swap.sql || "$source" == *checkin_history_actor_role.sql || "$source" == *checkin_reversal_history.sql || "$source" == *ceremonial_portal.sql || "$source" == *admin_guest_rsvp_sending.sql || "$source" == *link_responsible_identity.sql || "$source" == *messaging_conversations.sql ]]; then continue; fi
+ if [[ "$source" == *wedding_planning.sql || "$source" == *notification_soft_delete.sql || "$source" == *notification_scheduler.sql || "$source" == *general_notifications.sql || "$source" == supabase/migrations/20261013204105_name_pin_access.sql || "$source" == *replace_ticket_compare_and_swap.sql || "$source" == *checkin_history_actor_role.sql || "$source" == *checkin_reversal_history.sql || "$source" == *ceremonial_portal.sql || "$source" == *admin_guest_rsvp_sending.sql || "$source" == *link_responsible_identity.sql || "$source" == *messaging_conversations.sql ]]; then continue; fi
  if [[ "$source" == supabase/migrations/202610090004_access_units.sql ]]; then
   run_sql < tests/access-upgrade-prepare.sql
  fi
@@ -141,3 +141,5 @@ npx tsx scripts/test-party-content.ts
 npx tsx scripts/test-notifications.ts
 
 npx tsx scripts/test-notification-delete.ts
+
+npx tsx scripts/test-planning.ts

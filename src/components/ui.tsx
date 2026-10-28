@@ -299,6 +299,7 @@ const nav = {
     ["Presentes", "/gestao-presentes"],
     ["Mensagens", "/gestao-mensagens"],
     ["Notificações", "/notificacoes"],
+    ["Planejamento do Casamento", "/planejamento"],
     ["Dia do evento", "/dia-do-evento"],
     ["Local", "/configuracao"],
     ["Minha conta", "/conta"],

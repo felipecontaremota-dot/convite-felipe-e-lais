@@ -459,3 +459,34 @@ export function notificationPreferences(
     p_payload: payload,
   });
 }
+
+// Separate module data: never added to guest snapshots or offline mutation queues.
+export const planningSnapshot = () =>
+  rpc<import("../features/planning/domain").PlanningData>("planning_snapshot", {
+    p_event: eventId,
+  });
+export const planningAction = (
+  kind: string,
+  id: string,
+  version: number | null,
+  values: Record<string, unknown>,
+  request: string,
+) =>
+  rpc<{ id: string; version: number }>("planning_action", {
+    p_event: eventId,
+    p_kind: kind,
+    p_id: id,
+    p_version: version,
+    p_values: values,
+    p_request: request,
+  });
+export const planningHistory = (
+  entity: string | undefined,
+  cursor: { before: string; id: string } | null,
+) =>
+  rpc<import("../features/planning/domain").History[]>("planning_history", {
+    p_event: eventId,
+    p_entity: entity || null,
+    p_before: cursor?.before || null,
+    p_cursor: cursor?.id || null,
+  });

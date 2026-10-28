@@ -29,6 +29,34 @@ export class SyncError extends AppError {
   }
 }
 export function administrativeError(message: string): string | null {
+  if (message.includes("planning_duplicate_supplier"))
+    return "Já existe um fornecedor ativo com esse nome ou CPF/CNPJ. Reutilize o cadastro existente.";
+  if (message.includes("planning_busy"))
+    return "O planejamento está sendo atualizado. Aguarde alguns instantes e tente novamente.";
+  if (
+    message.includes("planning_stale") ||
+    message.includes("planning_request_changed")
+  )
+    return "Os dados foram alterados. Cancele este formulário, atualize o planejamento e reabra o registro.";
+  if (message.includes("planning_overpay"))
+    return "O valor supera o saldo ou gera crédito. Confira os valores e confirme explicitamente essa situação.";
+  if (message.includes("planning_schedule_exists"))
+    return "Já existe um cronograma ou o valor não permite essas parcelas. Edite as parcelas existentes.";
+  if (message.includes("planning_invalid_pix"))
+    return "Confira o tipo e o valor da chave PIX.";
+  if (message.includes("planning_invalid_tax"))
+    return "Confira o CPF/CNPJ informado.";
+  if (message.includes("planning_future_payment"))
+    return "Um pagamento realizado não pode ter data futura.";
+  if (message.includes("planning_paid_entry"))
+    return "Há pagamentos registrados. Preserve a obrigação ou registre um cancelamento com conciliação financeira.";
+  if (
+    message.includes("planning_invalid_parent") ||
+    message.includes("planning_archived")
+  )
+    return "O vínculo não está mais disponível. Atualize o planejamento.";
+  if (message.includes("planning_"))
+    return "Confira os campos e atualize o planejamento antes de tentar novamente.";
   if (message.includes("profile login conflict"))
     return "Não foi possível confirmar esse nome com o acesso atual. Confira os dados ou peça ajuda aos noivos.";
   if (message.includes("notification scheduling not enabled"))
