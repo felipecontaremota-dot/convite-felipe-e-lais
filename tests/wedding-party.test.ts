@@ -97,6 +97,20 @@ it("preserves the entire story in order, personal paragraphs, safe text and gend
   );
 });
 
+it.each([null, undefined, ""])(
+  "omits absent personal excerpt %s without empty paragraphs or placeholders",
+  (message) => {
+    const body = letterParagraphs("João", message, "PADRINHO");
+    expect(body).toHaveLength(storyParagraphs.length + 3);
+    expect(body.slice(0, storyParagraphs.length).map((p) => p.before)).toEqual([
+      ...storyParagraphs,
+    ]);
+    expect(body.at(-1)?.after).toBe(", aceita ser nosso padrinho?");
+    expect(JSON.stringify(body)).not.toMatch(/null|undefined|placeholder/);
+    expect(body.every((p) => p.before || p.name)).toBe(true);
+  },
+);
+
 it("waits for completed flap and extraction before light, never advancing on rerender or time alone", async () => {
   const calls: string[] = [];
   const pending: (() => void)[] = [];

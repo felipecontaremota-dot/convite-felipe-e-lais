@@ -253,16 +253,7 @@ export function PromotionControl({
           )}
           <Button
             title={editVersion?.cycle ? "Salvar mensagem" : "Salvar e promover"}
-            disabled={
-              busy ||
-              (!message.trim() &&
-                !(
-                  editVersion?.cycle &&
-                  editVersion.message == null &&
-                  message === ""
-                )) ||
-              !app.online
-            }
+            disabled={busy || !app.online}
             onPress={saveMessage}
           />
           <Button

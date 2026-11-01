@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { TestPostgres } from "../support/postgres";
+import { storyParagraphs } from "../../src/features/weddingParty/letterContent";
 const db = new TestPostgres(),
   event = "00000000-0000-4000-8000-000000000001",
   admin = "deaffeed-0000-4000-8000-000000000001";
@@ -515,3 +516,132 @@ test("dashboard email reuses a retained request, confirms real receipts and neve
   ).toBe(false);
   await expect(dialog).toBeVisible();
 });
+
+for (const [role, excerpt, width] of [
+  ["PADRINHO", "", 390],
+  ["MADRINHA", "Trecho da carta preservado.\n\nSegundo parágrafo.", 1280],
+] as const)
+  test(`optional personal excerpt ${role} ${excerpt ? "filled" : "empty"}: real promotion, invitation and independent couples note`, async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width, height: 900 });
+    const f = family(`trecho ${role}`);
+    const originalRsvp = JSON.stringify(snapshot().rsvps);
+    await backend(page);
+    await login(page);
+    await page.getByRole("link", { name: "Convidados", exact: true }).click();
+    await page
+      .getByRole("button", { name: `Abrir ficha de ${f.name}`, exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Editar convidado", exact: true })
+      .click();
+    const form = page.getByRole("dialog", {
+      name: "Editar convidado",
+      exact: true,
+    });
+    await form
+      .getByLabel("Classificação especial", { exact: true })
+      .selectOption(role);
+    await form
+      .getByRole("button", {
+        name:
+          role === "PADRINHO" ? "Promover a padrinho" : "Promover a madrinha",
+        exact: true,
+      })
+      .click();
+    const modal = page.getByRole("dialog", {
+      name: `Mensagem especial para ${f.name}`,
+      exact: true,
+    });
+    await expect(
+      modal.getByLabel("Trecho personalizado", { exact: true }),
+    ).toHaveValue("");
+    if (excerpt)
+      await modal
+        .getByLabel("Trecho personalizado", { exact: true })
+        .fill(excerpt);
+    const note = "Recado independente, sem modificar a carta.";
+    await modal.getByLabel("Recado personalizado", { exact: true }).fill(note);
+    await expect(
+      modal.getByRole("button", { name: "Salvar e promover", exact: true }),
+    ).toBeEnabled();
+    await modal
+      .getByRole("button", { name: "Salvar e promover", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    const saved = db.rpc(admin, "wedding_party_admin_get", {
+      p_event: event,
+      p_guest: f.first.id,
+    });
+    expect(saved.role).toBe(role);
+    expect(saved.personal_message).toBe(excerpt || null);
+    expect(saved.couples_note).toBe(note);
+    expect(JSON.stringify(snapshot().rsvps)).toBe(originalRsvp);
+
+    const uid = randomUUID();
+    db.sql(
+      `insert into auth.users(id,is_anonymous) values('${uid}',true);insert into invitation_sessions(event_id,user_id,invitation_id,pin_verified_at,profile_guest_id) values('${event}','${uid}','${f.unit.id}',now(),'${f.first.id}');`,
+    );
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:8083",
+      viewport: { width, height: 900 },
+      reducedMotion: "reduce",
+    });
+    try {
+      const guest = await context.newPage();
+      await backend(guest, uid);
+      await guest.goto("/");
+      await guest.getByLabel("Nome do convidado", { exact: true }).fill(f.name);
+      await guest.getByLabel("Senha do convite", { exact: true }).fill("4778");
+      await guest
+        .getByRole("button", { name: "Abrir convite", exact: true })
+        .click();
+      await expect(guest).toHaveURL(/\/inicio$/);
+      await guest.goto("/padrinhos?surpresa=1");
+      await guest
+        .getByRole("button", { name: "Abrir convite especial", exact: true })
+        .click();
+      const paper = guest.locator("[data-party-paper]");
+      await expect(paper).toBeVisible();
+      await expect(paper).toContainText(
+        role === "PADRINHO"
+          ? "aceita ser nosso padrinho?"
+          : "aceita ser nossa madrinha?",
+      );
+      await expect(paper).not.toContainText(
+        /null|undefined|placeholder|Mensagem inválida/,
+      );
+      await expect(paper).not.toContainText(note);
+      if (excerpt)
+        await expect(paper).toContainText("Trecho da carta preservado.");
+      await expect(paper.locator("[data-letter-paragraph]")).toHaveCount(
+        storyParagraphs.length + 3 + (excerpt ? 2 : 0),
+      );
+    } finally {
+      await context.close();
+    }
+    await form
+      .getByRole("button", { name: "Editar mensagem especial", exact: true })
+      .click();
+    await expect(
+      modal.getByLabel("Trecho personalizado", { exact: true }),
+    ).toHaveValue(excerpt);
+    await expect(
+      modal.getByLabel("Recado personalizado", { exact: true }),
+    ).toHaveValue(note);
+    await modal.getByLabel("Trecho personalizado", { exact: true }).fill("");
+    await modal
+      .getByRole("button", { name: "Salvar mensagem", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    const cleared = db.rpc(admin, "wedding_party_admin_get", {
+      p_event: event,
+      p_guest: f.first.id,
+    });
+    expect(cleared.personal_message).toBeNull();
+    expect(cleared.couples_note).toBe(note);
+    expect(cleared.cycle_id).toBe(saved.cycle_id);
+  });

@@ -1161,13 +1161,8 @@ export function demoPartyAdminSave(
     )
       throw Error("Dados alterados. Atualize.");
     const couplesNote = note?.trim() ? note : null;
-    const keepEmpty =
-      displayName !== undefined &&
-      !!current &&
-      current.personal_message == null &&
-      message === "";
-    if ((!message.trim() && !keepEmpty) || message.length > 12000)
-      throw Error("Mensagem inválida.");
+    if (message.length > 12000) throw Error("Mensagem inválida.");
+    const personalMessage = message.trim() ? message : null;
     if (
       (current?.cycle_id || null) !== cycle ||
       (current?.personal_message ?? null) !== expectedMessage
@@ -1184,7 +1179,7 @@ export function demoPartyAdminSave(
     if (current && current.role !== role)
       throw Error("A classificação deve ser preservada.");
     if (current) {
-      if (!keepEmpty) current.personal_message = message;
+      current.personal_message = personalMessage;
       if (note !== undefined) current.couples_note = couplesNote;
       if (displayName !== undefined) current.display_name = nickname;
       return current;
@@ -1198,7 +1193,7 @@ export function demoPartyAdminSave(
       accepted_at: null,
       completed_at: null,
       active: true,
-      personal_message: message,
+      personal_message: personalMessage,
       couples_note: couplesNote,
       display_name: nickname,
     };
