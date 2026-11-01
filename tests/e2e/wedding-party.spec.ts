@@ -773,6 +773,38 @@ for (const width of [320, 390, 1280]) {
         .getByText("Madrinhas:", { exact: true })
         .evaluate((el) => getComputedStyle(el).fontWeight),
     ).toBe("700");
+    const groomsmen = page
+      .locator("[data-party-body]")
+      .filter({ hasText: "Padrinhos:" });
+    await expect(groomsmen).toHaveText(
+      "💙 Padrinhos: terno cinza claro, camisa social branca, gravata em tons de azul serenity ou azul-claro e sapatos sociais pretos.",
+    );
+    await expect(groomsmen).not.toContainText(
+      /azul-marinho|em tom discreto|marrons ou pretos|\*/,
+    );
+    for (const phrase of [
+      "Padrinhos:",
+      "cinza claro",
+      "azul serenity ou azul-claro",
+    ])
+      expect(
+        await groomsmen
+          .getByText(phrase, { exact: true })
+          .evaluate((el) => getComputedStyle(el).fontWeight),
+      ).toBe("700");
+    await expect(
+      page.locator("[data-party-body]").filter({ hasText: "Madrinhas:" }),
+    ).toHaveText(
+      "💙 Madrinhas: vestidos longos, em tons de azul serenity ou azul-claro, preferencialmente lisos, sem estampas, com modelo e tecido de sua preferência.",
+    );
+    expect(
+      await groomsmen.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
     await page.screenshot({
       path: `/tmp/party-content-traje-${width}.png`,
       fullPage: true,

@@ -68,12 +68,16 @@ it("retains approved attire and ceremony guidance without invented schedule", ()
     "Madrinhas:",
     "azul serenity ou azul-claro",
     "Padrinhos:",
-    "azul-marinho",
-    "preferencialmente marrons ou pretos",
+    "cinza claro",
+    "em tons de",
+    "sapatos sociais pretos.",
     "confortáveis para aproveitar cada instante",
     "ter vocês ao nosso lado! 💙",
   ])
     expect(attire).toContain(phrase);
+  expect(attire).not.toMatch(
+    /azul-marinho|em tom discreto|marrons ou pretos|\*/,
+  );
   const ceremony = render("cerimonia");
   for (const phrase of [
     "🕊️ Chegada:",

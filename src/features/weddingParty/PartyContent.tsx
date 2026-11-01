@@ -57,9 +57,9 @@ export function PartyContent({
         </PartyParagraph>
         <PartyParagraph style={text}>
           💙 <Text style={bold}>Padrinhos:</Text> terno{" "}
-          <Text style={bold}>azul-marinho</Text>, camisa social branca, gravata
-          em tom discreto e sapatos sociais, preferencialmente marrons ou
-          pretos.
+          <Text style={bold}>cinza claro</Text>, camisa social branca, gravata
+          em tons de <Text style={bold}>azul serenity ou azul-claro</Text> e
+          sapatos sociais pretos.
         </PartyParagraph>
         <PartyParagraph style={text}>
           Queremos que todos estejam elegantes, mas, acima de tudo, confortáveis
