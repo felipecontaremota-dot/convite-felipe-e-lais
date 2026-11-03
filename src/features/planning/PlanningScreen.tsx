@@ -1,54 +1,47 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, Text, View } from "react-native";
-import * as Clipboard from "expo-clipboard";
+import { createElement, useEffect, useRef, useState } from "react";
+import { Platform, Text, View, useWindowDimensions } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Clipboard from "expo-clipboard";
 import { useApp } from "../../lib/AppProvider";
 import {
+  Screen,
   Button,
   Card,
   Choice,
   Empty,
   Field,
-  Screen,
-  Toggle,
   styles,
 } from "../../components/ui";
 import { AdminModal, ConfirmModal } from "../../components/AdminModal";
-import { Select } from "../../components/adminUi";
 import { theme } from "../../theme/tokens";
+import { feedbackColors } from "../../theme/feedback";
 import * as api from "../../repositories/api";
-import { id } from "../../repositories/demo";
+import { cents, day, money, moneyInput, maskDate, todaySP } from "./domain";
+import { SupplierEditor, isoDate } from "./SupplierEditor";
+import { demoSimple, demoSimpleAction } from "./demo";
 import {
-  planningDate,
-  PlanningEditor,
-  recordValue,
-  type EditorKind,
-} from "./PlanningEditor";
-import { demoPlanning, demoPlanningAction } from "./demo";
-import { PlanningHistory } from "./PlanningHistory";
-import { downloadDocument, uploadDocument } from "./documents";
-import {
-  addDays,
-  contractStates,
-  day,
-  ledger,
-  money,
-  maskDate,
-  timestamp,
-  todaySP,
-  type Entry,
-  type LedgerRecord,
-  type PlanningData,
-  type PlanningDocument,
-} from "./domain";
+  simpleLedger,
+  paymentRows,
+  progressColor,
+  simpleError,
+  type SimpleData,
+  type Vendor,
+  type Settlement,
+  type Due,
+  type PaySort,
+} from "./simpleDomain";
+type Action = (
+  kind: string,
+  id: string,
+  version: number | null,
+  values: Record<string, unknown>,
+  request: string,
+) => Promise<void>;
 const tabs = [
   { value: "overview", label: "Visão geral" },
   { value: "suppliers", label: "Fornecedores" },
-  { value: "entries", label: "Despesas e contratos" },
   { value: "payments", label: "Pagamentos" },
-  { value: "documents", label: "Documentos" },
 ];
-const demoFiles = new Map<string, Blob>();
 export function PlanningScreen() {
   const app = useApp();
   return (
@@ -57,1131 +50,767 @@ export function PlanningScreen() {
     </Screen>
   );
 }
-function Progress({ value }: { value: number }) {
+export function FinancialProgress({ percent }: { percent: number }) {
   return (
-    <View
-      accessibilityRole="progressbar"
-      accessibilityLabel="Percentual quitado"
-      accessibilityValue={{ min: 0, max: 100, now: value }}
+    <>
+      {Platform.OS === "web"
+        ? createElement(
+            "style",
+            null,
+            "[data-financial-progress]{transition:width .6s ease,background-color .6s linear;}@media(prefers-reduced-motion:reduce){[data-financial-progress]{transition:none!important;}}",
+          )
+        : null}
+      {Platform.OS === "web" ? (
+        createElement(
+          "div",
+          {
+            role: "progressbar",
+            "aria-label": "Percentual pago",
+            "aria-valuemin": 0,
+            "aria-valuemax": 100,
+            "aria-valuenow": percent,
+            style: {
+              height: 12,
+              borderRadius: 12,
+              overflow: "hidden",
+              backgroundColor: theme.colors.wash,
+            },
+          },
+          createElement("div", {
+            "data-financial-progress": "true",
+            style: {
+              height: 12,
+              width: `${percent}%`,
+              backgroundColor: progressColor(percent),
+            },
+          }),
+        )
+      ) : (
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="Percentual pago"
+          accessibilityValue={{ min: 0, max: 100, now: percent }}
+          style={{
+            height: 12,
+            borderRadius: 12,
+            overflow: "hidden",
+            backgroundColor: theme.colors.wash,
+          }}
+        >
+          <View
+            style={{
+              height: 12,
+              width: `${percent}%`,
+              backgroundColor: progressColor(percent),
+            }}
+          />
+        </View>
+      )}
+      <Text style={styles.text}>
+        {percent.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% pago
+      </Text>
+    </>
+  );
+}
+function Status({ label }: { label: string }) {
+  const tone =
+    label === "Pago"
+      ? feedbackColors.confirmed
+      : label === "Vencido"
+        ? feedbackColors.declined
+        : label === "Pendente"
+          ? feedbackColors.neutral
+          : feedbackColors.deciding;
+  return (
+    <Text
       style={{
-        height: 10,
-        borderRadius: 8,
-        overflow: "hidden",
-        backgroundColor: theme.colors.wash,
+        alignSelf: "flex-start",
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        backgroundColor: tone.background,
+        color: tone.text,
+        fontWeight: "600",
       }}
     >
-      <View
-        style={{
-          height: 10,
-          width: `${value}%`,
-          backgroundColor: theme.colors.primary,
-        }}
-      />
-    </View>
+      {label}
+    </Text>
   );
 }
 function PlanningContent() {
   const app = useApp(),
     client = useQueryClient(),
-    event = app.data!.event.id;
-  const [today, setToday] = useState(todaySP);
-  useEffect(() => {
-    const timer = setInterval(() => setToday(todaySP()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-  const key = ["planning", app.scope];
+    event = app.data!.event.id,
+    key = ["simple-planning", app.scope];
   const query = useQuery({
     queryKey: key,
-    queryFn: () => (app.isDemo ? demoPlanning(event) : api.planningSnapshot()),
+    queryFn: () =>
+      app.isDemo ? demoSimple(event) : api.simplePlanningSnapshot(),
+    enabled: app.online,
     retry: false,
     refetchInterval: app.online ? 30000 : false,
-    enabled: app.online,
   });
-  const active = useRef(true),
-    urls = useRef<string[]>([]),
-    lock = useRef(false);
+  useEffect(
+    () => () => {
+      client.removeQueries({ queryKey: ["simple-planning", app.scope] });
+    },
+    [client, app.scope],
+  );
+  const [today, setToday] = useState(todaySP);
+  useEffect(() => {
+    const t = setInterval(() => setToday(todaySP()), 60000);
+    return () => clearInterval(t);
+  }, []);
+  const [tab, setTab] = useState("overview"),
+    [editor, setEditor] = useState<Vendor | null | undefined>(undefined),
+    [detail, setDetail] = useState<string | null>(null),
+    [budget, setBudget] = useState(false),
+    [payment, setPayment] = useState<{ due: Due; old?: Settlement } | null>(
+      null,
+    ),
+    [confirmation, setConfirmation] = useState<{
+      kind: string;
+      id: string;
+      version: number;
+      paid: number;
+      name: string;
+    } | null>(null);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [search, setSearch] = useState("");
+  const lock = useRef(false),
+    active = useRef(true);
   useEffect(() => {
     active.current = true;
-    const registry = urls.current;
     return () => {
       active.current = false;
-      registry.forEach((u) => URL.revokeObjectURL(u));
-      client.removeQueries({ queryKey: ["planning", app.scope] });
-      client.removeQueries({ queryKey: ["planning-history", app.scope] });
     };
-  }, [client, app.scope]);
-  const [tab, setTab] = useState("overview"),
-    [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState(""),
-    [error, setError] = useState("");
-  const [editor, setEditor] = useState<{
-    kind: EditorKind;
-    record?: ReturnType<typeof recordValue>;
-    entryId?: string;
-  } | null>(null);
-  const [detail, setDetail] = useState<string | null>(null),
-    [supplierDetail, setSupplierDetail] = useState<string | null>(null),
-    [detailTab, setDetailTab] = useState("general");
-  const [confirm, setConfirm] = useState<{
-    kind: string;
-    record: LedgerRecord;
-    request: string;
-  } | null>(null);
-  const [upload, setUpload] = useState<{
-    supplier_id?: string;
-    entry_id?: string;
-    payment_id?: string;
-  } | null>(null);
-  const [preview, setPreview] = useState<{ id: string; url: string } | null>(
-    null,
-  );
-  const [search, setSearch] = useState(""),
-    [category, setCategory] = useState(""),
-    [supplier, setSupplier] = useState(""),
-    [kind, setKind] = useState(""),
-    [status, setStatus] = useState(""),
-    [financial, setFinancial] = useState(""),
-    [from, setFrom] = useState(""),
-    [to, setTo] = useState(""),
-    [archived, setArchived] = useState(false),
-    [period, setPeriod] = useState("30"),
-    [paymentFilter, setPaymentFilter] = useState("ALL");
-  const data = query.data;
-  const change = async (
-    kind: string,
-    identifier: string,
-    version: number | null,
-    values: Record<string, unknown>,
-    request: string,
-  ) => {
-    if (lock.current) throw Error("Uma operação está em andamento.");
-    if (!app.online || app.data?.role !== "ADMIN")
-      throw Error("Conecte-se para salvar o planejamento.");
+  }, []);
+  const act: Action = async (kind, id, version, values, request) => {
+    if (lock.current) throw Error("Aguarde a operação atual.");
     lock.current = true;
     setBusy(true);
     setError("");
+    setNotice("");
     try {
-      if (app.isDemo)
-        demoPlanningAction(event, kind, identifier, version, values);
-      else await api.planningAction(kind, identifier, version, values, request);
-      await query.refetch({ throwOnError: true });
-      await client.invalidateQueries({
-        queryKey: ["planning-history", app.scope],
-      });
-      if (active.current) setNotice("Planejamento atualizado.");
-    } catch (failure) {
+      if (app.isDemo) demoSimpleAction(event, kind, id, version, values);
+      else if (kind === "BUDGET_SAVE")
+        await api.planningAction(kind, id, version, values, request);
+      else await api.simplePlanningAction(kind, id, version, values, request);
       await query.refetch();
-      throw failure;
+      if (active.current) setNotice("Planejamento atualizado.");
+    } catch (e) {
+      if (active.current) setError(simpleError(e));
+      throw e;
     } finally {
       lock.current = false;
       if (active.current) setBusy(false);
     }
   };
-  const archive = (kind: string, record: LedgerRecord) =>
-    setConfirm({ kind: `${kind}_ARCHIVE`, record, request: id() });
-  const edit = (kind: EditorKind, record?: object, entryId?: string) =>
-    setEditor({ kind, record: recordValue(record), entryId });
-  const openEntry = (entry: Entry) => {
-    setDetail(entry.id);
-    setDetailTab("general");
-  };
-  const prepareDocument = useCallback(
-    async (doc: PlanningDocument) => {
-      setError("");
-      try {
-        const blob = app.isDemo
-          ? demoFiles.get(doc.id)
-          : await downloadDocument(doc);
-        if (!blob)
-          throw Error(
-            "Arquivo de demonstração disponível apenas na sessão em que foi anexado.",
-          );
-        if (!active.current) return;
-        const url = URL.createObjectURL(blob);
-        urls.current.push(url);
-        setPreview({ id: doc.id, url });
-      } catch (e) {
-        if (active.current)
-          setError(e instanceof Error ? e.message : "Documento indisponível.");
-      }
-    },
-    [app.isDemo],
-  );
   if (query.isPending)
+    return <Text style={styles.text}>Carregando planejamento…</Text>;
+  if (query.isError || !query.data)
     return (
       <>
-        <Text style={styles.text}>
-          {app.online
-            ? "Carregando planejamento…"
-            : "Conecte-se para carregar o planejamento."}
+        <Text style={styles.error}>
+          Não foi possível carregar o planejamento.
         </Text>
-        <Button
-          title="Carregar dados novamente"
-          secondary
-          disabled={!app.online}
-          onPress={() => query.refetch()}
-        />
+        <Button title="Tentar novamente" onPress={() => query.refetch()} />
       </>
     );
-  if (!data || query.isError)
-    return (
-      <>
-        <Text role="alert" style={styles.error}>
-          Não foi possível carregar o planejamento. Confira sua conexão e
-          autorização administrativa.
-        </Text>
-        <Button
-          title="Carregar dados novamente"
-          onPress={() => query.refetch()}
-          disabled={!app.online}
-        />
-      </>
-    );
-  const totals = ledger(data, today),
-    current = totals.items.find((i) => i.entry.id === detail),
-    vendor = data.suppliers.find((s) => s.id === supplierDetail);
-  const vendorName = (identifier: string | null) =>
-    data.suppliers.find((s) => s.id === identifier)?.name || "Sem fornecedor";
-  let dateFrom: string | null = null,
-    dateTo: string | null = null,
-    dateError = "";
+  const data = query.data;
+  let l: ReturnType<typeof simpleLedger>;
   try {
-    dateFrom = planningDate(from);
-    dateTo = planningDate(to);
-    if (dateFrom && dateTo && dateFrom > dateTo)
-      throw Error("O início do período deve ser anterior ao fim.");
+    l = simpleLedger(data, today);
   } catch (e) {
-    dateError = e instanceof Error ? e.message : "Confira as datas.";
+    return (
+      <>
+        <Text style={styles.error}>{simpleError(e)}</Text>
+        <Button
+          title="Atualizar planejamento"
+          onPress={() => query.refetch()}
+        />
+      </>
+    );
   }
-  const filtered = totals.items.filter(
-    (i) =>
-      (archived || !i.entry.deleted_at) &&
-      (!search ||
-        `${i.entry.title} ${i.entry.description} ${vendorName(i.entry.supplier_id)}`
-          .toLocaleLowerCase("pt-BR")
-          .includes(search.toLocaleLowerCase("pt-BR"))) &&
-      (!category || i.entry.category === category) &&
-      (!supplier ||
-        (supplier === "NONE"
-          ? !i.entry.supplier_id
-          : i.entry.supplier_id === supplier)) &&
-      (!kind || i.entry.kind === kind) &&
-      (!status || i.entry.status === status) &&
-      (!financial || i.status === financial) &&
-      (paymentFilter === "ALL" ||
-        (paymentFilter === "PAID"
-          ? i.obligation > 0 && i.balance === 0
-          : paymentFilter === "OPEN"
-            ? i.balance > 0
-            : i.overdue > 0)) &&
-      ((!dateFrom && !dateTo) ||
-        (!dateError &&
-          i.installments.some(
-            (p) =>
-              (!dateFrom || p.due_on >= dateFrom) &&
-              (!dateTo || p.due_on <= dateTo),
-          ))),
-  );
-  const documents = (target?: {
-    supplier_id?: string;
-    entry_id?: string;
-    payment_id?: string;
-  }) => (
-    <>
+  const vendor = l.vendors.find((v) => v.id === detail);
+  const dueRow = (d: (typeof l.dues)[number]) => (
+    <Card key={d.id}>
+      <Text style={styles.heading}>
+        {l.vendors.find((v) => v.id === d.vendor_id)!.name}
+      </Text>
+      <Text style={styles.text}>
+        {d.label} · {day(d.due_on)} · {money(d.remaining)}
+      </Text>
+      <Status label={d.status} />
       <Button
-        title="Anexar documento"
+        title={`Registrar pagamento de ${d.label}`}
         secondary
-        disabled={busy || !app.online}
-        onPress={() => setUpload(target || {})}
+        disabled={busy || !app.online || !d.remaining}
+        onPress={() => setPayment({ due: d })}
       />
-      {data.documents
-        .filter(
-          (d) =>
-            !target ||
-            Object.entries(target).some(([k, v]) => d[k as "entry_id"] === v),
-        )
-        .map((d) => (
-          <Card key={d.id}>
-            <Text style={styles.text}>{d.name}</Text>
-            <Text style={styles.small}>
-              {timestamp(d.created_at)} · {Math.ceil(d.size_bytes / 1024)} KB
-              {d.state === "PENDING" ? " · Envio pendente" : ""}
-              {d.deleted_at ? " · Excluído" : ""}
-            </Text>
-            {!d.deleted_at ? (
-              <>
-                <Button
-                  disabled={d.state !== "READY"}
-                  title={`Preparar documento: ${d.name}`}
-                  secondary
-                  onPress={() => prepareDocument(d)}
-                />
-                {preview?.id === d.id && Platform.OS === "web"
-                  ? React.createElement(
-                      "a",
-                      {
-                        href: preview.url,
-                        download: d.name,
-                        style: { color: theme.colors.secondary, padding: 12 },
-                      },
-                      "Baixar documento",
-                    )
-                  : null}
-                {preview?.id === d.id && Platform.OS === "web"
-                  ? React.createElement(
-                      "a",
-                      {
-                        href: preview.url,
-                        target: "_blank",
-                        rel: "noopener noreferrer",
-                        style: { color: theme.colors.secondary, padding: 12 },
-                      },
-                      "Visualizar documento",
-                    )
-                  : null}
-                <Button
-                  title="Editar identificação do documento"
-                  secondary
-                  disabled={busy || !app.online}
-                  onPress={() => edit("DOCUMENT", d)}
-                />
-                <Button
-                  title={`Excluir documento: ${d.name}`}
-                  secondary
-                  disabled={busy || !app.online}
-                  onPress={() => archive("DOCUMENT", d)}
-                />
-              </>
-            ) : null}
-          </Card>
-        ))}
-      {!data.documents.some(
-        (d) =>
-          !d.deleted_at &&
-          (!target ||
-            Object.entries(target).some(([k, v]) => d[k as "entry_id"] === v)),
-      ) ? (
-        <Empty text="Nenhum documento anexado." />
-      ) : null}
-    </>
+    </Card>
   );
-  const history = (identifier?: string) => (
-    <PlanningHistory identifier={identifier} />
-  );
-  const payments = (entryId?: string) => (
-    <>
-      {data.payments
-        .filter((p) => !entryId || p.entry_id === entryId)
-        .map((p) => (
-          <Card key={p.id}>
-            <Text style={styles.text}>
-              {data.entries.find((e) => e.id === p.entry_id)?.title} ·{" "}
-              {money(p.amount_cents)}
-            </Text>
-            <Text style={styles.small}>
-              {p.supplier_name || "Sem fornecedor no registro"} ·{" "}
-              {day(p.paid_on)} · {p.method} ·{" "}
-              {
-                data.installments.find((i) => i.id === p.installment_id)
-                  ?.description
-              }
-              {p.deleted_at ? " · Registro cancelado" : ""}
-            </Text>
-            {p.notes ? <Text style={styles.text}>{p.notes}</Text> : null}
-            {!p.deleted_at ? (
-              <>
-                <Button
-                  title="Editar pagamento"
-                  secondary
-                  disabled={busy || !app.online}
-                  onPress={() => edit("PAYMENT", p, p.entry_id)}
-                />
-                <Button
-                  title="Anexar comprovante"
-                  secondary
-                  disabled={busy || !app.online}
-                  onPress={() => setUpload({ payment_id: p.id })}
-                />
-                <Button
-                  title="Cancelar registro de pagamento"
-                  secondary
-                  disabled={busy || !app.online}
-                  onPress={() => archive("PAYMENT", p)}
-                />
-              </>
-            ) : null}
-          </Card>
-        ))}
-      {!data.payments.some((p) => !entryId || p.entry_id === entryId) ? (
-        <Empty text="Nenhum pagamento registrado." />
-      ) : null}
-    </>
-  );
+  const disabled = busy || !app.online;
   return (
     <>
       <Text style={styles.text}>
-        Acompanhe fornecedores, contratos, despesas e pagamentos do nosso grande
-        dia.
+        Fornecedores, vencimentos e pagamentos do nosso grande dia.
       </Text>
-      {!app.online ? (
-        <Text role="alert" style={styles.notice}>
-          Sem conexão. Alterações financeiras não são enviadas para filas
-          offline.
-        </Text>
-      ) : null}
+      <Button
+        title="Atualizar planejamento"
+        secondary
+        onPress={() => query.refetch()}
+        disabled={disabled}
+      />
+      <Choice value={tab} onChange={setTab} options={tabs} />
       {notice ? (
-        <Text role="status" style={styles.notice}>
+        <Text accessibilityLiveRegion="polite" style={styles.notice}>
           {notice}
         </Text>
       ) : null}
       {error ? (
-        <Text role="alert" style={styles.error}>
+        <Text accessibilityRole="alert" style={styles.error}>
           {error}
-        </Text>
-      ) : null}
-      <Button
-        title="Atualizar planejamento"
-        secondary
-        disabled={!app.online || busy}
-        onPress={() => query.refetch()}
-      />
-      <Choice value={tab} options={tabs} onChange={setTab} />
-      <Text style={styles.small}>
-        Indicadores globais do evento. Os filtros abaixo afetam somente as
-        listas. Incluem obrigações e pagamentos de lançamentos arquivados.
-      </Text>
-      <View style={[styles.row, { alignItems: "stretch" }]}>
-        {[
-          ["Orçamento previsto", money(totals.budget ?? totals.planned)],
-          ["Total contratado/comprometido", money(totals.committed)],
-          ["Total pago", money(totals.paid)],
-          ["Saldo a pagar", money(totals.balance)],
-          ["Pagamentos vencidos", money(totals.overdue)],
-          [
-            "Próximos pagamentos",
-            `${totals.future.length} · ${money(totals.futureAmount)}`,
-          ],
-        ].map(([label, value]) => (
-          <View
-            key={label}
-            style={{ flexGrow: 1, flexBasis: 220, minWidth: 0 }}
-          >
-            <Card>
-              <Text style={styles.small}>{label}</Text>
-              <Text style={styles.heading}>{value}</Text>
-            </Card>
-          </View>
-        ))}
-      </View>
-      <Progress value={totals.percent} />
-      <Text style={styles.small}>
-        {totals.percent}% quitado · {100 - totals.percent}% pendente do valor
-        comprometido.
-      </Text>
-      {totals.credit > 0 ? (
-        <Text role="alert" style={styles.notice}>
-          Crédito ou reembolso a conciliar: {money(totals.credit)}. Não reduz o
-          saldo de outros contratos.
         </Text>
       ) : null}
       {tab === "overview" ? (
         <>
-          <Card>
-            <Text style={styles.heading}>Orçamento do casamento</Text>
-            <Text style={styles.text}>
-              Orçamento global:{" "}
-              {totals.budget === null
-                ? "Ainda não definido"
-                : money(totals.budget)}
+          {data.legacy_count > 0 ? (
+            <Text style={styles.small}>
+              Controle simplificado: os registros financeiros anteriores foram
+              preservados em arquivo. Os cadastros de fornecedores e o orçamento
+              foram mantidos; confira e defina o valor e o plano de cada
+              contrato neste novo controle.
             </Text>
-            <Text style={styles.text}>
-              Projeção dos lançamentos: {money(totals.planned)}
-            </Text>
-            <Text style={styles.text}>
-              Disponível para novas contratações:{" "}
-              {totals.available === null
-                ? "Defina o orçamento"
-                : money(totals.available)}
-            </Text>
-            <Text style={styles.text}>
-              Orçamento utilizado:{" "}
-              {totals.used === null ? "—" : `${totals.used}%`}
-            </Text>
-            {totals.exceeded > 0 ? (
-              <Text style={styles.error}>
-                Excedente: {money(totals.exceeded)}
-              </Text>
-            ) : null}
-            <Button
-              title="Definir orçamento"
-              secondary
-              disabled={busy || !app.online}
-              onPress={() => edit("BUDGET", data.budget || undefined, event)}
-            />
-          </Card>
-          <Button
-            title="Nova despesa ou contratação"
-            onPress={() => edit("ENTRY")}
-            disabled={busy || !app.online}
-          />
-          <Text style={styles.heading}>Próximos vencimentos</Text>
-          <Text style={styles.small}>
-            Vencimentos e pagamentos usam datas distintas. Horário de Brasília.
-          </Text>
-          <Choice
-            value={period}
-            onChange={setPeriod}
-            options={[
-              { value: "overdue", label: "Vencidos" },
-              { value: "7", label: "7 dias" },
-              { value: "15", label: "15 dias" },
-              { value: "30", label: "30 dias" },
-              { value: "future", label: "Futuros" },
-            ]}
-          />
-          {totals.due
-            .filter((p) =>
-              period === "overdue"
-                ? p.due_on < today
-                : p.due_on >= today &&
-                  (period === "future" ||
-                    p.due_on <= addDays(today, Number(period))),
-            )
-            .map((p) => (
-              <Card key={p.id}>
-                <Text style={styles.text}>
-                  {p.entry.title} · {vendorName(p.entry.supplier_id)}
-                </Text>
-                <Text style={p.due_on < today ? styles.error : styles.text}>
-                  {p.description} · {day(p.due_on)} · {money(p.due)} ·{" "}
-                  {p.status}
-                </Text>
-                <Button
-                  title="Abrir lançamento"
-                  secondary
-                  onPress={() => openEntry(p.entry)}
-                />
-              </Card>
-            ))}
-          {!totals.due.length ? (
-            <Empty text="Nenhum vencimento pendente. Cadastre despesas e seu cronograma para iniciar." />
           ) : null}
-          <Text style={styles.heading}>Histórico do planejamento</Text>
-          {history()}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            {[
+              [
+                "Orçamento previsto",
+                data.budget ? money(data.budget.amount_cents) : "Não definido",
+              ],
+              ["Total contratado", money(l.total)],
+              ["Total pago", money(l.paid)],
+              ["Saldo a pagar", money(l.balance)],
+              [
+                "Pagamentos vencidos",
+                `${l.overdue.length} · ${money(l.overdue.reduce((n, d) => n + d.remaining, 0))}`,
+              ],
+              [
+                "Próximos pagamentos",
+                `${l.upcoming.length} · ${money(l.upcoming.reduce((n, d) => n + d.remaining, 0))}`,
+              ],
+            ].map(([label, value]) => (
+              <View key={label} style={{ flexGrow: 1, flexBasis: 260 }}>
+                <Card>
+                  <Text style={styles.small}>{label}</Text>
+                  <Text style={styles.heading}>{value}</Text>
+                  {label === "Orçamento previsto" ? (
+                    <Button
+                      title={
+                        data.budget ? "Editar orçamento" : "Definir orçamento"
+                      }
+                      secondary
+                      onPress={() => setBudget(true)}
+                      disabled={disabled}
+                    />
+                  ) : null}
+                </Card>
+              </View>
+            ))}
+          </View>
+          <FinancialProgress percent={l.percent} />
+          <Text style={styles.heading}>Pagamentos vencidos</Text>
+          {l.overdue.length ? (
+            l.overdue.map(dueRow)
+          ) : (
+            <Empty text="Nenhum pagamento vencido." />
+          )}
+          <Text style={styles.heading}>Próximos pagamentos</Text>
+          {l.upcoming.length ? (
+            l.upcoming.slice(0, 8).map(dueRow)
+          ) : (
+            <Empty text="Nenhum vencimento futuro pendente." />
+          )}
         </>
       ) : null}
       {tab === "suppliers" ? (
         <>
           <Button
             title="Cadastrar fornecedor"
-            disabled={busy || !app.online}
-            onPress={() => edit("SUPPLIER")}
-          />
-          <Toggle
-            label="Mostrar fornecedores arquivados"
-            value={archived}
-            onChange={setArchived}
-          />
-          {data.suppliers
-            .filter((s) => archived || !s.deleted_at)
-            .map((s) => (
-              <Card key={s.id}>
-                <Text style={styles.heading}>
-                  {s.name}
-                  {s.deleted_at ? " · Arquivado" : ""}
-                </Text>
-                <Text style={styles.small}>
-                  {s.category} ·{" "}
-                  {
-                    data.entries.filter(
-                      (e) => e.supplier_id === s.id && !e.deleted_at,
-                    ).length
-                  }{" "}
-                  lançamentos
-                </Text>
-                <Button
-                  title={`Detalhes de ${s.name}`}
-                  secondary
-                  onPress={() => setSupplierDetail(s.id)}
-                />
-              </Card>
-            ))}
-          {!data.suppliers.some((s) => !s.deleted_at) ? (
-            <Empty text="Cadastre seu primeiro fornecedor. Despesas avulsas também podem ser registradas sem fornecedor." />
-          ) : null}
-        </>
-      ) : null}
-      {tab === "entries" ? (
-        <>
-          <Button
-            title="Nova despesa ou contratação"
-            disabled={busy || !app.online}
-            onPress={() => edit("ENTRY")}
+            onPress={() => setEditor(null)}
+            disabled={disabled}
           />
           <Field
-            label="Buscar fornecedor, serviço ou despesa"
+            label="Buscar fornecedor"
             value={search}
             onChangeText={setSearch}
           />
-          <Select
-            label="Filtrar categoria"
-            value={category}
-            onChange={setCategory}
-            options={[
-              { value: "", label: "Todas as categorias" },
-              ...[
-                ...new Set(data.entries.map((e) => e.category).filter(Boolean)),
-              ]
-                .sort()
-                .map((v) => ({ value: v, label: v })),
-            ]}
-          />
-          <Select
-            label="Filtrar fornecedor"
-            value={supplier}
-            onChange={setSupplier}
-            options={[
-              { value: "", label: "Todos os fornecedores" },
-              { value: "NONE", label: "Sem fornecedor" },
-              ...data.suppliers.map((s) => ({ value: s.id, label: s.name })),
-            ]}
-          />
-          <Select
-            label="Filtrar tipo de lançamento"
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: "", label: "Todos os tipos" },
-              { value: "SERVICE", label: "Serviço" },
-              { value: "EXPENSE", label: "Despesa avulsa" },
-            ]}
-          />
-          <Select
-            label="Filtrar situação contratual"
-            value={status}
-            onChange={setStatus}
-            options={[
-              { value: "", label: "Todas as situações" },
-              ...Object.entries(contractStates).map(([value, label]) => ({
-                value,
-                label,
-              })),
-            ]}
-          />
-          <Select
-            label="Filtrar situação financeira"
-            value={financial}
-            onChange={setFinancial}
-            options={[
-              { value: "", label: "Todas as situações financeiras" },
-              ...[
-                "Pago",
-                "Pendente",
-                "Parcialmente pago",
-                "Vencido",
-                "Cancelado",
-              ].map((v) => ({ value: v, label: v })),
-            ]}
-          />
-          <Select
-            label="Filtrar pagamentos"
-            value={paymentFilter}
-            onChange={setPaymentFilter}
-            options={[
-              { value: "ALL", label: "Todos os pagamentos" },
-              { value: "PAID", label: "Pagos" },
-              { value: "OPEN", label: "Pendentes (qualquer saldo em aberto)" },
-              { value: "OVERDUE", label: "Vencidos" },
-            ]}
-          />
-          <Field
-            label="Vencimento a partir de (DD/MM/AAAA)"
-            value={from}
-            onChangeText={(v) => setFrom(maskDate(v))}
-          />
-          <Field
-            label="Vencimento até (DD/MM/AAAA)"
-            value={to}
-            onChangeText={(v) => setTo(maskDate(v))}
-          />
-          {dateError ? (
-            <Text role="alert" style={styles.error}>
-              {dateError}
-            </Text>
-          ) : null}
-          <Toggle
-            label="Mostrar lançamentos arquivados"
-            value={archived}
-            onChange={setArchived}
-          />
-          {filtered.map((i) => (
-            <Card key={i.entry.id}>
-              <Text style={styles.heading}>{i.entry.title}</Text>
-              <Text style={styles.small}>
-                {i.entry.category} · {vendorName(i.entry.supplier_id)} ·{" "}
-                {contractStates[i.entry.status]}
-                {i.entry.deleted_at ? " · Arquivado" : ""}
-              </Text>
-              <Text style={styles.text}>
-                Valor final:{" "}
-                {money(i.entry.agreed_cents - i.entry.discount_cents)} · Pago:{" "}
-                {money(i.paid)} · Saldo: {money(i.balance)}
-              </Text>
-              <Text style={styles.text}>
-                {i.status} · Próximo vencimento:{" "}
-                {day(i.installments.find((p) => p.due > 0)?.due_on || null)}
-              </Text>
-              <Progress value={i.percent} />
-              <Button
-                title={`Abrir ${i.entry.title}`}
-                secondary
-                onPress={() => openEntry(i.entry)}
-              />
-            </Card>
-          ))}
-          {!filtered.length ? (
-            <Empty text="Nenhum lançamento corresponde aos filtros. Cadastre uma despesa ou ajuste a pesquisa." />
+          {l.vendors
+            .filter((v) =>
+              v.name
+                .toLocaleLowerCase("pt-BR")
+                .includes(search.toLocaleLowerCase("pt-BR")),
+            )
+            .map((v) => (
+              <Card key={v.id}>
+                <Text style={styles.heading}>{v.name}</Text>
+                <Text style={styles.text}>
+                  Valor contratado: {money(v.total_cents)}
+                </Text>
+                <Text style={styles.text}>
+                  Pago: {money(v.paid)} · Saldo: {money(v.balance)}
+                </Text>
+                <Button
+                  title={`Abrir fornecedor ${v.name}`}
+                  secondary
+                  onPress={() => setDetail(v.id)}
+                />
+              </Card>
+            ))}
+          {!l.vendors.length ? (
+            <Empty text="Cadastre o primeiro fornecedor e defina seu plano financeiro." />
           ) : null}
         </>
       ) : null}
       {tab === "payments" ? (
-        <>
-          <Button
-            title="Registrar pagamento"
-            disabled={busy || !app.online}
-            onPress={() => edit("PAYMENT")}
-          />
-          <Text style={styles.small}>
-            Cadastre uma parcela no lançamento para registrar entradas,
-            quitações parciais, antecipações ou pagamentos complementares.
-          </Text>
-          {payments()}
-        </>
-      ) : null}
-      {tab === "documents" ? documents() : null}
-      {current ? (
-        <AdminModal
-          title={current.entry.title}
-          onClose={() => setDetail(null)}
-          contentWidth={880}
-        >
-          <Choice
-            value={detailTab}
-            onChange={setDetailTab}
-            options={[
-              { value: "general", label: "Dados gerais" },
-              { value: "financial", label: "Informações financeiras" },
-              { value: "payments", label: "Pagamentos" },
-              { value: "documents", label: "Documentos" },
-              { value: "history", label: "Histórico" },
-            ]}
-          />
-          {detailTab === "general" ? (
-            <>
-              <Text style={styles.text}>
-                {current.entry.kind === "SERVICE"
-                  ? "Contratação de serviço"
-                  : "Despesa avulsa"}{" "}
-                · {current.entry.category}
-              </Text>
-              <Text style={styles.text}>
-                {vendorName(current.entry.supplier_id)} ·{" "}
-                {contractStates[current.entry.status]}
-              </Text>
-              <Text style={styles.text}>{current.entry.description}</Text>
-              <Text style={styles.small}>
-                Contratação: {day(current.entry.contracted_on)} ·
-                Execução/entrega: {day(current.entry.delivery_on)}
-              </Text>
-              <Text style={styles.text}>{current.entry.notes}</Text>
-              {current.entry.deleted_at ? (
-                <Button
-                  title="Editar lançamento arquivado"
-                  secondary
-                  disabled={busy || !app.online}
-                  onPress={() => edit("ENTRY", current.entry)}
-                />
-              ) : null}
-              {!current.entry.deleted_at ? (
-                <>
-                  <Button
-                    title="Editar lançamento"
-                    secondary
-                    disabled={busy || !app.online}
-                    onPress={() => edit("ENTRY", current.entry)}
-                  />
-                  <Button
-                    title="Arquivar lançamento"
-                    secondary
-                    disabled={busy || !app.online}
-                    onPress={() => archive("ENTRY", current.entry)}
-                  />
-                </>
-              ) : null}
-            </>
-          ) : null}
-          {detailTab === "financial" ? (
-            <>
-              <Text style={styles.text}>
-                Previsto: {money(current.entry.estimated_cents)} · Contratado:{" "}
-                {money(current.entry.agreed_cents)} · Desconto:{" "}
-                {money(current.entry.discount_cents)}
-              </Text>
-              <Text style={styles.text}>
-                Valor final:{" "}
-                {money(
-                  current.entry.agreed_cents - current.entry.discount_cents,
-                )}{" "}
-                · Obrigação atual: {money(current.obligation)}
-              </Text>
-              <Text style={styles.text}>
-                Pago: {money(current.paid)} · Saldo: {money(current.balance)} ·
-                Crédito a conciliar: {money(current.credit)}
-              </Text>
-              <Text style={styles.text}>
-                {current.entry.payment_method} · {current.entry.financial_notes}
-              </Text>
-              <Progress value={current.percent} />
-              {current.difference !== 0 ? (
-                <Text role="alert" style={styles.notice}>
-                  Diferença entre obrigação e parcelas:{" "}
-                  {money(current.difference)}.{" "}
-                  {current.difference > 0
-                    ? "Valor ainda não distribuído; não é considerado pago."
-                    : "O cronograma supera a obrigação. Ajuste as parcelas."}
-                </Text>
-              ) : null}
-            </>
-          ) : null}
-          {detailTab === "payments" ? (
-            <>
-              {current.entry.deleted_at ? (
-                <Text style={styles.notice}>
-                  Lançamento arquivado: a quitação e a conciliação continuam
-                  disponíveis, sem desarquivar o registro.
-                </Text>
-              ) : null}
-              <>
-                <Button
-                  title="Cadastrar parcela"
-                  secondary
-                  disabled={busy || !app.online}
-                  onPress={() =>
-                    edit("INSTALLMENT", undefined, current.entry.id)
-                  }
-                />
-                <Button
-                  title="Gerar parcelas mensais"
-                  secondary
-                  disabled={
-                    busy ||
-                    !app.online ||
-                    current.installments.length > 0 ||
-                    (["CONTRACTED", "COMPLETED", "CANCELLED"].includes(
-                      current.entry.status,
-                    ) &&
-                      current.balance === 0)
-                  }
-                  onPress={() =>
-                    edit("SCHEDULE", current.entry, current.entry.id)
-                  }
-                />
-                <Button
-                  title="Registrar pagamento"
-                  disabled={busy || !app.online}
-                  onPress={() => edit("PAYMENT", undefined, current.entry.id)}
-                />
-              </>
-              {current.archivedPaid > 0 ? (
-                <Text style={styles.small}>
-                  Pagamentos preservados de parcelas arquivadas:{" "}
-                  {money(current.archivedPaid)}. Já considerados na conciliação.
-                </Text>
-              ) : null}
-              {current.difference !== 0 ? (
-                <Text role="alert" style={styles.notice}>
-                  Diferença entre obrigação e parcelas:{" "}
-                  {money(current.difference)}. Não é considerada paga.
-                </Text>
-              ) : null}
-              {current.installments.some((p) => p.credit > 0) ? (
-                <Text role="alert" style={styles.notice}>
-                  Há pagamento superior ao valor de uma parcela. Os indicadores
-                  respeitam o saldo total do lançamento; concilie a distribuição
-                  do cronograma.
-                </Text>
-              ) : null}
-              {current.installments.map((p) => (
-                <Card key={p.id}>
-                  <Text style={styles.heading}>{p.description}</Text>
-                  <Text
-                    style={p.status === "Vencido" ? styles.error : styles.text}
-                  >
-                    {day(p.due_on)} · {p.status}
-                  </Text>
-                  <Text style={styles.text}>
-                    Previsto: {money(p.amount_cents)} · Pago: {money(p.paid)} ·
-                    Saldo da parcela: {money(p.remaining)}
-                  </Text>
-                  <>
-                    <Button
-                      title="Editar parcela"
-                      secondary
-                      disabled={busy || !app.online}
-                      onPress={() => edit("INSTALLMENT", p, current.entry.id)}
-                    />
-                    <Button
-                      title="Arquivar parcela"
-                      secondary
-                      disabled={busy || !app.online}
-                      onPress={() => archive("INSTALLMENT", p)}
-                    />
-                  </>
-                </Card>
-              ))}
-              {payments(current.entry.id)}
-            </>
-          ) : null}
-          {detailTab === "documents"
-            ? documents({ entry_id: current.entry.id })
-            : null}
-          {detailTab === "history" ? history(current.entry.id) : null}
-        </AdminModal>
+        <Payments
+          data={data}
+          onEdit={(p) =>
+            setPayment({
+              old: p,
+              due: data.dues.find((d) => d.id === p.due_id)!,
+            })
+          }
+          onDelete={(p) =>
+            setConfirmation({
+              kind: "PAYMENT_DELETE",
+              id: p.id,
+              version: p.version,
+              paid: p.amount_cents,
+              name: l.vendors.find((v) => v.id === p.vendor_id)!.name,
+            })
+          }
+          disabled={disabled}
+        />
       ) : null}
       {vendor ? (
         <AdminModal
           title={vendor.name}
-          onClose={() => setSupplierDetail(null)}
+          onClose={() => setDetail(null)}
           contentWidth={760}
         >
           <Text style={styles.text}>
-            {vendor.responsible} · {vendor.category}
+            Valor contratado: {money(vendor.total_cents)}
           </Text>
+          <Text style={styles.text}>Pago: {money(vendor.paid)}</Text>
           <Text style={styles.text}>
-            CPF/CNPJ: {vendor.tax_id || "—"} · {vendor.email}
+            Saldo pendente: {money(vendor.balance)}
           </Text>
-          <Text style={styles.text}>
-            {vendor.phone} · {vendor.whatsapp} · {vendor.website}
-          </Text>
-          <Text style={styles.text}>{vendor.address}</Text>
-          <Text style={styles.heading}>Dados de pagamento</Text>
-          <Text style={styles.text}>
-            {vendor.pix_type} · {vendor.pix_key}
-          </Text>
-          <Text style={styles.text}>
-            {vendor.holder_name} · {vendor.holder_tax_id} · {vendor.bank} ·{" "}
-            {vendor.agency} · {vendor.account}
-          </Text>
-          {vendor.pix_key ? (
+          {Object.entries(vendor.details)
+            .filter(([, value]) => value)
+            .map(([field, value]) => (
+              <Text key={field} style={styles.text}>
+                {detailLabel(field)}: {value}
+              </Text>
+            ))}
+          {vendor.details.pix_key ? (
             <Button
               title="Copiar chave PIX"
               secondary
               onPress={async () => {
-                try {
-                  await Clipboard.setStringAsync(vendor.pix_key);
-                  setNotice("Chave PIX copiada.");
-                } catch {
-                  setError(
-                    "Não foi possível copiar. Selecione a chave manualmente.",
-                  );
-                }
+                await Clipboard.setStringAsync(vendor.details.pix_key!);
+                setNotice("Chave PIX copiada.");
               }}
             />
           ) : null}
-          <Text style={styles.text}>{vendor.notes}</Text>
-          <Text style={styles.small}>
-            Cadastrado em {timestamp(vendor.created_at)} · Atualizado em{" "}
-            {timestamp(vendor.updated_at)}
-          </Text>
           <Button
-            title="Editar fornecedor"
-            secondary
-            disabled={busy || !app.online}
-            onPress={() => edit("SUPPLIER", vendor)}
+            title="Editar fornecedor e plano"
+            onPress={() => setEditor(vendor)}
+            disabled={disabled}
           />
+          <Text style={styles.heading}>Plano financeiro</Text>
+          {vendor.dues.length ? (
+            vendor.dues.map((d) => (
+              <Card key={d.id}>
+                <Text style={styles.heading}>{d.label}</Text>
+                <Text style={styles.text}>
+                  {day(d.due_on)} · Previsto: {money(d.amount_cents)}
+                </Text>
+                <Text style={styles.text}>
+                  Pago: {money(d.paid)} · Saldo: {money(d.remaining)}
+                </Text>
+                <Status label={d.status} />
+                <Button
+                  title={`Registrar pagamento de ${d.label}`}
+                  secondary
+                  disabled={disabled || d.remaining === 0}
+                  onPress={() => setPayment({ due: d })}
+                />
+              </Card>
+            ))
+          ) : (
+            <Text style={styles.small}>
+              Informe o valor contratado e defina o plano financeiro.
+            </Text>
+          )}
           <Button
-            title="Arquivar fornecedor"
+            title="Excluir fornecedor"
             secondary
-            disabled={busy || !app.online || !!vendor.deleted_at}
-            onPress={() => archive("SUPPLIER", vendor)}
+            onPress={() =>
+              setConfirmation({
+                kind: "VENDOR_DELETE",
+                id: vendor.id,
+                version: vendor.version,
+                paid: vendor.paid,
+                name: vendor.name,
+              })
+            }
+            disabled={disabled}
           />
-          {documents({ supplier_id: vendor.id })}
-          <Text style={styles.heading}>Histórico</Text>
-          {history(vendor.id)}
         </AdminModal>
       ) : null}
-      {editor ? (
-        <PlanningEditor
-          key={`${editor.kind}-${editor.record?.id || "new"}`}
-          {...editor}
-          data={data}
-          onSave={change}
-          onClose={() => setEditor(null)}
+      {editor !== undefined ? (
+        <SupplierEditor
+          vendor={editor || undefined}
+          dues={data.dues.filter((d) => d.vendor_id === editor?.id)}
+          paid={Object.fromEntries(
+            l.dues
+              .filter((d) => d.vendor_id === editor?.id)
+              .map((d) => [d.id, d.paid]),
+          )}
+          onClose={() => setEditor(undefined)}
+          onSave={(id, version, values, request) =>
+            act("VENDOR_SAVE", id, version, values, request)
+          }
         />
       ) : null}
-      {upload ? (
-        <UploadModal
+      {payment ? (
+        <PaymentEditor
+          due={payment.due}
+          old={payment.old}
           data={data}
-          target={upload}
-          onClose={() => setUpload(null)}
-          onUpload={async (file, target, identifier, request) => {
-            if (!app.online) throw Error("Conecte-se para anexar.");
-            if (app.isDemo) {
-              const now = new Date().toISOString();
-              demoPlanningAction(event, "DOCUMENT_SAVE", identifier, null, {
-                ...target,
-                name: file.name,
-                mime: file.type,
-                size_bytes: file.size,
-                state: "READY",
-                created_at: now,
-              });
-              demoFiles.set(identifier, file);
-            } else await uploadDocument(file, target, identifier, request);
-            await query.refetch({ throwOnError: true });
-            setNotice("Documento anexado em armazenamento privado.");
-          }}
+          onClose={() => setPayment(null)}
+          onSave={act}
         />
       ) : null}
-      {confirm ? (
+      {budget ? (
+        <BudgetEditor
+          data={data}
+          event={event}
+          onClose={() => setBudget(false)}
+          onSave={act}
+        />
+      ) : null}
+      {confirmation ? (
         <ConfirmModal
           title={
-            confirm.kind === "PAYMENT_ARCHIVE"
-              ? "Cancelar registro de pagamento?"
-              : "Arquivar registro?"
+            confirmation.kind === "VENDOR_DELETE"
+              ? "Excluir fornecedor"
+              : "Cancelar registro de pagamento"
           }
           text={
-            confirm.kind === "PAYMENT_ARCHIVE"
-              ? "O registro deixará de compor o total pago, mas será preservado na auditoria. Esta ação não realiza estorno bancário. Deseja continuar?"
-              : "O registro será excluído logicamente. Contratos, pagamentos, documentos e histórico vinculados serão preservados. Obrigações já assumidas continuam nos indicadores até a conciliação explícita. Deseja continuar?"
+            confirmation.kind === "VENDOR_DELETE"
+              ? `${confirmation.name} possui ${money(confirmation.paid)} em pagamentos registrados. A exclusão retirará também o histórico financeiro deste fornecedor do Planejamento do Casamento. Os registros de auditoria serão preservados. Deseja continuar?`
+              : "Cancelar somente este registro financeiro? Isso não realiza estorno bancário e preserva a auditoria."
           }
           confirmLabel={
-            confirm.kind === "PAYMENT_ARCHIVE"
-              ? "Cancelar registro"
-              : "Arquivar"
+            confirmation.kind === "VENDOR_DELETE"
+              ? "Excluir fornecedor"
+              : "Cancelar registro"
           }
-          onCancel={() => setConfirm(null)}
+          onCancel={() => setConfirmation(null)}
           onConfirm={async () => {
-            await change(
-              confirm.kind,
-              confirm.record.id,
-              confirm.record.version,
-              {},
-              confirm.request,
+            await act(
+              confirmation.kind,
+              confirmation.id,
+              confirmation.version,
+              { expected_paid_cents: confirmation.paid },
+              crypto.randomUUID(),
             );
-            setConfirm(null);
-            if (confirm.kind === "SUPPLIER_ARCHIVE") setSupplierDetail(null);
+            if (confirmation.kind === "VENDOR_DELETE") setDetail(null);
+            setConfirmation(null);
           }}
         />
       ) : null}
     </>
   );
 }
-function UploadModal({
+const labels: Record<string, string> = {
+  tax_id: "CPF/CNPJ",
+  phone: "Telefone",
+  whatsapp: "WhatsApp",
+  email: "E-mail",
+  notes: "Observações",
+  bank: "Banco",
+  agency: "Agência",
+  account: "Conta",
+  account_type: "Tipo de conta",
+  holder_name: "Titular",
+  holder_tax_id: "CPF/CNPJ do titular",
+  pix_key: "Chave PIX",
+  pix_type: "Tipo de chave PIX",
+  responsible: "Responsável",
+  category: "Categoria",
+  website: "Site/Instagram",
+  address: "Endereço",
+};
+const detailLabel = (field: string) => labels[field] || field;
+function Payments({
   data,
-  target,
-  onUpload,
-  onClose,
+  onEdit,
+  onDelete,
+  disabled,
 }: {
-  data: PlanningData;
-  target: { supplier_id?: string; entry_id?: string; payment_id?: string };
-  onUpload: (
-    file: File,
-    target: { supplier_id?: string; entry_id?: string; payment_id?: string },
-    identifier: string,
-    request: string,
-  ) => Promise<void>;
-  onClose: () => void;
+  data: SimpleData;
+  onEdit: (p: Settlement) => void;
+  onDelete: (p: Settlement) => void;
+  disabled: boolean;
 }) {
-  const [file, setFile] = useState<File | null>(null),
-    [selected, setSelected] = useState(
-      Object.entries(target).map(([k, v]) => `${k}:${v}`)[0] || "",
-    ),
+  const [sort, setSort] = useState<PaySort>("vendor"),
+    [descending, setDescending] = useState(false),
+    width = useWindowDimensions().width;
+  const rows = paymentRows(data, sort, descending),
+    total = simpleLedger(data).paid;
+  const headers: [PaySort, string][] = [
+    ["vendor", "Fornecedor"],
+    ["due", "Data de vencimento"],
+    ["paid", "Data de pagamento"],
+    ["amount", "Valor pago"],
+  ];
+  return (
+    <>
+      <Text style={styles.heading}>
+        Total pago:{" "}
+        <Text style={{ color: feedbackColors.confirmed.text }}>
+          {money(total)}
+        </Text>
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {headers.map(([key, label]) => (
+          <Button
+            key={key}
+            title={`${label}${sort === key ? (descending ? " ↓" : " ↑") : ""}`}
+            secondary
+            onPress={() => {
+              setDescending(sort === key ? !descending : false);
+              setSort(key);
+            }}
+          />
+        ))}
+      </View>
+      {rows.length ? (
+        rows.map((p) => (
+          <Card key={p.id}>
+            <View
+              {...(Platform.OS === "web"
+                ? { dataSet: { paymentRow: p.id } }
+                : {})}
+              style={{ flexDirection: width > 700 ? "row" : "column", gap: 12 }}
+            >
+              {[
+                p.vendor,
+                day(p.due),
+                day(p.paid_on),
+                money(p.amount_cents),
+              ].map((value, i) => (
+                <View
+                  key={i}
+                  style={width > 700 ? { flex: 1, minWidth: 0 } : {}}
+                >
+                  <Text style={styles.small}>{headers[i]![1]}</Text>
+                  <Text style={styles.text}>{value}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              <Button
+                title={`Editar pagamento de ${p.vendor}`}
+                secondary
+                disabled={disabled}
+                onPress={() => onEdit(p)}
+              />
+              <Button
+                title={`Cancelar pagamento de ${p.vendor}`}
+                secondary
+                disabled={disabled}
+                onPress={() => onDelete(p)}
+              />
+            </View>
+          </Card>
+        ))
+      ) : (
+        <Empty text="Nenhum pagamento realizado." />
+      )}
+    </>
+  );
+}
+function PaymentEditor({
+  due,
+  old,
+  data,
+  onClose,
+  onSave,
+}: {
+  due: Due;
+  old?: Settlement;
+  data: SimpleData;
+  onClose: () => void;
+  onSave: Action;
+}) {
+  const remaining =
+    simpleLedger(data).dues.find((d) => d.id === due.id)!.remaining +
+    (old?.amount_cents || 0);
+  const [identifier] = useState(() => old?.id || crypto.randomUUID()),
+    [amount, setAmount] = useState(moneyInput(old?.amount_cents ?? remaining)),
+    [date, setDate] = useState(day(old?.paid_on || todaySP())),
+    [method, setMethod] = useState(old?.method || "PIX"),
+    [notes, setNotes] = useState(old?.notes || ""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [ids, setIds] = useState(() => ({ id: id(), request: id() })),
-    lock = useRef(false);
+    [busy, setBusy] = useState(false);
+  const lock = useRef(false),
+    request = useRef({ body: "", id: crypto.randomUUID() });
   return (
     <AdminModal
-      title="Anexar documento privado"
+      title="Registrar pagamento"
       onClose={onClose}
       dismissible={!busy}
     >
       <Text style={styles.text}>
-        PDF, JPG ou PNG até 10 MB. Somente administradores do evento poderão
-        acessar.
+        {data.vendors.find((v) => v.id === due.vendor_id)!.name} · {due.label}
       </Text>
-      <Select
-        label="Vincular documento"
-        value={selected}
-        onChange={setSelected}
-        disabled={!!Object.keys(target).length || busy}
-        options={[
-          { value: "", label: "Selecione o vínculo" },
-          ...data.suppliers
-            .filter((s) => !s.deleted_at || selected === `supplier_id:${s.id}`)
-            .map((s) => ({
-              value: `supplier_id:${s.id}`,
-              label: `Fornecedor: ${s.name}`,
-            })),
-          ...data.entries
-            .filter((e) => !e.deleted_at || selected === `entry_id:${e.id}`)
-            .map((e) => ({
-              value: `entry_id:${e.id}`,
-              label: `Lançamento: ${e.title}`,
-            })),
-          ...data.payments
-            .filter((p) => !p.deleted_at || selected === `payment_id:${p.id}`)
-            .map((p) => ({
-              value: `payment_id:${p.id}`,
-              label: `Pagamento: ${money(p.amount_cents)} · ${day(p.paid_on)}`,
-            })),
-        ]}
+      <Text style={styles.text}>Saldo devido: {money(remaining)}</Text>
+      <Field
+        label="Valor pago"
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="decimal-pad"
+        editable={!busy}
       />
-      {Platform.OS === "web" ? (
-        React.createElement("input", {
-          type: "file",
-          accept: "application/pdf,image/jpeg,image/png",
-          "aria-label": "Selecionar documento",
-          disabled: busy,
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-            setFile(e.target.files?.[0] || null);
-            setIds({ id: id(), request: id() });
-          },
-          style: { maxWidth: "100%", color: theme.colors.ink, padding: 12 },
-        })
-      ) : (
-        <Text style={styles.text}>
-          Abra este módulo pelo navegador para anexar arquivos.
-        </Text>
-      )}
+      <Field
+        label="Data efetiva do pagamento (DD/MM/AAAA)"
+        value={date}
+        onChangeText={(v) => setDate(maskDate(v))}
+        editable={!busy}
+      />
+      <Field
+        label="Forma de pagamento"
+        value={method}
+        onChangeText={setMethod}
+        editable={!busy}
+      />
+      <Field
+        label="Observação (opcional)"
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+        maxLength={4000}
+        editable={!busy}
+      />
       {error ? (
-        <Text role="alert" style={styles.error}>
+        <Text accessibilityRole="alert" style={styles.error}>
           {error}
         </Text>
       ) : null}
       <Button
-        title="Salvar documento"
-        disabled={!file || !selected || busy}
+        title="Salvar pagamento"
+        disabled={busy}
         onPress={async () => {
-          if (lock.current || !file) return;
+          if (lock.current) return;
           lock.current = true;
           setBusy(true);
-          setError("");
           try {
-            if (
-              !file.size ||
-              file.size > 10485760 ||
-              !/\.(pdf|jpe?g|png)$/i.test(file.name)
-            )
-              throw Error("Use PDF, JPG ou PNG até 10 MB.");
-            const [key, value] = selected.split(":");
-            await onUpload(file, { [key!]: value }, ids.id, ids.request);
+            const n = cents(amount),
+              paidOn = isoDate(date);
+            if (n <= 0) throw Error("Informe um valor maior que zero.");
+
+            if (paidOn > todaySP()) throw Error("simple_future_payment");
+            if (!method.trim()) throw Error("Informe a forma de pagamento.");
+            const values = {
+              due_id: due.id,
+              amount_cents: n,
+              paid_on: paidOn,
+              method: method.trim(),
+              notes,
+            };
+            const body = JSON.stringify(values);
+            if (n > remaining && body !== request.current.body)
+              throw Error("simple_overpay");
+            if (body !== request.current.body)
+              request.current = { body, id: crypto.randomUUID() };
+            await onSave(
+              "PAYMENT_SAVE",
+              identifier,
+              old?.version ?? null,
+              values,
+              request.current.id,
+            );
             onClose();
           } catch (e) {
-            setError(e instanceof Error ? e.message : "Falha ao anexar.");
+            setError(simpleError(e));
           } finally {
             lock.current = false;
+            setBusy(false);
+          }
+        }}
+      />
+    </AdminModal>
+  );
+}
+function BudgetEditor({
+  data,
+  event,
+  onClose,
+  onSave,
+}: {
+  data: SimpleData;
+  event: string;
+  onClose: () => void;
+  onSave: Action;
+}) {
+  const [value, setValue] = useState(
+      moneyInput(data.budget?.amount_cents || 0),
+    ),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    request = useRef({ body: "", id: crypto.randomUUID() });
+  return (
+    <AdminModal
+      title="Orçamento previsto"
+      onClose={onClose}
+      dismissible={!busy}
+    >
+      <Field
+        label="Orçamento previsto"
+        value={value}
+        onChangeText={setValue}
+        keyboardType="decimal-pad"
+        editable={!busy}
+      />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Button
+        title="Salvar orçamento"
+        disabled={busy}
+        onPress={async () => {
+          setBusy(true);
+          try {
+            const values = { amount_cents: cents(value) },
+              body = JSON.stringify(values);
+            if (body !== request.current.body)
+              request.current = { body, id: crypto.randomUUID() };
+            await onSave(
+              "BUDGET_SAVE",
+              event,
+              data.budget?.version ?? null,
+              values,
+              request.current.id,
+            );
+            onClose();
+          } catch (e) {
+            setError(simpleError(e));
+          } finally {
             setBusy(false);
           }
         }}

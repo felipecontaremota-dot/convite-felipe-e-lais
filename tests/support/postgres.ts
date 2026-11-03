@@ -159,6 +159,8 @@ export class TestPostgres {
       `'${String(value).replaceAll("'", "''")}'`;
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
+      planning_simple_snapshot: `planning_simple_snapshot(${event})`,
+      planning_simple_action: `planning_simple_action(${event},${literal(args.p_kind)},${literal(args.p_id)}::uuid,${args.p_version == null ? "null" : literal(args.p_version)}::integer,${literal(JSON.stringify(args.p_values))}::jsonb,${literal(args.p_request)}::uuid)`,
       planning_history: `planning_history(${event},${args.p_entity == null ? "null" : literal(args.p_entity)}::uuid,${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_cursor == null ? "null" : literal(args.p_cursor)}::uuid)`,
       planning_snapshot: `planning_snapshot(${event})`,
       planning_action: `planning_action(${event},${literal(args.p_kind)},${literal(args.p_id)}::uuid,${args.p_version == null ? "null" : literal(args.p_version)}::integer,${literal(JSON.stringify(args.p_values))}::jsonb,${literal(args.p_request)}::uuid)`,

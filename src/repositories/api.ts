@@ -1,3 +1,4 @@
+import { simpleError } from "../features/planning/simpleDomain";
 import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import { validMessageId } from "../features/messages/recipients";
 import { supabase, eventId } from "../lib/supabase";
@@ -49,7 +50,10 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
                 : null
         : null;
     throw new AppError(
-      checkinMessage ||
+      (fn.startsWith("planning_simple_") && error.message.startsWith("simple_")
+        ? simpleError(error.message)
+        : null) ||
+        checkinMessage ||
         (error.message.includes("unauthorized")
           ? "Acesso não autorizado."
           : error.message.includes("family access required")
@@ -461,10 +465,6 @@ export function notificationPreferences(
 }
 
 // Separate module data: never added to guest snapshots or offline mutation queues.
-export const planningSnapshot = () =>
-  rpc<import("../features/planning/domain").PlanningData>("planning_snapshot", {
-    p_event: eventId,
-  });
 export const planningAction = (
   kind: string,
   id: string,
@@ -480,13 +480,23 @@ export const planningAction = (
     p_values: values,
     p_request: request,
   });
-export const planningHistory = (
-  entity: string | undefined,
-  cursor: { before: string; id: string } | null,
+export const simplePlanningSnapshot = () =>
+  rpc<import("../features/planning/simpleDomain").SimpleData>(
+    "planning_simple_snapshot",
+    { p_event: eventId },
+  );
+export const simplePlanningAction = (
+  kind: string,
+  id: string,
+  version: number | null,
+  values: Record<string, unknown>,
+  request: string,
 ) =>
-  rpc<import("../features/planning/domain").History[]>("planning_history", {
+  rpc<{ id: string; version: number }>("planning_simple_action", {
     p_event: eventId,
-    p_entity: entity || null,
-    p_before: cursor?.before || null,
-    p_cursor: cursor?.id || null,
+    p_kind: kind,
+    p_id: id,
+    p_version: version,
+    p_values: values,
+    p_request: request,
   });

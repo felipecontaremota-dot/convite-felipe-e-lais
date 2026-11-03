@@ -17,9 +17,18 @@ for (const width of [390, 1280])
     await page
       .getByRole("button", { name: "Cadastrar fornecedor", exact: true })
       .click();
-    let modal = page.getByRole("dialog", { name: "Fornecedor", exact: true });
+    let modal = page.getByRole("dialog", {
+      name: "Cadastrar fornecedor",
+      exact: true,
+    });
+    await modal
+      .getByRole("checkbox", {
+        name: "Contatos e dados bancários (opcionais)",
+        exact: true,
+      })
+      .click();
     const field = (name: string) => modal.getByLabel(name, { exact: true });
-    await field("Nome do fornecedor ou empresa").fill("Fornecedor PIX");
+    await field("Nome/Nome empresarial").fill("Fornecedor PIX");
     await field("CPF ou CNPJ").fill("52998224725");
     await field("Tipo de chave PIX").selectOption("CPF");
     await expect(field("Chave PIX")).toHaveValue("52998224725");
@@ -45,15 +54,29 @@ for (const width of [390, 1280])
     await field("Tipo de chave PIX").selectOption("EMAIL");
     await expect(field("Chave PIX")).toHaveValue("changed@example.test");
     await field("Chave PIX").fill("third-party@example.test");
-    await modal.getByRole("button", { name: "Salvar", exact: true }).click();
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
+      .click();
     await expect(modal).toHaveCount(0);
     await page
-      .getByRole("button", { name: "Detalhes de Fornecedor PIX", exact: true })
+      .getByRole("button", {
+        name: "Abrir fornecedor Fornecedor PIX",
+        exact: true,
+      })
       .click();
     await page
-      .getByRole("button", { name: "Editar fornecedor", exact: true })
+      .getByRole("button", { name: "Editar fornecedor e plano", exact: true })
       .click();
-    modal = page.getByRole("dialog", { name: "Fornecedor", exact: true });
+    modal = page.getByRole("dialog", {
+      name: "Editar fornecedor",
+      exact: true,
+    });
+    await modal
+      .getByRole("checkbox", {
+        name: "Contatos e dados bancários (opcionais)",
+        exact: true,
+      })
+      .click();
     await expect(field("Chave PIX")).toHaveValue("third-party@example.test");
     await field("E-mail").fill("edited@example.test");
     await expect(field("Chave PIX")).toHaveValue("third-party@example.test");
@@ -64,7 +87,9 @@ for (const width of [390, 1280])
     await field("Tipo de chave PIX").selectOption("EMAIL");
     await expect(field("Chave PIX")).toHaveValue("edited@example.test");
     await field("Chave PIX").fill("manual@example.test");
-    await modal.getByRole("button", { name: "Salvar", exact: true }).click();
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
+      .click();
     await expect(modal).toHaveCount(0);
   });
 for (const promoted of [false, true])

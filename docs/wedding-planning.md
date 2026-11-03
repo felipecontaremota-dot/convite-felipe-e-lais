@@ -1,53 +1,48 @@
-# Planejamento do Casamento
+# Planejamento do Casamento — controle simplificado
 
-Acesso: menu administrativo → Planejamento do Casamento (`/planejamento`). Exclusivo de ADMIN do evento. Não há alteração das sessões, RSVP, QR, check-in, mensagens, notificações ou portal do cerimonialista.
+Acesso exclusivo de ADMIN do evento em `/planejamento`. A interface tem somente **Visão geral**, **Fornecedores** e **Pagamentos**. Não há alteração de autenticação, convidados, RSVP, padrinhos, QR, check-in, mensagens, e-mails, notificações, vídeo ou PWA.
 
-## Modelo e autorização
+## Causa do erro de R$ 1.820,00
 
-Seis relações novas: `planning_suppliers`, `planning_entries`, `planning_installments`, `planning_payments`, `planning_budgets` e `planning_documents`. Todas possuem RLS, isolamento por `event_id`, versionamento e identificadores próprios. FKs compostas impedem vínculos entre eventos. Os clientes têm somente SELECT condicionado a ADMIN; gravações passam por `planning_action`, que revalida o papel, serializa operações do evento e aplica a alteração, o recibo e a auditoria numa transação. Não há escrita offline.
+O modelo anterior validava simultaneamente o saldo da parcela e a obrigação do contrato. A consulta de produção encontrou uma parcela de 182.000 centavos vinculada a um lançamento `COMPLETED` com `agreed_cents = 0`. Mesmo sem pagamento anterior, a comparação com o contrato rejeitava 182.000 > 0. A parcela mostrava R$ 1.820,00, enquanto a segunda referência estava zerada. Não era arredondamento de ponto flutuante.
 
-`planning_snapshot` é uma leitura própria do módulo, não acrescenta dados financeiros aos snapshots dos convidados. `planning_document_finish` é exclusiva de `service_role` e confirma somente documentos preparados por um administrador que ainda tenha esse papel. Nenhuma RPC anterior é substituída.
+O controle novo possui uma única obrigação: valor contratado do fornecedor, obrigatoriamente igual à soma dos vencimentos. O registro de pagamento usa comparação estrita `>` com os saldos do vencimento e do fornecedor. Igualdade quita normalmente; pagamento parcial mantém o saldo; excedente real é rejeitado com mensagem clara.
 
-São reutilizados `user_roles`, `event_role`, `audit_logs`, `mutation_receipts`, o cliente Supabase, a autenticação e os componentes administrativos. O recibo contém somente identificação, versão e fingerprint da requisição, sem os dados financeiros ou bancários em texto aberto. Alterações concorrentes exigem a versão esperada; repetição da mesma requisição retorna o resultado original.
+## Modelo atual
 
-## Finanças e conciliação
+- `planning_vendors`: fornecedor, contatos/dados bancários opcionais, valor total e modalidade do plano, versão e exclusão lógica.
+- `planning_dues`: vencimentos individualizados, entrada/parcelas/à vista, valores e posições editáveis.
+- `planning_settlements`: somente pagamentos efetivamente realizados, data, método, observação e histórico de cancelamento lógico.
+- `planning_budgets`: orçamento existente reutilizado.
 
-Valores são centavos inteiros (bigint), limitados por registro, formatados em BRL. A obrigação de um lançamento Contratado ou Concluído é o valor acordado menos o desconto. Planejado, Orçamento solicitado e Em negociação não geram obrigação. No cancelamento, o administrador informa explicitamente a obrigação mantida, sem apagar pagamentos anteriores.
+Não é necessário cadastrar despesas ou contratos em uma segunda tela. O fornecedor e o plano são gravados atomicamente por `planning_simple_action`. `planning_simple_snapshot` retorna somente os dados desse módulo ao ADMIN autorizado.
 
-Cada pagamento guarda a identificação do fornecedor no momento do registro, sem copiar seus dados bancários. Alterações posteriores no cadastro não reescrevem essa identificação histórica. Cada parcela aceita vários pagamentos. Entradas, pagamentos antecipados e complementares são descrições/ordens do cronograma; é possível criar novas parcelas ou adicionar pagamentos às existentes. O gerador mensal considera o saldo ainda não pago e divide os centavos exatamente, com limite de 120 parcelas, e mantém o dia original quando possível (31/01 → 28/02 → 31/03). Não gera outro cronograma sobre parcelas ativas.
+RLS por evento, FKs compostas, ausência de escrita direta pelo cliente, autorização dentro das RPCs e proteção contra acesso de convidados/cerimonialistas são preservadas. Requisições são idempotentes pelos recibos já existentes; alterações usam versão e bloqueio transacional por evento. Os erros não expõem linhas bancárias. Logs de auditoria registram valores, plano e alterações financeiras, sem contatos, PIX, dados bancários ou notas livres.
 
-Pagamentos precisam de valor positivo, data efetiva não futura, forma de pagamento, lançamento e parcela autorizados. Um valor superior ao saldo, ou uma edição que gere crédito, exige confirmação explícita. Créditos aparecem separados e nunca reduzem a dívida de outro contrato. Não há integração bancária, pagamento automático nem estorno bancário.
+## Transição dos registros anteriores
 
-O total pago soma registros de pagamentos não cancelados, uma única vez. Saldo global é a soma dos saldos positivos dos lançamentos. Não se somam contratos novamente por parcela ou pagamento. O percentual quitado usa apenas o valor aplicado a cada obrigação, limitado ao valor devido por lançamento; créditos não quitam outros contratos. O total efetivamente pago continua incluindo o excedente, destacado separadamente.
+A migration `simple_supplier_planning` não executa DROP, TRUNCATE ou DELETE. As tabelas e os registros anteriores de fornecedores, despesas/contratos, parcelas, pagamentos e documentos continuam preservados e protegidos como arquivo legado. Não se alteram dados de outros módulos nem se limpam tabelas compartilhadas de auditoria/recibos.
 
-A projeção soma obrigações assumidas e estimativas de lançamentos ainda não contratados, sem repetir parcelas. O orçamento global é opcional e configurável; disponibilidade e excedente são separados do saldo financeiro a pagar. Filtros afetam somente a lista, nunca os indicadores globais.
+Os cadastros ativos dos fornecedores são copiados com seus contatos e dados bancários. O orçamento global permanece no mesmo registro. Valores, planos e pagamentos antigos **não são convertidos automaticamente** para o novo controle, porque a origem pode conter contrato zerado, parcelas incompatíveis e obrigações sem associação simples. O novo financeiro inicia com esses valores zerados, conforme a autorização de reinício limitada ao módulo; a tela avisa para conferir e definir cada contrato. Não há criação de pagamentos ou contratos fictícios.
 
-O cronograma é conciliado com a obrigação: diferenças permanecem visíveis e não são consideradas pagas. Nos indicadores de vencimento, o saldo de cada lançamento é distribuído por vencimento, limitado à obrigação restante, evitando contar a mesma dívida em dobro num cronograma excedente. A lista também mostra o saldo próprio de cada parcela e a divergência a corrigir. Pagamentos de parcelas arquivadas continuam compondo a cobertura financeira do cronograma, sem serem cobrados novamente.
+Arquivos privados antigos não são apagados nem expostos. O endpoint antigo de documentos e as RPCs legadas permanecem para compatibilidade/arquivo; a interface nova não os utiliza, exceto a gravação de orçamento já existente. Não há aba Documentos ou Despesas e contratos.
 
-Datas de vencimento e de pagamento são separadas. Os agrupamentos vencidos, 7/15/30 dias e futuros usam o calendário de America/Sao_Paulo; a tela atualiza a data ao atravessar a meia-noite.
+## Operação
 
-## Arquivamento e auditoria
+O plano aceita À vista, Entrada + parcelas e Somente parcelas. Quantidade gera linhas com sugestão em centavos exatos e datas mensais, respeitando o último dia do mês. Valores e vencimentos individuais são editáveis. A diferença entre contrato e plano fica visível; o backend impede salvar diferenças.
 
-Exclusões são lógicas e confirmadas. Arquivar um fornecedor não apaga seus vínculos. Obrigações e pagamentos de lançamentos arquivados continuam nos indicadores, com indicação explícita; o filtro permite encontrá-los, registrar a quitação e editar a conciliação sem restaurá-los silenciosamente. Não se apagam pagamentos ao editar/arquivar uma parcela. Cancelar o registro de um pagamento retira-o do total pago, preservando o registro e a auditoria, sem realizar estorno bancário.
+Editar uma obrigação com pagamentos exige confirmação quando seus dados financeiros mudam. Não é permitido reduzir o valor abaixo do que foi pago nem excluir uma parcela com pagamentos sem cancelar explicitamente os registros. Nenhuma edição apaga pagamentos silenciosamente.
 
-A auditoria existente registra operador, horário, entidade, versão, campos alterados e valores/datas financeiros relevantes. PIX, dados bancários, contatos e notas livres não são copiados para os logs de auditoria. A consulta `planning_history` apresenta páginas de 100 eventos com cursor estável, incluindo histórico antigo e registros filhos do lançamento; não há corte permanente na visualização. Erros de integridade da nova RPC são saneados para não expor os detalhes das linhas bancárias.
+A exclusão de fornecedor exige confirmação incluindo o valor pago atual. O backend verifica esse valor para evitar confirmação desatualizada. Fornecedor, plano e pagamentos deixam de integrar as listas/totais ativos, mas permanecem armazenados e auditados. Cancelar pagamento não realiza estorno bancário.
 
-## Documentos
+Visão geral calcula orçamento, contratado, pago, saldo, vencidos e próximos vencimentos a partir do mesmo `simpleLedger`. Status são Pago, Vencido, Vence hoje, Vencimento próximo (1–5 dias) e Pendente. Datas usam `America/Sao_Paulo`.
 
-Bucket novo `wedding-planning`, privado. O bucket público de convites não é alterado. Formatos: PDF, JPG/JPEG e PNG, até 10 MiB. O endpoint `planning-documents` exige JWT válido, verifica o usuário e seu papel no evento, limita a leitura do corpo e confere extensão, MIME e assinatura dos bytes antes do upload. Usa as variáveis de servidor já fornecidas pela plataforma, sem chaves no frontend.
+Pagamentos contém somente registros realizados, com total cujo valor monetário é verde, colunas Fornecedor/Data de vencimento/Data de pagamento/Valor pago e ordenação crescente/decrescente. O padrão é fornecedor A→Z, com desempate determinístico por datas/ID. No celular as linhas reorganizam-se em cards.
 
-O cliente não possui política de INSERT/UPDATE/DELETE no Storage. A RPC prepara metadados PENDING; o endpoint validado faz o upload e somente então confirma READY pelo RPC exclusivo de serviço. Upload parcial não libera leitura. Tentativas idênticas reutilizam a reserva; uma resposta perdida não deve duplicar o documento. Pendências podem ser excluídas logicamente pela administração.
+A barra exibe percentual numérico, interpola vermelho→âmbar→verde e anima discretamente largura/cor. `prefers-reduced-motion` desativa a transição. Não se usa cor como único indicador.
 
-Downloads são autenticados, sujeitos a RLS e ao vínculo do evento. Não há URLs públicas ou assinadas permanentes. Blobs são mantidos somente em memória para visualizar/baixar, e suas URLs são revogadas ao sair do módulo. Excluir logicamente o documento bloqueia novas leituras, preservando metadados, objeto privado e auditoria. Conteúdo já baixado por um usuário autorizado não pode ser desfeito. A identificação do documento é editável; os bytes não são sobrescritos.
+## Testes
 
-Validação de formato não é antivírus. Uma política futura de retenção/limpeza física dos objetos arquivados exigirá ação administrativa própria; esta entrega não remove bytes indiscriminadamente.
+Fixtures apenas em modo demo explícito ou PostgreSQL descartável. `test-simple-planning.ts` reproduz o erro anterior, valida upgrade/rollback e preservação de dados externos/legados, comparação exata, múltiplos pagamentos, excesso real, edição de parcelas pagas, exclusão lógica, RLS, idempotência e concorrência independente. Os testes de navegador verificam criação/edição/planos, pagamentos, ordenação, recarregamento e mobile. Não se registram pagamentos de teste em produção.
 
-## Testes e operação
-
-Fixtures financeiras existem somente nos bancos descartáveis e no modo de demonstração local explícito. A migration não insere fornecedores, contratos, parcelas, pagamentos ou orçamento em produção. Não usa db push ou altera migrations históricas.
-
-`test-planning.ts` cobre upgrade/rollback, autorização/RLS, vínculos, versões, parcelas exatas, múltiplos pagamentos, cancelamento, arquivamento, auditoria sem dados bancários, documentos privados, concorrência e idempotência em conexões independentes. O transporte de upload é validado por testes Deno; testes de navegador usam RPCs reais em PostgreSQL descartável e um adaptador de Storage. O stub SQL de Storage é exclusivamente de teste, não uma migration.
-
-Uma reversão de frontend não deve apagar tabelas ou arquivos financeiros. Após uso real, qualquer mudança de dados exige nova análise incremental. Arquivos/documentos reais não são criados como teste em produção.
-
-Migration aplicada pelo mecanismo gerenciado em produção: `20261028192221_wedding_planning.sql`, SHA-256 `a35f14f5f2e52942d3a94834ab0cdb308143e3dc651c86e06d9f83a56060cb9f`. O histórico oficial contém os mesmos 30.657 bytes. Nenhuma migration histórica foi reparada ou reaplicada.
+Migration aplicada pelo mecanismo gerenciado em produção: `20261103015210_simple_supplier_planning.sql`, 17.862 bytes, SHA-256 `32d99d54b76b9cc4531a489f1680c55a75d56533e389861af7b6ef8e3004f7b0`. O histórico oficial contém os mesmos bytes testados. Pós-verificação: oito cadastros copiados sem divergência, orçamento preservado, valores contratados novos zerados, nenhum novo vencimento/pagamento e dados legados/externos/RPCs anteriores/políticas anteriores inalterados. Nenhuma migration histórica foi reparada ou reaplicada.

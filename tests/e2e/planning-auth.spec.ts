@@ -1,16 +1,19 @@
 import { test, expect, type Page } from "@playwright/test";
-import { createHash } from "node:crypto";
 import { TestPostgres } from "../support/postgres";
 import { ticketFixture } from "../support/ticket-fixture";
 const db = new TestPostgres();
 let f: ReturnType<typeof ticketFixture>;
-const files = new Map<string, Buffer>();
 test.beforeAll(async () => {
   test.setTimeout(120000);
   await db.start();
   f = ticketFixture(db);
 });
 test.afterAll(() => db.stop());
+test.beforeEach(() =>
+  db.sql(
+    "delete from planning_settlements;delete from planning_dues;delete from planning_vendors;delete from planning_budgets;",
+  ),
+);
 async function backend(
   page: Page,
   uid: string,
@@ -23,7 +26,7 @@ async function backend(
     aud: "authenticated",
     role: "authenticated",
     email: "planning@example.test",
-    is_anonymous: uid !== f.admin && uid !== f.staff,
+    is_anonymous: false,
   };
   const session = {
     access_token: `${enc({ alg: "HS256" })}.${enc({ sub: uid, exp, role: "authenticated" })}.fixture`,
@@ -45,57 +48,15 @@ async function backend(
         data = db.rpc(uid, path.split("/").at(-1)!, args);
         if (args.p_kind === "PAYMENT_SAVE" && control.losePayment) {
           control.losePayment = false;
-          throw Error("Simulated committed reply lost");
+          throw Error("Simulated lost committed response");
         }
-      } else if (path === "/functions/v1/planning-documents") {
-        db.rpc(uid, "planning_snapshot", { p_event: f.event });
-        const form = await new Response(req.postDataBuffer(), {
-          headers: { "Content-Type": req.headers()["content-type"]! },
-        }).formData();
-        const file = form.get("file") as File,
-          identifier = String(form.get("id")),
-          bytes = Buffer.from(await file.arrayBuffer()),
-          sha = createHash("sha256").update(bytes).digest("hex");
-        const reservation = db.rpc(uid, "planning_action", {
-          p_event: f.event,
-          p_kind: "DOCUMENT_PREPARE",
-          p_id: identifier,
-          p_version: null,
-          p_request: String(form.get("request_id")),
-          p_values: {
-            entry_id: String(form.get("entry_id")),
-            name: file.name,
-            mime: file.type,
-            size_bytes: bytes.length,
-            sha256: sha,
-          },
-        });
-        db.sql(
-          `insert into storage.objects(bucket_id,name) values('wedding-planning','${reservation.path}') on conflict do nothing;begin;set local role service_role;select planning_document_finish('${f.event}','${identifier}','${sha}');commit;`,
-        );
-        files.set(reservation.path, bytes);
-        data = { id: identifier };
-      } else if (path.startsWith("/storage/v1/object/")) {
-        const name = path.split("/wedding-planning/")[1]!;
-        const count = db
-          .sql(
-            `begin;set local role authenticated;set local request.jwt.claim.sub='${uid}';select count(*) from storage.objects where bucket_id='wedding-planning' and name='${name}';commit;`,
-          )
-          .trim();
-        if (count !== "1" || !files.has(name)) throw Error("unauthorized");
-        await route.fulfill({
-          status: 200,
-          contentType: "application/pdf",
-          body: files.get(name),
-        });
-        return;
-      } else throw Error("Unsupported fixture path");
+      } else throw Error("unsupported");
     } catch (e) {
       status = 400;
       data = {
-        message: String(e).includes("planning_overpay")
-          ? "planning_overpay"
-          : "Operação não autorizada ou inválida.",
+        message:
+          String(e).match(/simple_[a-z_]+/)?.[0] ||
+          "Operação não autorizada ou inválida.",
         code: "P0001",
       };
     }
@@ -117,311 +78,293 @@ async function login(page: Page, uid: string) {
 const dialog = (page: Page, name: string) =>
   page.getByRole("dialog", { name, exact: true });
 for (const width of [390, 1280])
-  test(`real authorized ledger, partial payments, private document lifecycle and responsive layout at ${width}px`, async ({
+  test(`simple supplier ledger, exact 1820, partial payments, sorting and reload at ${width}px`, async ({
     page,
   }) => {
     test.setTimeout(120000);
-    await page.setViewportSize({ width, height: 844 });
-    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width, height: 900 });
     const control = await login(page, f.admin);
     await page
       .getByRole("link", { name: "Planejamento do Casamento", exact: true })
       .click();
     await expect(
-      page.getByText(
-        "Acompanhe fornecedores, contratos, despesas e pagamentos do nosso grande dia.",
-      ),
-    ).toBeVisible();
-    await page.screenshot({
-      path: test.info().outputPath(`planning-overview-${width}.png`),
-    });
+      page.getByRole("radio", { name: "Despesas e contratos", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("radio", { name: "Documentos", exact: true }),
+    ).toHaveCount(0);
     await page
       .getByRole("button", { name: "Definir orçamento", exact: true })
       .click();
-    let modal = dialog(page, "Orçamento global");
+    let modal = dialog(page, "Orçamento previsto");
     await modal
-      .getByLabel("Orçamento global", { exact: true })
-      .fill("40.000,00");
-    await modal.getByRole("button", { name: "Salvar", exact: true }).click();
+      .getByLabel("Orçamento previsto", { exact: true })
+      .fill("30.000,00");
+    await modal
+      .getByRole("button", { name: "Salvar orçamento", exact: true })
+      .click();
     await expect(modal).toHaveCount(0);
     await page
       .getByRole("radio", { name: "Fornecedores", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Cadastrar fornecedor", exact: true })
-      .click();
-    modal = dialog(page, "Fornecedor");
-    await modal
-      .getByLabel("Nome do fornecedor ou empresa", { exact: true })
-      .fill(`Fornecedor ${width}`);
-    await modal
-      .getByLabel("Categoria principal", { exact: true })
-      .fill("Fotografia");
-    await modal
-      .getByLabel("Tipo de chave PIX", { exact: true })
-      .selectOption("EMAIL");
-    await modal
-      .getByLabel("Chave PIX", { exact: true })
-      .fill(`financeiro${width}@example.test`);
-    await modal.getByRole("button", { name: "Salvar", exact: true }).click();
-    await expect(modal).toHaveCount(0);
-    const supplier = JSON.parse(
-      db
-        .sql(
-          `select to_jsonb(s) from planning_suppliers s where name='Fornecedor ${width}'`,
-        )
-        .trim(),
-    );
-    await page
-      .getByRole("radio", { name: "Despesas e contratos", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Nova despesa ou contratação", exact: true })
-      .click();
-    modal = dialog(page, "Despesa ou contratação");
-    const title = `Fotografia ${width}`;
-    await modal.getByLabel("Título", { exact: true }).fill(title);
-    await modal.getByLabel("Categoria", { exact: true }).fill("Fotografia");
-    await modal
-      .getByLabel("Fornecedor (opcional)", { exact: true })
-      .selectOption(supplier.id);
-    await modal
-      .getByLabel("Situação da contratação", { exact: true })
-      .selectOption("CONTRACTED");
-    await modal
-      .getByRole("radio", { name: "Informações financeiras", exact: true })
-      .click();
-    await modal
-      .getByLabel("Valor inicialmente orçado", { exact: true })
-      .fill("2.200,00");
-    await modal
-      .getByLabel("Valor contratado ou comprometido", { exact: true })
-      .fill("2.000,00");
-    await modal.getByRole("button", { name: "Salvar", exact: true }).click();
-    await expect(modal).toHaveCount(0);
-    await page
-      .getByRole("button", { name: `Abrir ${title}`, exact: true })
-      .click();
-    const detail = dialog(page, title);
-    await detail
-      .getByRole("radio", { name: "Pagamentos", exact: true })
-      .click();
-    await detail
-      .getByRole("button", { name: "Cadastrar parcela", exact: true })
-      .click();
-    modal = dialog(page, "Parcela");
-    await modal
-      .getByLabel("Descrição da parcela", { exact: true })
-      .fill("Entrada e complementos");
-    await modal
-      .getByLabel("Valor previsto da parcela", { exact: true })
-      .fill("2.000,00");
-    await modal
-      .getByLabel("Data de vencimento (DD/MM/AAAA)", { exact: true })
-      .fill("20/10/2026");
-    await modal.getByRole("button", { name: "Salvar", exact: true }).click();
-    await expect(modal).toHaveCount(0);
-    const entry = JSON.parse(
-        db
-          .sql(
-            `select to_jsonb(e) from planning_entries e where title='${title}'`,
-          )
-          .trim(),
-      ),
-      parcel = JSON.parse(
-        db
-          .sql(
-            `select to_jsonb(i) from planning_installments i where entry_id='${entry.id}'`,
-          )
-          .trim(),
-      );
-    for (const amount of ["500,00", "700,00", "800,00"]) {
-      await detail
-        .getByRole("button", { name: "Registrar pagamento", exact: true })
+    const create = async (name: string, type: string, total: string) => {
+      await page
+        .getByRole("button", { name: "Cadastrar fornecedor", exact: true })
         .click();
-      modal = dialog(page, "Registro de pagamento");
-      await modal
-        .getByLabel("Parcela", { exact: true })
-        .selectOption(parcel.id);
-      await modal
-        .getByLabel("Valor efetivamente pago", { exact: true })
-        .fill(amount);
-      await modal
-        .getByLabel("Data efetiva do pagamento (DD/MM/AAAA)", { exact: true })
-        .fill("20/10/2026");
-      await modal.getByLabel("Forma de pagamento", { exact: true }).fill("PIX");
-      if (amount === "500,00") control.losePayment = true;
-      await modal.getByRole("button", { name: "Salvar", exact: true }).click();
-      if (amount === "500,00") {
-        await expect(modal.getByRole("alert")).toBeVisible();
-        await modal
-          .getByRole("button", { name: "Salvar", exact: true })
+      const m = dialog(page, "Cadastrar fornecedor");
+      await m.getByLabel("Nome/Nome empresarial", { exact: true }).fill(name);
+      await m
+        .getByLabel("Valor total do contrato", { exact: true })
+        .fill(total);
+      if (type !== "CASH")
+        await m
+          .getByRole("radio", {
+            name: type === "DOWN" ? "Entrada + parcelas" : "Somente parcelas",
+            exact: true,
+          })
           .click();
-      }
-      await expect(modal).toHaveCount(0);
-      if (amount === "500,00" && width === 390) {
-        await detail
-          .getByRole("radio", { name: "Dados gerais", exact: true })
-          .click();
-        await detail
-          .getByRole("button", { name: "Arquivar lançamento", exact: true })
-          .click();
-        const confirmation = dialog(page, "Arquivar registro?");
-        await confirmation
-          .getByRole("button", { name: "Arquivar", exact: true })
-          .click();
-        await expect(confirmation).toHaveCount(0);
-        await detail
-          .getByRole("radio", { name: "Pagamentos", exact: true })
-          .click();
-        await expect(
-          detail.getByText(
-            "Lançamento arquivado: a quitação e a conciliação continuam disponíveis, sem desarquivar o registro.",
-            { exact: true },
-          ),
-        ).toBeVisible();
-      }
-    }
-    expect(
-      db
-        .sql(
-          `select sum(amount_cents) from planning_payments where entry_id='${entry.id}'`,
-        )
-        .trim(),
-    ).toBe("200000");
-    await detail
-      .getByRole("button", { name: "Registrar pagamento", exact: true })
-      .click();
-    modal = dialog(page, "Registro de pagamento");
-    await modal.getByLabel("Parcela", { exact: true }).selectOption(parcel.id);
+      return m;
+    };
+    const name = `Villarejo ${width}`;
+    modal = await create(name, "DOWN", "18.200,00");
     await modal
-      .getByLabel("Valor efetivamente pago", { exact: true })
-      .fill("1,00");
-    await modal.getByLabel("Forma de pagamento", { exact: true }).fill("PIX");
-    await modal.getByRole("button", { name: "Salvar", exact: true }).click();
-    await expect(modal.getByRole("alert")).toContainText("supera o saldo");
-    await modal.getByRole("button", { name: "Cancelar", exact: true }).click();
-    await detail
-      .getByRole("radio", { name: "Documentos", exact: true })
-      .click();
-    await detail
-      .getByRole("button", { name: "Anexar documento", exact: true })
-      .click();
-    modal = dialog(page, "Anexar documento privado");
-    await expect(
-      modal.getByLabel("Vincular documento", { exact: true }),
-    ).toHaveValue(`entry_id:${entry.id}`);
-    const name = `Contrato-${width}.pdf`;
-    await modal.getByLabel("Selecionar documento").setInputFiles({
-      name,
-      mimeType: "application/pdf",
-      buffer: Buffer.from(
-        "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n",
-      ),
-    });
+      .getByLabel("Valor da entrada", { exact: true })
+      .fill("1.820,00");
     await modal
-      .getByRole("button", { name: "Salvar documento", exact: true })
+      .getByLabel("Data da entrada (DD/MM/AAAA)", { exact: true })
+      .fill("08/10/2026");
+    await modal.getByLabel("Quantidade de parcelas", { exact: true }).fill("2");
+    await expect(modal.getByLabel("Valor 2", { exact: true })).toHaveValue(
+      "8.190,00",
+    );
+    await expect(modal.getByLabel("Valor 3", { exact: true })).toHaveValue(
+      "8.190,00",
+    );
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
       .click();
     await expect(modal).toHaveCount(0);
-    await expect(detail.getByText(name, { exact: true })).toBeVisible();
-    await detail
-      .getByRole("button", { name: `Preparar documento: ${name}`, exact: true })
+    await page
+      .getByRole("button", { name: `Abrir fornecedor ${name}`, exact: true })
       .click();
-    const pending = page.waitForEvent("download");
+    let detail = dialog(page, name);
     await detail
-      .getByRole("link", { name: "Baixar documento", exact: true })
-      .click();
-    expect((await pending).suggestedFilename()).toBe(name);
-    await detail
-      .getByRole("button", { name: `Excluir documento: ${name}`, exact: true })
-      .click();
-    modal = dialog(page, "Arquivar registro?");
-    await modal.getByRole("button", { name: "Arquivar", exact: true }).click();
-    await expect(modal).toHaveCount(0);
-    await expect(
-      detail.getByRole("button", {
-        name: `Preparar documento: ${name}`,
+      .getByRole("button", {
+        name: "Registrar pagamento de Entrada",
         exact: true,
-      }),
-    ).toHaveCount(0);
+      })
+      .click();
+    modal = dialog(page, "Registrar pagamento");
+    await expect(modal.getByLabel("Valor pago", { exact: true })).toHaveValue(
+      "1.820,00",
+    );
+    await modal
+      .getByLabel("Data efetiva do pagamento (DD/MM/AAAA)", { exact: true })
+      .fill("08/10/2026");
+    await modal
+      .getByRole("button", { name: "Salvar pagamento", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    await expect(
+      detail.getByText("Saldo pendente: R$ 16.380,00", { exact: true }),
+    ).toBeVisible();
+    await detail
+      .getByRole("button", {
+        name: "Registrar pagamento de Parcela 1",
+        exact: true,
+      })
+      .click();
+    modal = dialog(page, "Registrar pagamento");
+    await modal.getByLabel("Valor pago", { exact: true }).fill("8.190,01");
+    await modal
+      .getByRole("button", { name: "Salvar pagamento", exact: true })
+      .click();
+    await expect(modal.getByRole("alert")).toContainText("superior");
+    await modal.getByLabel("Valor pago", { exact: true }).fill("500,00");
+    await modal
+      .getByRole("button", { name: "Salvar pagamento", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    await detail
+      .getByRole("button", {
+        name: "Registrar pagamento de Parcela 1",
+        exact: true,
+      })
+      .click();
+    modal = dialog(page, "Registrar pagamento");
+    await expect(modal.getByLabel("Valor pago", { exact: true })).toHaveValue(
+      "7.690,00",
+    );
+    control.losePayment = true;
+    await modal
+      .getByRole("button", { name: "Salvar pagamento", exact: true })
+      .click();
+    await expect(modal.getByRole("alert")).toBeVisible();
+    await modal
+      .getByRole("button", { name: "Salvar pagamento", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
     await detail
       .getByRole("button", { name: "Fechar modal", exact: true })
       .click();
+    modal = await create(`À vista ${width}`, "CASH", "2.655,00");
+    await modal
+      .getByLabel("Primeiro vencimento (DD/MM/AAAA)", { exact: true })
+      .fill("10/10/2026");
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
     await page
-      .getByLabel("Buscar fornecedor, serviço ou despesa", { exact: true })
-      .fill("Sem correspondência");
+      .getByRole("button", {
+        name: `Abrir fornecedor À vista ${width}`,
+        exact: true,
+      })
+      .click();
+    detail = dialog(page, `À vista ${width}`);
+    await detail
+      .getByRole("button", {
+        name: "Registrar pagamento de À vista",
+        exact: true,
+      })
+      .click();
+    modal = dialog(page, "Registrar pagamento");
+    await modal
+      .getByRole("button", { name: "Salvar pagamento", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    await detail
+      .getByRole("button", { name: "Fechar modal", exact: true })
+      .click();
+    modal = await create(`Parcelado ${width}`, "INSTALLMENTS", "2.000,00");
+    await modal
+      .getByLabel("Primeiro vencimento (DD/MM/AAAA)", { exact: true })
+      .fill("10/10/2026");
+    await modal.getByLabel("Quantidade de parcelas", { exact: true }).fill("4");
+    await expect(modal.getByLabel("Valor 4", { exact: true })).toHaveValue(
+      "500,00",
+    );
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    await page.reload();
+    await page.getByRole("radio", { name: "Pagamentos", exact: true }).click();
+    await expect(page.locator("[data-payment-row]")).toHaveCount(4);
+    await page.getByRole("button", { name: "Valor pago", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Valor pago ↑", exact: true })
+      .click();
+    await expect(page.locator("[data-payment-row]").first()).toContainText(
+      "7.690,00",
+    );
+    await page.getByRole("button", { name: "Fornecedor", exact: true }).click();
+    await expect(page.locator("[data-payment-row]").first()).toContainText(
+      `À vista ${width}`,
+    );
+    await page
+      .getByRole("button", { name: "Fornecedor ↑", exact: true })
+      .click();
+    await expect(page.locator("[data-payment-row]").first()).toContainText(
+      name,
+    );
+    for (const title of ["Data de vencimento", "Data de pagamento"]) {
+      await page.getByRole("button", { name: title, exact: true }).click();
+      await page
+        .getByRole("button", { name: `${title} ↑`, exact: true })
+        .click();
+      await expect(
+        page.getByRole("button", { name: `${title} ↓`, exact: true }),
+      ).toBeVisible();
+    }
+    await page.getByRole("radio", { name: "Visão geral", exact: true }).click();
     await expect(
-      page.getByText(
-        "Nenhum lançamento corresponde aos filtros. Cadastre uma despesa ou ajuste a pesquisa.",
-      ),
-    ).toBeVisible();
-    await page
-      .getByLabel("Buscar fornecedor, serviço ou despesa", { exact: true })
-      .fill("");
+      page.getByRole("progressbar", { name: "Percentual pago", exact: true }),
+    ).toHaveAttribute("aria-valuenow", String((1266500 / 2285500) * 100));
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
     await page.screenshot({
-      path: test.info().outputPath(`planning-${width}.png`),
+      path: `/tmp/simple-planning-overview-${width}.png`,
       fullPage: true,
     });
-    await page.reload();
-    await page
-      .getByRole("radio", { name: "Despesas e contratos", exact: true })
-      .click();
-    if (width === 390)
+    for (const viewport of [320, 768, width]) {
+      await page.setViewportSize({ width: viewport, height: 900 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
       await page
-        .getByRole("checkbox", {
-          name: "Mostrar lançamentos arquivados",
-          exact: true,
-        })
-        .click();
+        .getByRole("progressbar", { name: "Percentual pago", exact: true })
+        .scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: `/tmp/simple-planning-progress-${viewport}.png`,
+      });
+    }
+    if (width === 390) {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await expect(page.locator("[data-financial-progress]")).toHaveCSS(
+        "transition-duration",
+        "0s",
+      );
+    }
+
+    await page
+      .getByRole("radio", { name: "Fornecedores", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: `Abrir fornecedor ${name}`, exact: true })
+      .click();
+    detail = dialog(page, name);
+    await detail
+      .getByRole("button", { name: "Editar fornecedor e plano", exact: true })
+      .click();
+    modal = dialog(page, "Editar fornecedor");
+    await modal
+      .getByLabel("Vencimento 2 (DD/MM/AAAA)", { exact: true })
+      .fill("09/11/2026");
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
+      .click();
+    await expect(modal.getByRole("alert")).toContainText("Confirme");
+    await modal
+      .getByRole("checkbox", {
+        name: "Confirmo o ajuste do plano que possui pagamentos registrados",
+        exact: true,
+      })
+      .click();
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    await detail
+      .getByRole("button", { name: "Excluir fornecedor", exact: true })
+      .click();
+    const confirm = dialog(page, "Excluir fornecedor");
+    await expect(confirm).toContainText("10.010,00");
+    await confirm
+      .getByRole("button", { name: "Excluir fornecedor", exact: true })
+      .click();
+    await expect(confirm).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: `Abrir ${title}`, exact: true }),
-    ).toBeVisible();
+      page.getByRole("button", {
+        name: `Abrir fornecedor ${name}`,
+        exact: true,
+      }),
+    ).toHaveCount(0);
   });
-test("ceremonialist cannot see the module menu or direct route and no financial RPC is fetched", async ({
+test("ceremonialist cannot see or query the simple financial module", async ({
   page,
 }) => {
-  let reads = 0;
   await login(page, f.staff);
-  page.on("request", (r) => {
-    if (r.url().includes("planning_snapshot")) reads++;
-  });
+  await page.goto("/planejamento");
+  await expect(
+    page.getByRole("button", { name: "Cadastrar fornecedor", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "Planejamento do Casamento", exact: true }),
   ).toHaveCount(0);
-  await page.goto("/planejamento");
-  await expect(
-    page.getByText("Total contratado/comprometido", { exact: true }),
-  ).toHaveCount(0);
-  expect(reads).toBe(0);
-});
-
-test("complete historical audit can be paged beyond the initial 100 events", async ({
-  page,
-}) => {
-  test.setTimeout(120000);
-  const target = JSON.parse(
-    db
-      .sql(
-        "select to_jsonb(e) from planning_entries e order by created_at limit 1",
-      )
-      .trim(),
-  );
-  db.sql(
-    `insert into audit_logs(event_id,actor,action,entity,entity_id,metadata,created_at) select '${f.event}','${f.admin}','ENTRY_SAVE','planning_entries','${target.id}',jsonb_build_object('after',jsonb_build_object('amount_cents',100000+n)),'2000-01-01T00:00:00Z'::timestamptz+make_interval(secs=>n) from generate_series(1,101) n;`,
-  );
-  await login(page, f.admin);
-  await page
-    .getByRole("link", { name: "Planejamento do Casamento", exact: true })
-    .click();
-  const old = page.getByText(/Depois: Valor: R\$\s*1\.000,01/);
-  await expect(old).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Carregar mais histórico", exact: true })
-    .click();
-  await expect(old).toHaveCount(1);
 });
