@@ -71,6 +71,16 @@ async function main() {
       "t",
     );
     db.sql(migration);
+    const catalog = () =>
+      db.sql(
+        "select jsonb_build_object('oid',oid,'acl',proacl,'config',proconfig,'owner',proowner)::text from pg_proc where oid='planning_simple_action(uuid,text,uuid,integer,jsonb,uuid)'::regprocedure",
+      );
+    const originalCatalog = catalog();
+    const scopedFile = readdirSync("supabase/migrations").find((n) =>
+      n.endsWith("_scoped_due_updates.sql"),
+    )!;
+    db.sql(readFileSync(`supabase/migrations/${scopedFile}`, "utf8"));
+    assert.equal(catalog(), originalCatalog);
     assert.equal(integrity(), before);
     const snap = (uid = f.admin) =>
       db.rpc(uid, "planning_simple_snapshot", { p_event: f.event });
@@ -249,6 +259,147 @@ async function main() {
         f.admin,
         randomUUID(),
       ),
+    );
+    // Deterministic cross-event race: B passes its existence check, pauses
+    // before INSERT, then A inserts the same UUID. B must not update A's row.
+    const eventB = randomUUID(),
+      vendorA = randomUUID(),
+      vendorB = randomUUID(),
+      sharedDue = randomUUID();
+    const gateKey = BigInt(
+      "0x" + randomUUID().replaceAll("-", "").slice(0, 15),
+    ).toString();
+    db.sql(`insert into events(id,title,starts_at) values('${eventB}','Other financial fixture','2026-12-15');insert into user_roles(event_id,user_id,role) values('${eventB}','${f.staff}','ADMIN');
+      create function public.simple_test_gate() returns trigger language plpgsql as $gate$ begin if new.vendor_id='${vendorB}'::uuid then perform pg_advisory_xact_lock(${gateKey}::bigint);end if;return new;end $gate$;
+      create trigger simple_test_gate before insert on planning_dues for each row execute function public.simple_test_gate();`);
+    const psqlArgs = db.ci
+      ? [
+          "-u",
+          "postgres",
+          "psql",
+          "-d",
+          db.name,
+          "-qAt",
+          "-v",
+          "ON_ERROR_STOP=1",
+        ]
+      : [
+          "exec",
+          "-i",
+          db.name,
+          "psql",
+          "-h",
+          "127.0.0.1",
+          "-U",
+          "postgres",
+          "-qAt",
+          "-v",
+          "ON_ERROR_STOP=1",
+        ];
+    const gate = spawn(db.ci ? "sudo" : "docker", psqlArgs, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    gate.stderr.resume();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(Error("gate startup timeout")),
+          5000,
+        );
+        gate.on("error", reject);
+        let gateOutput = "";
+        gate.stdout.on("data", (chunk) => {
+          gateOutput += String(chunk);
+          if (gateOutput.includes("gate-ready")) {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+        gate.stdin.write(
+          `select pg_advisory_lock(${gateKey}::bigint);select 'gate-ready';\n`,
+        );
+      });
+      const racingValues = {
+        name: "Event B race",
+        details: {},
+        total_cents: 200,
+        plan_type: "CASH",
+        dues: [
+          {
+            id: sharedDue,
+            label: "B",
+            amount_cents: 200,
+            due_on: "2026-12-01",
+            position: 0,
+          },
+        ],
+      };
+      const blocked = spawn(db.ci ? "sudo" : "docker", psqlArgs, {
+        stdio: ["pipe", "ignore", "pipe"],
+      });
+      let blockedError = "";
+      blocked.stderr.on("data", (chunk) => (blockedError += String(chunk)));
+      const blockedDone = new Promise<number>((resolve) =>
+        blocked.on("close", (code) => resolve(code ?? 1)),
+      );
+      blocked.stdin.end(
+        `begin;set local role authenticated;set local request.jwt.claim.sub='${f.staff}';select planning_simple_action('${eventB}','VENDOR_SAVE','${vendorB}',null,'${JSON.stringify(racingValues)}'::jsonb,'${randomUUID()}');commit;`,
+      );
+      let waiting = false;
+      for (let n = 0; n < 100; n++) {
+        waiting =
+          db
+            .sql(
+              `select exists(select 1 from pg_stat_activity where datname='${db.ci ? db.name : "postgres"}' and wait_event='advisory' and query like '%${vendorB}%')`,
+            )
+            .trim() === "t";
+        if (waiting) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.ok(waiting, "B must pause after validation and before inserting");
+      action("VENDOR_SAVE", vendorA, {
+        name: "Event A race",
+        details: {},
+        total_cents: 100,
+        plan_type: "CASH",
+        dues: [
+          {
+            id: sharedDue,
+            label: "A",
+            amount_cents: 100,
+            due_on: "2026-12-01",
+            position: 0,
+          },
+        ],
+      });
+      gate.stdin.end(`select pg_advisory_unlock(${gateKey}::bigint);\n`);
+      assert.notEqual(
+        await blockedDone,
+        0,
+        "cross-event UUID conflict must abort",
+      );
+      assert.match(blockedError, /simple_invalid/);
+      assert.equal(
+        db
+          .sql(
+            `select amount_cents from planning_dues where id='${sharedDue}' and event_id='${f.event}' and vendor_id='${vendorA}'`,
+          )
+          .trim(),
+        "100",
+      );
+      assert.equal(
+        db
+          .sql(`select count(*) from planning_vendors where id='${vendorB}'`)
+          .trim(),
+        "0",
+        "failed request rolls back supplier too",
+      );
+    } finally {
+      gate.kill();
+    }
+    assert.equal(integrity(), before);
+    console.log(
+      "Cross-event UUID race: foreign due unchanged, conflicting supplier transaction rolled back PASS",
     );
     console.log(
       "Simple supplier planning: old 1820/zero-contract bug reproduced; exact equality, partial payments, true overpay, plan validation, paid changes, archive reset, RLS/ACL, scope/rollback, stale writes, idempotence and concurrent payments PASS",

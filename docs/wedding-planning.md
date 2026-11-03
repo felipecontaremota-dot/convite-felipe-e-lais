@@ -29,7 +29,7 @@ Arquivos privados antigos não são apagados nem expostos. O endpoint antigo de 
 
 ## Operação
 
-O plano aceita À vista, Entrada + parcelas e Somente parcelas. Quantidade gera linhas com sugestão em centavos exatos e datas mensais, respeitando o último dia do mês. Valores e vencimentos individuais são editáveis. A diferença entre contrato e plano fica visível; o backend impede salvar diferenças.
+O plano aceita À vista, Entrada + parcelas e Somente parcelas. Quantidade gera linhas com sugestão em centavos exatos e datas mensais, respeitando o último dia do mês. Valores e vencimentos individuais são editáveis; controles de subir/descer reorganizam as parcelas preservando seus identificadores e pagamentos. A diferença entre contrato e plano fica visível; o backend impede salvar diferenças.
 
 Editar uma obrigação com pagamentos exige confirmação quando seus dados financeiros mudam. Não é permitido reduzir o valor abaixo do que foi pago nem excluir uma parcela com pagamentos sem cancelar explicitamente os registros. Nenhuma edição apaga pagamentos silenciosamente.
 
@@ -46,3 +46,5 @@ A barra exibe percentual numérico, interpola vermelho→âmbar→verde e anima 
 Fixtures apenas em modo demo explícito ou PostgreSQL descartável. `test-simple-planning.ts` reproduz o erro anterior, valida upgrade/rollback e preservação de dados externos/legados, comparação exata, múltiplos pagamentos, excesso real, edição de parcelas pagas, exclusão lógica, RLS, idempotência e concorrência independente. Os testes de navegador verificam criação/edição/planos, pagamentos, ordenação, recarregamento e mobile. Não se registram pagamentos de teste em produção.
 
 Migration aplicada pelo mecanismo gerenciado em produção: `20261103015210_simple_supplier_planning.sql`, 17.862 bytes, SHA-256 `32d99d54b76b9cc4531a489f1680c55a75d56533e389861af7b6ef8e3004f7b0`. O histórico oficial contém os mesmos bytes testados. Pós-verificação: oito cadastros copiados sem divergência, orçamento preservado, valores contratados novos zerados, nenhum novo vencimento/pagamento e dados legados/externos/RPCs anteriores/políticas anteriores inalterados. Nenhuma migration histórica foi reparada ou reaplicada.
+
+Proteção complementar aplicada: `20261103021214_scoped_due_updates.sql`, 12.772 bytes, SHA-256 `5a337afe43771097eab55b71bf45b9ef8986e081878fac4147ebcf3062ed59fb`. O conflito concorrente de UUID somente pode atualizar a parcela do mesmo evento e fornecedor; caso contrário, a operação inteira é revertida. O teste usa duas conexões e uma barreira antes do INSERT para provar essa condição. A substituição preservou OID, ACL, assinatura e dados.

@@ -97,7 +97,9 @@ export function simpleLedger(data: SimpleData, today = todaySP()) {
       ...v,
       paid,
       balance: v.total_cents - paid,
-      dues: dues.filter((d) => d.vendor_id === v.id),
+      dues: dues
+        .filter((d) => d.vendor_id === v.id)
+        .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id)),
     };
   });
   const total = sum(rows.map((v) => v.total_cents)),

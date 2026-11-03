@@ -407,6 +407,30 @@ export function SupplierEditor({
                 Pago: {money(paid[r.id]!)}. O registro será preservado.
               </Text>
             ) : null}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {[-1, 1].map((direction) => (
+                <Button
+                  key={direction}
+                  title={`Mover vencimento ${i + 1} para ${direction < 0 ? "cima" : "baixo"}`}
+                  secondary
+                  disabled={
+                    busy ||
+                    i + direction < (type === "DOWN" ? 1 : 0) ||
+                    i + direction >= rows.length
+                  }
+                  onPress={() =>
+                    setRows((previous) => {
+                      const next = [...previous];
+                      [next[i], next[i + direction]] = [
+                        next[i + direction]!,
+                        next[i]!,
+                      ];
+                      return next;
+                    })
+                  }
+                />
+              ))}
+            </View>
             <Button
               title={`Excluir vencimento ${i + 1}`}
               secondary

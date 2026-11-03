@@ -248,6 +248,43 @@ for (const width of [390, 1280])
       .getByRole("button", { name: "Salvar fornecedor", exact: true })
       .click();
     await expect(modal).toHaveCount(0);
+    await page
+      .getByRole("button", {
+        name: `Abrir fornecedor Parcelado ${width}`,
+        exact: true,
+      })
+      .click();
+    detail = dialog(page, `Parcelado ${width}`);
+    await detail
+      .getByRole("button", { name: "Editar fornecedor e plano", exact: true })
+      .click();
+    modal = dialog(page, "Editar fornecedor");
+    await modal.getByLabel("Descrição 1", { exact: true }).fill("Primeira");
+    await modal.getByLabel("Descrição 2", { exact: true }).fill("Segunda");
+    await modal
+      .getByRole("button", {
+        name: "Mover vencimento 2 para cima",
+        exact: true,
+      })
+      .click();
+    await expect(modal.getByLabel("Descrição 1", { exact: true })).toHaveValue(
+      "Segunda",
+    );
+    await modal
+      .getByRole("button", { name: "Salvar fornecedor", exact: true })
+      .click();
+    await expect(modal).toHaveCount(0);
+    await detail
+      .getByRole("button", { name: "Editar fornecedor e plano", exact: true })
+      .click();
+    modal = dialog(page, "Editar fornecedor");
+    await expect(modal.getByLabel("Descrição 1", { exact: true })).toHaveValue(
+      "Segunda",
+    );
+    await modal.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await detail
+      .getByRole("button", { name: "Fechar modal", exact: true })
+      .click();
     await page.reload();
     await page.getByRole("radio", { name: "Pagamentos", exact: true }).click();
     await expect(page.locator("[data-payment-row]")).toHaveCount(4);

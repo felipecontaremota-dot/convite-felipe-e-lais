@@ -170,3 +170,17 @@ it("distributes cents exactly, including non-divisible amounts", () => {
   expect(splitCents(450000, 3)).toEqual([150000, 150000, 150000]);
   expect(() => splitCents(1, 3)).toThrow();
 });
+
+it("preserves explicit plan order independently of the dashboard due-date order", () => {
+  const data = {
+    ...emptySimple(),
+    vendors: [vendor("v", "A", 200)],
+    dues: [
+      { ...due("first", "v", 100, "2026-12-01"), position: 0 },
+      { ...due("second", "v", 100, "2026-11-01"), position: 1 },
+    ],
+  };
+  const l = simpleLedger(data, "2026-10-01");
+  expect(l.vendors[0]?.dues.map((d) => d.id)).toEqual(["first", "second"]);
+  expect(l.upcoming.map((d) => d.id)).toEqual(["second", "first"]);
+});
