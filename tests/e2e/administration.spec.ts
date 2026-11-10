@@ -142,7 +142,10 @@ test("standalone creation, child/group, contact mask, email validation, detail a
     page.getByText("Nota administrativa privada", { exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByLabel("Possui observação administrativa", { exact: true }),
+    page.getByRole("button", {
+      name: "Observação de José Victor",
+      exact: true,
+    }),
   ).toBeVisible();
   const db = await database(page),
     guest = db.guests.find((g: { name: string }) => g.name === "José Victor"),

@@ -3,6 +3,12 @@ import { invitationLink } from "../../utils/security";
 import type { Snapshot } from "../../types/domain";
 import { listGuests, RSVP_LABELS, formatPhone } from "./adminDomain";
 
+export type GuestExportData = Pick<
+  Snapshot,
+  "role" | "guests" | "invitations" | "contacts" | "rsvps"
+> & { event: { id: string } };
+export const canExportGuests = (role: Snapshot["role"] | undefined) =>
+  role === "ADMIN" || role === "CEREMONIALIST";
 export const guestExportHeaders = [
   "Nº",
   "Nome",
@@ -38,12 +44,13 @@ export function exportWhatsApp(value: string) {
 }
 // Explicit columns only: never pass a snapshot, administrative/session credentials or complete records to the writer.
 export function guestExportRows(
-  data: Snapshot | null,
+  data: GuestExportData | null,
   search: string,
   filter: string,
   baseUrl = process.env.EXPO_PUBLIC_WEB_BASE_URL || "",
 ): GuestExportRow[] {
-  if (data?.role !== "ADMIN") throw Error("Exportação não autorizada.");
+  if (!data || !canExportGuests(data.role))
+    throw Error("Exportação não autorizada.");
   const event = data.event.id;
   const invitations = new Map(
     data.invitations.filter((i) => i.event_id === event).map((i) => [i.id, i]),
@@ -61,7 +68,12 @@ export function guestExportRows(
         status = rsvps.get(g.id),
         unit = invitations.get(g.invitation_id);
       let link = "";
-      if (unit?.sharing_code && unit.link_active !== false && baseUrl) {
+      if (
+        data.role === "ADMIN" &&
+        unit?.sharing_code &&
+        unit.link_active !== false &&
+        baseUrl
+      ) {
         try {
           link = invitationLink(baseUrl, unit.sharing_code);
         } catch {
@@ -71,12 +83,12 @@ export function guestExportRows(
       return [
         index + 1,
         g.name || "",
-        exportWhatsApp(c?.whatsapp || ""),
+        data.role === "ADMIN" ? exportWhatsApp(c?.whatsapp || "") : "",
         g.group_label || "",
         link,
-        unit?.pin || "",
+        data.role === "ADMIN" ? unit?.pin || "" : "",
         unit?.name || "",
-        c?.email || "",
+        data.role === "ADMIN" ? c?.email || "" : "",
         status === "MAYBE"
           ? "Talvez"
           : status

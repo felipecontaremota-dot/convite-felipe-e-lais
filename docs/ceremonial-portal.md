@@ -119,3 +119,55 @@ A auditoria existente recebe cópia do check-in e nome cadastral, operador e hor
 Uma entrada ativa anterior à migration continua visível e é integralmente capturada ao ser removida. Exclusões antigas sem metadados não permitem reconstruir a identidade com segurança. Na verificação pré-migration de produção havia uma entrada ativa e nenhuma exclusão histórica sem detalhes; nenhuma operação real foi usada em testes. Outros operadores recebem atualização Realtime, complementada por consulta a cada cinco segundos quando a página operacional está visível e online, inclusive em listas administrativas e de padrinhos.
 
 Validação final desta retomada: 351 unitários, 59 testes de Functions, suíte SQL/RLS completa (incluindo upgrade, autorização, concorrência e auditoria), 260 E2E, lint, TypeScript, build e exportação aprovados. Inspeção visual em 320/1280 px e prévia de câmera simulada aprovadas. O proxy do ambiente bloqueia o acesso ao domínio publicado com CONNECT 403; não foram utilizadas credenciais reais nem executadas reversões em produção.
+
+## Observações e exportação operacional
+
+A rota `/observacoes` aparece entre Padrinhos e Lista de convidados. Ela usa somente
+`guests[].admin_notes`, a projeção já existente de `guest_admin_details.notes` no
+snapshot operacional. Notas ausentes, vazias ou compostas só por espaços são
+omitidas. Nome, vínculo, família (quando houver) e RSVP usam as estruturas atuais;
+a nota é destacada em negrito e a lista segue a ordenação pt-BR. Não há nova tabela,
+cópia da nota ou permissão de escrita. O indicador vermelho é compartilhado com a
+lista administrativa; no web, tooltip por hover/foco/clique, com Escape, texto
+integral e posicionamento na viewport; no nativo, consulta pelo modal existente.
+
+O cache continua sendo o snapshot do AppProvider. Preparar/atualizar cache offline,
+reload, atualização ao retornar à página e consulta periódica já existentes trazem
+as alterações do ADMIN. Um cache antigo sem nota não inventa conteúdo. A consulta
+offline preserva as notas recebidas; confirmar entradas ainda exige o servidor.
+
+A Lista de convidados operacional reutiliza `GuestExportButton`, os doze filtros,
+`guestWorkbook` e `guestPdf`. Os formatos são Excel (.xlsx/OOXML) e PDF: não existe
+uma exportação .xml independente. Conforme a decisão expressa do responsável,
+WhatsApp, e-mail, link individual e PIN continuam exclusivos do ADMIN. Essas quatro
+colunas ficam vazias no arquivo do CEREMONIALIST; títulos, ordenação, layout e as
+demais informações seguem os mesmos geradores administrativos. Há uma orientação
+no modal explicando a omissão. A exportação administrativa completa não muda.
+
+A migration incremental `ceremonial_guest_export` acrescenta somente a RPC estável
+`guest_list_export(event)`. Ela autoriza ADMIN/CEREMONIALIST pelo usuário autenticado
+e papel do evento no banco, e projeta apenas identificação, classificação, família,
+RSVP e status de envio individual. Não consulta `guest_contacts`, `invitation_access`
+ou credenciais QR; não altera tabelas, policies, funções anteriores ou dados. Não
+há execução para anon/service_role; authenticated precisa satisfazer a autorização
+interna. O cliente mantém a projeção apenas em memória enquanto o modal está aberto,
+sem inseri-la no snapshot ou cache offline. Trocar usuário/papel desmonta o estado;
+fechar ou concluir o download o descarta. A exportação operacional exige conexão.
+O gerador de linhas também remove os quatro campos para CEREMONIALIST como defesa
+adicional, mesmo se receber um objeto administrativo.
+
+Validação específica: `npx tsx scripts/test-ceremonial-export.ts` em PostgreSQL
+exclusivo de teste verifica payload sem segredos/contatos, paridade das colunas
+permitidas, filtros, isolamento entre eventos, anon/GUEST/revogação, negativa de
+escrita e integridade. Os E2E `ceremonial-notes.spec.ts` e
+`ceremonial-export.spec.ts` cobrem 320/390/768/1280 px, tooltip acessível, cache,
+alteração da nota pelo ADMIN e downloads reais. Nenhum dado de produção é usado
+para testes de escrita.
+
+Instalação em produção: `20261110173642_ceremonial_guest_export.sql`, registrada
+pelo mecanismo gerenciado do Supabase. SHA-256 do SQL testado e registrado:
+`6af3765f81d5da46b7a4c0bca8230bbf955b18e7d98d7881f353c4c180e731f9`.
+A comparação pré/pós confirmou convidados, convites, contatos, notas, RSVPs,
+credenciais, check-ins, papéis, policies e funções anteriores idênticos. A leitura
+com contexto autenticado CEREMONIALIST confirmou a projeção sem contatos/PIN/link.
+Nenhum dado real foi criado, editado ou removido como teste.

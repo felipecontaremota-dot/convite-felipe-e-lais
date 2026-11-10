@@ -1,6 +1,9 @@
-import type { Snapshot } from "../../types/domain";
 import { adminRsvpStatus } from "./adminGuestStatus";
-import { guestExportRows } from "./guestExport";
+import {
+  canExportGuests,
+  guestExportRows,
+  type GuestExportData,
+} from "./guestExport";
 
 export const exportFilterColumns = [
   ["Todos", "Familiar da noiva", "Familiar do noivo", "Convidado(a) da noiva"],
@@ -19,11 +22,11 @@ export function toggleExportFilter(
     : [...selected.filter((item) => item !== "Todos"), value];
 }
 export function filteredGuestExportRows(
-  data: Snapshot,
+  data: GuestExportData,
   selected: ExportFilter[],
   baseUrl?: string,
 ) {
-  if (data.role !== "ADMIN") throw Error("Exportação não autorizada.");
+  if (!canExportGuests(data.role)) throw Error("Exportação não autorizada.");
   if (!selected.length) return [];
   const groups = selected.filter(
     (value) =>

@@ -1201,3 +1201,31 @@ export function demoPartyAdminSave(
     return promotion;
   });
 }
+
+export async function demoGuestListExport() {
+  const data = await demoSnapshot("CEREMONIALIST");
+  // Build only non-sensitive export fields from the local demo fixture.
+  const db = await readCache<DemoDatabase>("demo-db");
+  return {
+    role: data.role,
+    event: data.event,
+    guests: data.guests.map((g) => ({
+      ...g,
+      invitation_sent: !!db?.snapshot.guests.find((x) => x.id === g.id)
+        ?.invitation_sent,
+    })),
+    invitations: data.invitations.map(
+      ({ id, event_id, name, active, kind, primary_guest_id, version }) => ({
+        id,
+        event_id,
+        name,
+        active,
+        kind,
+        primary_guest_id,
+        version,
+      }),
+    ),
+    rsvps: data.rsvps,
+    contacts: [],
+  };
+}

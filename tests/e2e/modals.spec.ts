@@ -32,13 +32,16 @@ test("guest modals trap focus, close with Escape, never expand list; notes badge
     const row = page
       .getByRole("button", { name: `Abrir ficha de ${name}`, exact: true })
       .locator("..");
-    const badge = row.getByLabel("Possui observação administrativa", {
+    const badge = row.getByRole("button", {
+      name: `Observação de ${name}`,
       exact: true,
     });
     if (notes?.trim()) {
       await expect(badge).toHaveText("!");
       expect(
-        await badge.evaluate((el) => getComputedStyle(el).backgroundColor),
+        await badge
+          .locator("span")
+          .evaluate((el) => getComputedStyle(el).backgroundColor),
       ).toBe("rgb(162, 34, 44)");
       await expect(row.getByText(notes, { exact: true })).toHaveCount(0);
     } else await expect(badge).toHaveCount(0);

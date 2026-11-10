@@ -1,3 +1,4 @@
+import { GuestNoteIndicator } from "./GuestNoteIndicator";
 import { PromotionControl } from "../weddingParty/PromotionControl";
 import { adminRsvpOptions, adminRsvpStatus } from "./adminGuestStatus";
 import { GuestExportButton } from "./GuestExportButton";
@@ -612,26 +613,7 @@ export function GuestsScreen() {
                 <Tag>{unit.name}</Tag>
               ) : null}
               {g.is_child ? <Tag tone="child">Criança</Tag> : null}
-              {g.admin_notes?.trim() ? (
-                <Text
-                  accessibilityLabel="Possui observação administrativa"
-                  {...(Platform.OS === "web"
-                    ? { title: "Possui observação" }
-                    : {})}
-                  style={{
-                    color: theme.colors.card,
-                    backgroundColor: theme.colors.destructive,
-                    borderRadius: 14,
-                    minWidth: 28,
-                    textAlign: "center",
-                    padding: 4,
-                    fontWeight: "800",
-                    fontSize: 17,
-                  }}
-                >
-                  !
-                </Text>
-              ) : null}
+              <GuestNoteIndicator guest={g} />
               {data?.checkins.some((c) => c.guest_id === g.id && !c.local) ? (
                 <Tag tone="confirmed">Presente</Tag>
               ) : null}

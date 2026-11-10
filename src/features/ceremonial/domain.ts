@@ -39,3 +39,9 @@ export function checkinOperatorLabel(role: unknown) {
   if (role === "ADMIN") return "Noivos";
   return "Operador não identificado";
 }
+
+export function guestsWithNotes(data: Snapshot | null) {
+  return operationalGuests(data, "", "ALL").filter(
+    (g) => !!g.admin_notes?.trim(),
+  );
+}

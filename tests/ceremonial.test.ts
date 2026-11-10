@@ -64,3 +64,41 @@ describe("check-in operator labels", () => {
     expect(checkinOperatorLabel(role)).toBe(label);
   });
 });
+
+describe("administrative notes for ceremonial readers", () => {
+  it("uses only the administrative note, excludes blank/missing content and sorts in Portuguese", async () => {
+    const { guestsWithNotes } =
+      await import("../src/features/ceremonial/domain");
+    const data = fixture();
+    data.guests = [
+      null,
+      undefined,
+      "",
+      "   ",
+      "\n\t",
+      "Texto exato\nSegunda linha",
+      "Ágata",
+    ].map(
+      (note, i) =>
+        ({
+          ...data.guests[0]!,
+          id: `g${i}`,
+          name: i === 6 ? "Ágata" : "Zélia",
+          admin_notes: note,
+        }) as unknown as Snapshot["guests"][number],
+    );
+    data.rsvps[0]!.note = "Não é uma observação administrativa";
+    expect(guestsWithNotes(data).map((g) => g.name)).toEqual([
+      "Ágata",
+      "Zélia",
+    ]);
+    expect(guestsWithNotes(data)[1]?.admin_notes).toBe(
+      "Texto exato\nSegunda linha",
+    );
+    data.guests[5]!.admin_notes = "Texto alterado";
+    expect(guestsWithNotes(data)[1]?.admin_notes).toBe("Texto alterado");
+    data.guests[5]!.admin_notes = "";
+    expect(guestsWithNotes(data)).toHaveLength(1);
+    expect(guestsWithNotes(null)).toEqual([]);
+  });
+});

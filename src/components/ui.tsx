@@ -309,6 +309,7 @@ const nav = {
     ["Informações", "/informacoes"],
     ["Local", "/como-chegar"],
     ["Padrinhos", "/padrinhos"],
+    ["Observações", "/observacoes"],
     ["Lista de convidados", "/dia-do-evento"],
   ],
 };

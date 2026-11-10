@@ -500,3 +500,10 @@ export const simplePlanningAction = (
     p_values: values,
     p_request: request,
   });
+
+// Online-only read projection. No contacts, PINs, links or offline persistence.
+export const guestListExport = () =>
+  rpc<import("../features/guests/guestExport").GuestExportData>(
+    "guest_list_export",
+    { p_event: eventId },
+  );

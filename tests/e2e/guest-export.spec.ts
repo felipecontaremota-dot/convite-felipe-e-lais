@@ -305,7 +305,7 @@ test("generation failure permits retry and double click starts only one download
   await expect(menu(page)).toHaveCount(0);
   expect(downloads).toHaveLength(1);
 });
-for (const role of ["convidado", "cerimonial"])
+for (const role of ["convidado"])
   test(`${role} has no export access or new controls`, async ({ page }) => {
     await page.goto("/");
     await page

@@ -105,7 +105,7 @@ describe("guest Excel export", () => {
     delete s.guests[0].is_child;
     expect(guestExportRows(s, "Bruno", "ALL")[0][9]).toBe("");
   });
-  it.each([null, "GUEST", "CEREMONIALIST"])(
+  it.each([null, "GUEST"])(
     "rejects role %s without new permissions",
     (role) => {
       const s = snapshot();
@@ -237,4 +237,20 @@ describe("guest Excel export", () => {
       "Nenhum convidado",
     );
   });
+});
+
+it("ceremonial files keep four sensitive columns blank even if an input contains administrative data", async () => {
+  const s = snapshot();
+  s.role = "CEREMONIALIST";
+  const rows = guestExportRows(s, "", "ALL", "https://example.test");
+  for (const row of rows) for (const c of [2, 4, 5, 7]) expect(row[c]).toBe("");
+  expect(rows[0]?.[1]).toBe("Ágata");
+  expect(rows[0]?.[6]).toBe("Família teste");
+  const blob = await guestWorkbook(rows, new Date());
+  const workbook = await readSheet(
+    Buffer.from(await blob.arrayBuffer()),
+    "Convidados",
+  );
+  expect(workbook[5]?.[1]).toBe("Ágata");
+  expect(JSON.stringify(workbook)).not.toContain("a@example.test");
 });

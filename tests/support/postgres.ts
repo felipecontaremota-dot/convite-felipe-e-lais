@@ -164,6 +164,7 @@ export class TestPostgres {
       planning_history: `planning_history(${event},${args.p_entity == null ? "null" : literal(args.p_entity)}::uuid,${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_cursor == null ? "null" : literal(args.p_cursor)}::uuid)`,
       planning_snapshot: `planning_snapshot(${event})`,
       planning_action: `planning_action(${event},${literal(args.p_kind)},${literal(args.p_id)}::uuid,${args.p_version == null ? "null" : literal(args.p_version)}::integer,${literal(JSON.stringify(args.p_values))}::jsonb,${literal(args.p_request)}::uuid)`,
+      guest_list_export: `guest_list_export(${event})`,
       event_role: `event_role(${event})`,
       notification_feed: `notification_feed(${event},${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_id == null ? "null" : literal(args.p_id)}::uuid)`,
       notification_preferences: `notification_preferences(${event},${literal(args.p_action)},${literal(JSON.stringify(args.p_payload))}::jsonb)`,

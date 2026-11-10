@@ -1,3 +1,4 @@
+import { GuestNoteIndicator } from "../guests/GuestNoteIndicator";
 import { Text, View } from "react-native";
 import { Tag } from "../../components/adminUi";
 import { styles } from "../../components/ui";
@@ -22,6 +23,7 @@ export function OperationalGuest({
     <>
       <Text style={styles.heading}>{guest.name}</Text>
       <View style={styles.row}>
+        <GuestNoteIndicator guest={guest} />
         {guest.group_label ? <Tag>{guest.group_label}</Tag> : null}
         {unit?.kind === "FAMILY" ? <Tag>{unit.name}</Tag> : null}
         {guest.is_child ? <Tag tone="child">Criança</Tag> : null}

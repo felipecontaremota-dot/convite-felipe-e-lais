@@ -40,7 +40,7 @@ export const guestContact = z.object({
   whatsapp: z.string().regex(/^(?:[0-9]{10,11})?$/),
 });
 export function listGuests(
-  data: Snapshot | null,
+  data: Pick<Snapshot, "guests" | "invitations" | "rsvps"> | null,
   search: string,
   filter: string,
 ): Guest[] {

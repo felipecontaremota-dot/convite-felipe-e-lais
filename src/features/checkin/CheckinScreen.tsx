@@ -1,3 +1,4 @@
+import { GuestExportButton } from "../guests/GuestExportButton";
 import * as Crypto from "expo-crypto";
 import {
   useFocusEffect,
@@ -130,6 +131,7 @@ export function CheckinScreen({ admin = false }: { admin?: boolean }) {
       section={section}
       title={role === "CEREMONIALIST" ? "Lista de convidados" : "Dia do evento"}
     >
+      {role === "CEREMONIALIST" ? <GuestExportButton /> : null}
       <Card>
         <Text style={styles.title}>{entries.length} check-ins</Text>
         <Text style={styles.text}>
