@@ -58,6 +58,8 @@ export function dueStatus(remaining: number, due: string, today = todaySP()) {
   if (due <= addDays(today, 5)) return "Vencimento próximo";
   return "Pendente";
 }
+export const paidPercent = (paid: number, total: number) =>
+  total > 0 ? Math.max(0, Math.min(100, (paid / total) * 100)) : 0;
 export function simpleLedger(data: SimpleData, today = todaySP()) {
   const vendors = data.vendors.filter((v) => !v.deleted_at);
   const payments = data.payments.filter(
@@ -97,6 +99,7 @@ export function simpleLedger(data: SimpleData, today = todaySP()) {
       ...v,
       paid,
       balance: v.total_cents - paid,
+      percent: paidPercent(paid, v.total_cents),
       dues: dues
         .filter((d) => d.vendor_id === v.id)
         .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id)),
@@ -111,7 +114,7 @@ export function simpleLedger(data: SimpleData, today = todaySP()) {
     total,
     paid,
     balance: total - paid,
-    percent: total ? (paid / total) * 100 : 0,
+    percent: paidPercent(paid, total),
     overdue: dues.filter((d) => d.status === "Vencido"),
     upcoming: dues.filter((d) => d.remaining > 0 && d.due_on >= today),
   };

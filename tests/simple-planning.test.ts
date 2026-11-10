@@ -184,3 +184,34 @@ it("preserves explicit plan order independently of the dashboard due-date order"
   expect(l.vendors[0]?.dues.map((d) => d.id)).toEqual(["first", "second"]);
   expect(l.upcoming.map((d) => d.id)).toEqual(["second", "first"]);
 });
+
+it.each([0, 25, 65, 100])(
+  "exposes the supplier-wide progress of %s%%",
+  (percent) => {
+    const data = {
+      ...emptySimple(),
+      vendors: [vendor("v", "Rezzet Films", 440000)],
+      dues: [due("a", "v", 220000), due("b", "v", 220000)],
+      payments: percent
+        ? [
+            payment("a", "v", "a", percent * 2200),
+            payment("b", "v", "b", percent * 2200),
+          ]
+        : [],
+    };
+    expect(simpleLedger(data).vendors[0]?.percent).toBe(percent);
+    expect(simpleLedger(data).percent).toBe(percent);
+  },
+);
+it("renders zero contracts safely and reports inconsistent overpayments instead of hiding them", () => {
+  const data = { ...emptySimple(), vendors: [vendor("v", "Zero", 0)] };
+  expect(simpleLedger(data).vendors[0]?.percent).toBe(0);
+  expect(simpleLedger(data).percent).toBe(0);
+  expect(() =>
+    simpleLedger({
+      ...data,
+      dues: [due("d", "v", 100)],
+      payments: [payment("p", "v", "d", 1)],
+    }),
+  ).toThrow("Pagamento superior ao contrato");
+});

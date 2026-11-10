@@ -17,6 +17,11 @@ import { theme } from "../../theme/tokens";
 import { feedbackColors } from "../../theme/feedback";
 import * as api from "../../repositories/api";
 import { cents, day, money, moneyInput, maskDate, todaySP } from "./domain";
+import {
+  PlanningCard,
+  PlanningCardStyles,
+  ProgressBadge,
+} from "./PlanningCard";
 import { SupplierEditor, isoDate } from "./SupplierEditor";
 import { demoSimple, demoSimpleAction } from "./demo";
 import {
@@ -255,6 +260,7 @@ function PlanningContent() {
   const disabled = busy || !app.online;
   return (
     <>
+      <PlanningCardStyles />
       <Text style={styles.text}>
         Fornecedores, vencimentos e pagamentos do nosso grande dia.
       </Text>
@@ -355,20 +361,31 @@ function PlanningContent() {
                 .includes(search.toLocaleLowerCase("pt-BR")),
             )
             .map((v) => (
-              <Card key={v.id}>
-                <Text style={styles.heading}>{v.name}</Text>
+              <PlanningCard
+                key={v.id}
+                kind="supplier"
+                label={`Abrir fornecedor ${v.name}`}
+                onPress={() => setDetail(v.id)}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 12,
+                  }}
+                >
+                  <Text style={[styles.heading, { flex: 1, minWidth: 0 }]}>
+                    {v.name}
+                  </Text>
+                  <ProgressBadge percent={v.percent} vendor={v.name} />
+                </View>
                 <Text style={styles.text}>
                   Valor contratado: {money(v.total_cents)}
                 </Text>
                 <Text style={styles.text}>
                   Pago: {money(v.paid)} · Saldo: {money(v.balance)}
                 </Text>
-                <Button
-                  title={`Abrir fornecedor ${v.name}`}
-                  secondary
-                  onPress={() => setDetail(v.id)}
-                />
-              </Card>
+              </PlanningCard>
             ))}
           {!l.vendors.length ? (
             <Empty text="Cadastre o primeiro fornecedor e defina seu plano financeiro." />
@@ -573,7 +590,8 @@ function Payments({
     [descending, setDescending] = useState(false),
     width = useWindowDimensions().width;
   const rows = paymentRows(data, sort, descending),
-    total = simpleLedger(data).paid;
+    ledger = simpleLedger(data),
+    total = ledger.paid;
   const headers: [PaySort, string][] = [
     ["vendor", "Fornecedor"],
     ["due", "Data de vencimento"],
@@ -603,7 +621,29 @@ function Payments({
       </View>
       {rows.length ? (
         rows.map((p) => (
-          <Card key={p.id}>
+          <PlanningCard
+            key={p.id}
+            kind="payment"
+            label={`Editar pagamento de ${p.vendor}`}
+            onPress={() => onEdit(p)}
+            disabled={disabled}
+            secondary={
+              <Button
+                title={`Cancelar pagamento de ${p.vendor}`}
+                secondary
+                disabled={disabled}
+                onPress={() => onDelete(p)}
+              />
+            }
+          >
+            <View style={{ alignItems: "flex-end" }}>
+              <ProgressBadge
+                percent={
+                  ledger.vendors.find((v) => v.id === p.vendor_id)!.percent
+                }
+                vendor={p.vendor}
+              />
+            </View>
             <View
               {...(Platform.OS === "web"
                 ? { dataSet: { paymentRow: p.id } }
@@ -625,21 +665,7 @@ function Payments({
                 </View>
               ))}
             </View>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <Button
-                title={`Editar pagamento de ${p.vendor}`}
-                secondary
-                disabled={disabled}
-                onPress={() => onEdit(p)}
-              />
-              <Button
-                title={`Cancelar pagamento de ${p.vendor}`}
-                secondary
-                disabled={disabled}
-                onPress={() => onDelete(p)}
-              />
-            </View>
-          </Card>
+          </PlanningCard>
         ))
       ) : (
         <Empty text="Nenhum pagamento realizado." />
