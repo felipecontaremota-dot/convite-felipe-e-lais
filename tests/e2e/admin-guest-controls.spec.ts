@@ -599,8 +599,9 @@ for (const [role, excerpt, width] of [
       await guest
         .getByRole("button", { name: "Abrir convite", exact: true })
         .click();
-      await expect(guest).toHaveURL(/\/inicio$/);
-      await guest.goto("/padrinhos?surpresa=1");
+      // A newly promoted guest is automatically sent to the surprise by GuestHome.
+      // Assert the final destination instead of racing the intermediate /inicio.
+      await expect(guest).toHaveURL(/\/padrinhos\?surpresa=1$/);
       await guest
         .getByRole("button", { name: "Abrir convite especial", exact: true })
         .click();
