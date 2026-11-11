@@ -7,6 +7,8 @@ import {
   type ExportFilter,
 } from "../src/features/guests/guestExportFilters";
 import { guestPdf } from "../src/features/guests/guestPdf";
+import { guestPdfRows } from "../src/features/guests/guestPdfData";
+import { readPdf, pdfMonogram } from "./support/pdf";
 import { guestWorkbook } from "../src/features/guests/guestWorkbook";
 import { readSheet } from "read-excel-file/node";
 const data = {
@@ -104,18 +106,26 @@ describe("export filters", () => {
       filteredGuestExportRows({ ...data, role: "GUEST" }, ["Todos"]),
     ).toThrow();
   });
-  it("both formats use identical filtered rows and retain existing columns", async () => {
+  it("Excel retains its existing columns while PDF uses the confirmed safe projection", async () => {
     const rows = filteredGuestExportRows(data, ["Confirmados"]);
     const date = new Date("2026-10-25T12:00:00Z");
     const excel = await guestWorkbook(rows, date);
     const sheet = await readSheet(Buffer.from(await excel.arrayBuffer()));
     expect(sheet[5][1]).toBe("Ágata");
     expect(sheet[5]).toHaveLength(10);
-    const pdf = guestPdf(rows, date);
-    const text = Buffer.from(await pdf.arrayBuffer()).toString("latin1");
+    const pdf = guestPdf(
+      guestPdfRows(data, ["Confirmados"]),
+      date,
+      pdfMonogram,
+    );
+    const text = (await readPdf(pdf)).map((p) => p.text).join(" ");
     expect(text).toContain("Ágata");
     expect(text).not.toContain("Bruno");
-    expect(text.startsWith("%PDF-")).toBe(true);
-    expect(() => guestPdf([], date)).toThrow();
+    expect(
+      Buffer.from(await pdf.arrayBuffer())
+        .subarray(0, 5)
+        .toString(),
+    ).toBe("%PDF-");
+    expect(guestPdf([], date, pdfMonogram).size).toBeGreaterThan(1000);
   });
 });

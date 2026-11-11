@@ -1,3 +1,4 @@
+import { readPdf } from "../support/pdf";
 import { test, expect, type Page } from "@playwright/test";
 import { readSheet } from "read-excel-file/node";
 import { guestExportHeaders } from "../../src/features/guests/guestExport";
@@ -14,6 +15,7 @@ async function open(page: Page, extra = 0) {
         ...base,
         id: "export-a",
         name: "Ágata Silva",
+        admin_notes: "Chegará acompanhada. Orientação integral dos noivos.",
         group_label: "Convidado(a) da noiva",
         is_child: true,
         invitation_sent: true,
@@ -270,7 +272,7 @@ test("combinations filter both files, all is exclusive, and empty results are re
   const { readFile } = await import("node:fs/promises");
   const bytes = await readFile((await file.path())!);
   expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
-  const content = bytes.toString("latin1");
+  const content = (await readPdf(bytes)).map((p) => p.text).join(" ");
   expect(content).toContain("Ágata Silva");
   expect(content).not.toContain("Bruno Alencar");
 });
@@ -315,3 +317,87 @@ for (const role of ["convidado"])
     await page.goto("/convidados");
     await expect(trigger(page)).toHaveCount(0);
   });
+
+test("PDF lists only confirmed guests, canonical notes and no administrative fields", async ({
+  page,
+}) => {
+  await open(page);
+  await choose(page);
+  const pending = page.waitForEvent("download");
+  await menu(page)
+    .getByRole("button", { name: "PDF (.pdf)", exact: true })
+    .click();
+  const file = await pending;
+  const { readFile } = await import("node:fs/promises");
+  const pages = await readPdf(await readFile((await file.path())!));
+  const text = pages.map((p) => p.text).join(" ");
+  expect(text).toContain("Ágata Silva");
+  expect(text).not.toMatch(
+    /Bruno Alencar|Carla Silva|agata@example|WhatsApp|E-mail|Senha/,
+  );
+  expect(text).toContain(
+    "1 convidados confirmados | 1 Padrinhos | 1 Observações",
+  );
+  expect(text).toContain(
+    "OBSERVAÇÃO: Chegará acompanhada. Orientação integral dos noivos.",
+  );
+});
+test("PDF with no confirmed guests downloads an explicit empty document", async ({
+  page,
+}) => {
+  await open(page);
+  await choose(page, ["Não irão"]);
+  const pending = page.waitForEvent("download");
+  await menu(page)
+    .getByRole("button", { name: "PDF (.pdf)", exact: true })
+    .click();
+  const file = await pending;
+  const { readFile } = await import("node:fs/promises");
+  const text = (await readPdf(await readFile((await file.path())!)))
+    .map((p) => p.text)
+    .join(" ");
+  expect(text).toContain(
+    "0 convidados confirmados | 0 Padrinhos | 0 Observações",
+  );
+  expect(text).toContain("Nenhum convidado confirmado até o momento.");
+  expect(text).not.toContain("Bruno Alencar");
+});
+
+test("PDF loads the bundled monogram, recovers from asset failure and prevents duplicate downloads", async ({
+  page,
+}) => {
+  await open(page);
+  await choose(page);
+  await page.route(/Monograma.*\.png/, (route) => route.abort());
+  const pdf = menu(page).getByRole("button", {
+    name: "PDF (.pdf)",
+    exact: true,
+  });
+  await pdf.click();
+  await expect(menu(page).getByRole("alert")).toHaveText(
+    "Não foi possível gerar o PDF. Tente novamente.",
+  );
+  await page.unroute(/Monograma.*\.png/);
+  const request = page.waitForResponse((r) => /Monograma.*\.png/.test(r.url()));
+  const downloads: string[] = [];
+  page.on("download", (d) => downloads.push(d.suggestedFilename()));
+  const pending = page.waitForEvent("download");
+  await pdf.evaluate((node) => {
+    (node as HTMLButtonElement).click();
+    (node as HTMLButtonElement).click();
+  });
+  const response = await request;
+  expect(response.ok()).toBe(true);
+  expect(new URL(response.url()).origin).toBe(new URL(page.url()).origin);
+  const file = await pending;
+  const { readFile } = await import("node:fs/promises");
+  const { readPdfImages } = await import("../support/pdf");
+  const images = await readPdfImages(
+    new Blob([await readFile((await file.path())!)]),
+  );
+  expect(images).toHaveLength(1);
+  expect(images[0]!.alphaHash).toBe(
+    "735afd72460b5ac862c7a0ab4ad95b329b47203ae62ac939ba216d16c385643e",
+  );
+  expect(downloads).toHaveLength(1);
+});

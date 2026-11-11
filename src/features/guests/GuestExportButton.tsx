@@ -26,6 +26,7 @@ import {
   toggleExportFilter,
   type ExportFilter,
 } from "./guestExportFilters";
+import { guestPdfRows } from "./guestPdfData";
 
 const paths = {
   download: "M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5",
@@ -96,6 +97,25 @@ function ScopedGuestExport() {
         ? exportData.data
         : null;
   const rows = source ? filteredGuestExportRows(source, selected) : [];
+  // Notes already authorized in the operational snapshot; the restricted export
+  // RPC deliberately does not return them or contact/access credentials.
+  const snapshotNotes = new Map(
+    app.data?.guests
+      .filter((g) => g.event_id === eventId)
+      .map((g) => [g.id, g.admin_notes]),
+  );
+  const pdfRows = source
+    ? guestPdfRows(
+        {
+          ...source,
+          guests: source.guests.map((g) => ({
+            ...g,
+            admin_notes: snapshotNotes.get(g.id),
+          })),
+        },
+        selected,
+      )
+    : [];
   const loadExport = async () => {
     const scope = app.scope;
     const attempt = ++epoch.current;
@@ -134,13 +154,17 @@ function ScopedGuestExport() {
     const scope = app.scope;
     const role = app.data!.role;
     try {
-      if (!rows.length)
+      if (!source || (format === "xlsx" && !rows.length))
         throw Error("Nenhum convidado encontrado para exportação.");
       const date = new Date();
       const blob =
         format === "xlsx"
           ? await (await import("./guestWorkbook")).guestWorkbook(rows, date)
-          : (await import("./guestPdf")).guestPdf(rows, date);
+          : (await import("./guestPdf")).guestPdf(
+              pdfRows,
+              date,
+              await (await import("./guestPdfMonogram")).loadGuestPdfMonogram(),
+            );
       const { downloadGuestWorkbook } = await import("./guestWorkbook");
       if (
         !active.current ||
@@ -160,7 +184,7 @@ function ScopedGuestExport() {
     } catch {
       if (active.current)
         setError(
-          rows.length
+          format !== "xlsx" || rows.length
             ? `Não foi possível gerar o ${format === "xlsx" ? "Excel" : "PDF"}. Tente novamente.`
             : "Nenhum convidado encontrado para exportação.",
         );
@@ -276,9 +300,17 @@ function ScopedGuestExport() {
                 {rows.length} convidados encontrados
               </Text>
               {selected.length > 0 && !rows.length ? (
-                <Text role="status" style={styles.text}>
-                  Nenhum convidado corresponde aos filtros selecionados.
-                </Text>
+                <>
+                  <Text role="status" style={styles.text}>
+                    Nenhum convidado corresponde aos filtros selecionados.
+                  </Text>
+                  <Button
+                    title={busy ? "Gerando PDF…" : "PDF (.pdf)"}
+                    secondary
+                    disabled={busy || loading || !source}
+                    onPress={() => generate("pdf")}
+                  />
+                </>
               ) : null}
               <Button title="Cancelar" secondary onPress={close} />
               <Button
@@ -312,11 +344,15 @@ function ScopedGuestExport() {
                   <Button
                     title={busy ? "Gerando PDF…" : "PDF (.pdf)"}
                     onPress={() => generate("pdf")}
-                    disabled={busy || !rows.length}
+                    disabled={busy || !source}
                     secondary
                   />
                 </View>
               </View>
+              <Text style={styles.small}>
+                O PDF inclui somente os {pdfRows.length} convidados confirmados
+                destes filtros, sem contatos, links ou senhas.
+              </Text>
               <Button
                 title="Voltar aos filtros"
                 secondary

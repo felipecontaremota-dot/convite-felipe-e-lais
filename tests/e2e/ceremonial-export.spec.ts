@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { readPdf } from "../support/pdf";
 import { readSheet } from "read-excel-file/node";
 import { TestPostgres } from "../support/postgres";
 import { ticketFixture } from "../support/ticket-fixture";
@@ -153,7 +154,16 @@ for (const width of [320, 390, 768, 1280])
     const pdf = readFileSync((await file.path())!);
     expect(pdf.length).toBeGreaterThan(1000);
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
-    expect(pdf.toString()).not.toContain("restricted@example.test");
+    const pages = await readPdf(pdf);
+    const text = pages.map((p) => p.text).join(" ");
+    expect(text).toContain("Ágata Operacional");
+    expect(text).toContain("OBSERVAÇÃO: Orientação atualizada pelos noivos");
+    expect(text).toContain(
+      "1 convidados confirmados | 0 Padrinhos | 1 Observações",
+    );
+    expect(text).not.toMatch(
+      /restricted@example.test|62999999999|WhatsApp|E-mail|Senha/,
+    );
     await trigger.scrollIntoViewIfNeeded();
     await trigger.click();
     await page
