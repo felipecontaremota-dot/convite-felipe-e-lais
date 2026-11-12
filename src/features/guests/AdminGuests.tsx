@@ -146,7 +146,7 @@ function GuestForm({
         ]}
       />
       <PromotionControl guest={guest} gender={greetingForm} />
-      <Toggle label="Criança (até 10 anos)" value={child} onChange={setChild} />
+      <Toggle label="Criança (até 7 anos)" value={child} onChange={setChild} />
       <Select
         label="Grupo / vínculo"
         value={group}
@@ -489,7 +489,7 @@ export function GuestsScreen() {
       {current && invitation && form === null ? (
         <AdminModal title={current.name} onClose={closeDetail}>
           <Text style={styles.text}>
-            {current.is_child ? "Criança (até 10 anos)" : "Adulto"} ·{" "}
+            {current.is_child ? "Criança (até 7 anos)" : "Adulto"} ·{" "}
             {current.group_label || "Vínculo não informado"}
           </Text>
           <Text style={styles.text}>

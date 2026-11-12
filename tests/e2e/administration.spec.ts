@@ -101,7 +101,7 @@ test("standalone creation, child/group, contact mask, email validation, detail a
   ).toHaveText(["Selecione", "Masculino", "Feminino"]);
   await page.getByLabel("Gênero", { exact: true }).selectOption("MASCULINE");
   await page
-    .getByRole("checkbox", { name: "Criança (até 10 anos)", exact: true })
+    .getByRole("checkbox", { name: "Criança (até 7 anos)", exact: true })
     .click();
   await page
     .getByLabel("Grupo / vínculo", { exact: true })
@@ -154,6 +154,7 @@ test("standalone creation, child/group, contact mask, email validation, detail a
     );
   expect(unit.kind).toBe("INDIVIDUAL");
   expect(guest.greeting_form).toBe("MASCULINE");
+  expect(guest.is_child).toBe(true);
   expect(unit.pin).toBe("0047");
   expect(unit.sharing_code).toMatch(/^[a-f0-9]{48}$/);
   expect(
@@ -179,12 +180,19 @@ test("standalone creation, child/group, contact mask, email validation, detail a
   await page
     .getByRole("button", { name: "Editar convidado", exact: true })
     .click();
+  await expect(
+    page.getByRole("checkbox", { name: "Criança (até 7 anos)", exact: true }),
+  ).toBeChecked();
   await page.getByLabel("Nome", { exact: true }).fill("José Editado");
   await expect(page.getByLabel("Gênero", { exact: true })).toHaveValue(
     "MASCULINE",
   );
   await page.getByLabel("Gênero", { exact: true }).selectOption("FEMININE");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  expect(
+    (await database(page)).guests.find((g: { id: string }) => g.id === guest.id)
+      .is_child,
+  ).toBe(true);
   expect(
     (await database(page)).guests.find((g: { id: string }) => g.id === guest.id)
       .greeting_form,
@@ -569,4 +577,66 @@ test("individual deletion is confirmed separately and a member pencil opens its 
       (g: { name: string }) => g.name === "Convidado Um",
     ).group_label,
   ).toBe("Demo");
+});
+
+test("new seven-year guidance preserves previously classified children on load and edit", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await admin(page);
+  // Historical classifications in a disposable demo fixture only. The actual
+  // model stores is_child, not chronological ages or dates of birth.
+  await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("demo-db")!);
+    db.snapshot.guests.forEach(
+      (g: { name: string; is_child: boolean }, i: number) => {
+        g.name = `Criança legada de ${8 + i} anos`;
+        g.is_child = true;
+      },
+    );
+    localStorage.setItem("demo-db", JSON.stringify(db));
+  });
+  const before = await database(page);
+  await page.reload();
+  await nav(page, "Convidados");
+  await expect(page.getByText("Criança", { exact: true })).toHaveCount(3);
+  await page
+    .getByRole("button", { name: "Adicionar convidado", exact: true })
+    .click();
+  await expect(
+    page.getByRole("checkbox", { name: "Criança (até 7 anos)", exact: true }),
+  ).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", {
+      name: "Abrir ficha de Criança legada de 8 anos",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByText(/Criança \(até 7 anos\)/)).toBeVisible();
+  expect(await database(page)).toEqual(before);
+  await page
+    .getByRole("button", { name: "Editar convidado", exact: true })
+    .click();
+  await expect(
+    page.getByRole("checkbox", { name: "Criança (até 7 anos)", exact: true }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Editar convidado", exact: true }),
+  ).toHaveCount(0);
+  const after = await database(page);
+  expect(after.guests.map((g: { is_child: boolean }) => g.is_child)).toEqual([
+    true,
+    true,
+    true,
+  ]);
+  expect(after.rsvps).toEqual(before.rsvps);
+  expect(after.invitations).toEqual(
+    before.invitations.map((i: { id: string; version: number }) => ({
+      ...i,
+      version: i.version + (i.id === before.guests[0].invitation_id ? 1 : 0),
+    })),
+  );
+  expect(after.guests.slice(1)).toEqual(before.guests.slice(1));
 });
