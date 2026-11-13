@@ -52,14 +52,18 @@ export function listGuests(
           .toLocaleLowerCase("pt-BR")
           .includes(query) &&
         (filter === "ALL" ||
-          g.group_label === filter ||
-          (filter === "SENT"
-            ? !!g.invitation_sent
-            : filter === "UNSENT"
-              ? !g.invitation_sent
-              : adminRsvpStatus(
-                  data?.rsvps.find((r) => r.guest_id === g.id),
-                ) === filter)),
+          (filter === "PADRINHO" || filter === "MADRINHA"
+            ? g.party_role === filter
+            : filter === "WEDDING_PARTY"
+              ? g.party_role === "PADRINHO" || g.party_role === "MADRINHA"
+              : g.group_label === filter ||
+                (filter === "SENT"
+                  ? !!g.invitation_sent
+                  : filter === "UNSENT"
+                    ? !g.invitation_sent
+                    : adminRsvpStatus(
+                        data?.rsvps.find((r) => r.guest_id === g.id),
+                      ) === filter))),
     )
     .sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),

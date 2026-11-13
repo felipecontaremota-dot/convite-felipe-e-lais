@@ -640,3 +640,85 @@ test("new seven-year guidance preserves previously classified children on load a
   );
   expect(after.guests.slice(1)).toEqual(before.guests.slice(1));
 });
+
+test("party filters use active promotions, ordered options and the existing name/family search", async ({
+  page,
+}) => {
+  await admin(page);
+  await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("demo-db")!);
+    const [father, mother, common] = db.snapshot.guests;
+    father.name = "João Oliveira";
+    father.greeting_form = "FEMININE";
+    mother.name = "Maria Oliveira";
+    mother.greeting_form = "MASCULINE";
+    common.name = "João Comum";
+    db.weddingParty = [
+      { guest_id: father.id, active: true, role: "PADRINHO" },
+      { guest_id: mother.id, active: true, role: "MADRINHA" },
+      { guest_id: common.id, active: false, role: "PADRINHO" },
+    ];
+    localStorage.setItem("demo-db", JSON.stringify(db));
+  });
+  const before = await database(page);
+  await page.reload();
+  await nav(page, "Convidados");
+  const filter = page.getByLabel("Filtrar convidados", { exact: true });
+  await expect(filter.locator("option")).toHaveText([
+    "Todos",
+    "Familiar da noiva",
+    "Familiar do noivo",
+    "Convidado(a) da noiva",
+    "Convidado(a) do noivo",
+    "Padrinhos",
+    "Madrinhas",
+    "Padrinhos e madrinhas",
+    "Confirmados",
+    "Não irão",
+    "Pendentes",
+    "Talvez",
+    "Convites enviados",
+    "Convites não enviados",
+  ]);
+  const rows = page.getByRole("button", { name: /^Abrir ficha de / });
+  for (const [value, names] of [
+    ["PADRINHO", ["João Oliveira"]],
+    ["MADRINHA", ["Maria Oliveira"]],
+    ["WEDDING_PARTY", ["João Oliveira", "Maria Oliveira"]],
+  ] as [string, string[]][]) {
+    await filter.selectOption(value);
+    await expect(rows).toHaveText(names);
+    await page
+      .getByLabel("Buscar pessoa ou família", { exact: true })
+      .fill("Família Demo");
+    await expect(rows).toHaveText(names);
+    await page
+      .getByLabel("Buscar pessoa ou família", { exact: true })
+      .fill(names[0]!.split(" ")[0]!);
+    await expect(rows).toHaveText([names[0]!]);
+    await page.getByLabel("Buscar pessoa ou família", { exact: true }).fill("");
+  }
+  await filter.selectOption("ALL");
+  await expect(rows).toHaveText([
+    "João Comum",
+    "João Oliveira",
+    "Maria Oliveira",
+  ]);
+  await page
+    .getByRole("button", { name: "Adicionar convidado", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Grupo / vínculo", { exact: true }).locator("option"),
+  ).toHaveText([
+    "Não se aplica",
+    "Familiar da noiva",
+    "Familiar do noivo",
+    "Convidado(a) da noiva",
+    "Convidado(a) do noivo",
+  ]);
+  await page.keyboard.press("Escape");
+  expect(await database(page)).toEqual(before);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await filter.selectOption("MADRINHA");
+  await expect(rows).toHaveText(["Maria Oliveira"]);
+});

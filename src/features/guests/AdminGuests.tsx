@@ -293,6 +293,9 @@ export function GuestsScreen() {
         options={[
           { value: "ALL", label: "Todos" },
           ...GROUPS.map((value) => ({ value, label: value })),
+          { value: "PADRINHO", label: "Padrinhos" },
+          { value: "MADRINHA", label: "Madrinhas" },
+          { value: "WEDDING_PARTY", label: "Padrinhos e madrinhas" },
           { value: "CONFIRMED", label: "Confirmados" },
           { value: "DECLINED", label: "Não irão" },
           { value: "PENDING", label: "Pendentes" },
