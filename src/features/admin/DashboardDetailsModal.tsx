@@ -2,12 +2,14 @@ import { Tag } from "../../components/adminUi";
 import { GuestInvitationActions } from "../guests/GuestInvitationActions";
 import type { useInvitationDelivery } from "../guests/useInvitationDelivery";
 import { useApp } from "../../lib/AppProvider";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Platform, Text, View } from "react-native";
 import { AdminModal } from "../../components/AdminModal";
-import { styles, Empty } from "../../components/ui";
+import { styles, Empty, Field } from "../../components/ui";
+import { GuestRsvpControl } from "../guests/GuestAdminControls";
 import {
   dashboardCategories,
+  searchDashboardGuests,
   type DashboardCategory,
   type dashboardDetails,
 } from "./dashboard";
@@ -25,6 +27,7 @@ export function DashboardDetailsModal({
   onClose: () => void;
   returnFocus: HTMLElement | null;
 }) {
+  const [search, setSearch] = useState("");
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const nodes = [document.documentElement, document.body];
@@ -51,6 +54,8 @@ export function DashboardDetailsModal({
     : 0;
   const config = dashboardCategories[category],
     guests = details.lists[category];
+  const editable = category !== "unsent" && category !== "children";
+  const visible = editable ? searchDashboardGuests(guests, search) : guests;
   return (
     <AdminModal
       title={`${config.title} — ${guests.length}`}
@@ -58,7 +63,15 @@ export function DashboardDetailsModal({
       animationType="none"
       onClose={onClose}
       captureKeyboard
+      borderlessClose
     >
+      {editable ? (
+        <Field
+          label="Buscar convidado por nome"
+          value={search}
+          onChangeText={setSearch}
+        />
+      ) : null}
       {isFinal ? (
         <Text style={styles.text}>
           Convite enviado e sem recusa de presença.
@@ -73,8 +86,8 @@ export function DashboardDetailsModal({
           todos os registros elegíveis.
         </Text>
       ) : null}
-      {guests.length ? (
-        guests.map((guest) => {
+      {visible.length ? (
+        visible.map((guest) => {
           const invitation = details.invitations.get(guest.invitation_id);
           return (
             <View
@@ -96,11 +109,18 @@ export function DashboardDetailsModal({
               <Text style={styles.text}>
                 Presença: {details.status.get(guest.id)}
               </Text>
+              {editable ? <GuestRsvpControl guest={guest} /> : null}
             </View>
           );
         })
       ) : (
-        <Empty text={config.empty} />
+        <Empty
+          text={
+            guests.length && search.trim()
+              ? "Nenhum convidado encontrado nesta lista."
+              : config.empty
+          }
+        />
       )}
     </AdminModal>
   );

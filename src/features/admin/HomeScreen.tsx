@@ -18,6 +18,7 @@ export function AdminHome() {
   const [selected, setSelected] = useState<DashboardCategory | null>(null);
   const [trigger, setTrigger] = useState<HTMLElement | null>(null);
   const categories: Record<string, DashboardCategory> = {
+    Crianças: "children",
     Convidados: "sent",
     "Convidados da noiva": "bride",
     "Convidados do noivo": "groom",
@@ -34,6 +35,7 @@ export function AdminHome() {
   };
   const counts: [string, number | undefined][] = [
     ["Na lista", details.counts.total],
+    ["Crianças", details.counts.children],
     ["Convidados", details.counts.sent],
     ["Convidados da noiva", details.counts.bride],
     ["Convidados do noivo", details.counts.groom],
@@ -146,6 +148,7 @@ export function AdminHome() {
       </View>
       {selected ? (
         <DashboardDetailsModal
+          key={selected}
           delivery={delivery}
           category={selected}
           details={details}

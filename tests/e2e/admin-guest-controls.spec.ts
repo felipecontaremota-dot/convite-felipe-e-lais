@@ -646,3 +646,96 @@ for (const [role, excerpt, width] of [
     expect(cleared.couples_note).toBe(note);
     expect(cleared.cycle_id).toBe(saved.cycle_id);
   });
+
+test("dashboard RSVP uses the existing authenticated action and updates counts and guest list", async ({
+  page,
+}) => {
+  const f = family("painel RSVP"),
+    s = snapshot(),
+    record = s.rsvps.find(
+      (r: { guest_id: string }) => r.guest_id === f.first.id,
+    );
+  action("GUEST_RSVP_SET", {
+    id: f.first.id,
+    status: "CONFIRMED",
+    expected_status: record.status,
+    expected_responded_at: record.responded_at,
+  });
+  const { dashboardDetails } =
+    await import("../../src/features/admin/dashboard");
+  const initial = dashboardDetails(snapshot());
+  const calls = await backend(page);
+  await login(page);
+  await page
+    .getByRole("button", {
+      name: `Confirmados: ${initial.counts.confirmed}`,
+      exact: true,
+    })
+    .click();
+  const dialog = page.locator("[data-admin-modal]");
+  await dialog
+    .getByLabel("Buscar convidado por nome", { exact: true })
+    .fill(f.name);
+  const control = dialog.getByLabel(
+    `Alterar confirmação de presença de ${f.name}`,
+    { exact: true },
+  );
+  await expect(control).toHaveValue("CONFIRMED");
+  await control.selectOption("DECLINED");
+  await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(0);
+  expect(calls.filter((c) => c.action === "GUEST_RSVP_SET")).toEqual([
+    {
+      action: "GUEST_RSVP_SET",
+      payload: {
+        id: f.first.id,
+        status: "DECLINED",
+        expected_status: "CONFIRMED",
+        expected_responded_at: expect.any(String),
+      },
+    },
+  ]);
+  const persisted = snapshot().rsvps.find(
+    (r: { guest_id: string }) => r.guest_id === f.first.id,
+  );
+  expect(persisted.status).toBe("DECLINED");
+  expect(persisted.dietary).toBe("Sem lactose");
+  expect(persisted.note).toBe("Nota preservada");
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", {
+      name: `Confirmados: ${initial.counts.confirmed - 1}`,
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: `Não irão: ${initial.counts.declined + 1}`,
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: `Não irão: ${initial.counts.declined + 1}`,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByLabel("Buscar convidado por nome", { exact: true })
+    .fill(f.name);
+  await expect(
+    page.getByLabel(`Alterar confirmação de presença de ${f.name}`, {
+      exact: true,
+    }),
+  ).toHaveValue("DECLINED");
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page.getByRole("link", { name: "Convidados", exact: true }).click();
+  await page
+    .getByLabel("Buscar pessoa ou família", { exact: true })
+    .fill(f.name);
+  await expect(
+    page.getByLabel(`Alterar confirmação de presença de ${f.name}`, {
+      exact: true,
+    }),
+  ).toHaveValue("DECLINED");
+});

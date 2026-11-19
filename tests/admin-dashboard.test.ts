@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { dashboardDetails } from "../src/features/admin/dashboard";
+import {
+  dashboardDetails,
+  searchDashboardGuests,
+} from "../src/features/admin/dashboard";
 import type { Snapshot } from "../src/types/domain";
 function fixture() {
   return {
@@ -179,5 +182,75 @@ describe("origin cards and sent-only pending answers", () => {
     expect(JSON.stringify(s)).toBe(before);
     s.guests[3]!.invitation_sent = true;
     expect(dashboardDetails(s).counts.unanswered).toBe(2);
+  });
+});
+
+describe("children and visual dashboard searches", () => {
+  it("counts existing child flags independently of age, sending and RSVP without rewriting records", () => {
+    const s = fixture();
+    s.guests.forEach((g, i) => {
+      g.is_child = i < 3;
+      g.name = `Registro legado ${8 + i} anos`;
+    });
+    const before = JSON.stringify(s);
+    const d = dashboardDetails(s);
+    expect(d.counts.children).toBe(3);
+    expect(d.lists.children.map((g) => g.id)).toEqual(["c", "a", "b"]);
+    expect(JSON.stringify(s)).toBe(before);
+  });
+  it("documents the existing confirmed total: 50 adults plus 8 children equals 58", () => {
+    const s = fixture();
+    s.guests = Array.from({ length: 58 }, (_, i) => ({
+      ...s.guests[0]!,
+      id: `g-${i}`,
+      name: `Pessoa ${i}`,
+      is_child: i >= 50,
+    }));
+    s.rsvps = s.guests.map((g) => ({
+      ...s.rsvps[0]!,
+      guest_id: g.id,
+      status: "CONFIRMED",
+    }));
+    const d = dashboardDetails(s);
+    expect(d.counts.confirmed).toBe(58);
+    expect(d.counts.children).toBe(8);
+  });
+  it("filters only names inside each original card universe, with accents/case, without changing indicators", () => {
+    const s = fixture();
+    s.guests.forEach((g, i) => {
+      g.name = [
+        "MARÍA Confirmada",
+        "João Ausente",
+        "Laís Indecisa",
+        "Cláudia Pendente",
+        "José Pendente",
+      ][i]!;
+      g.group_label = i % 2 ? "Convidado(a) do noivo" : "Convidado(a) da noiva";
+    });
+    const d = dashboardDetails(s),
+      before = JSON.stringify(d.counts);
+    for (const category of [
+      "sent",
+      "bride",
+      "groom",
+      "confirmed",
+      "declined",
+      "unanswered",
+      "deciding",
+    ] as const) {
+      const list = d.lists[category];
+      expect(searchDashboardGuests(list, "")).toEqual(list);
+      if (list.length) {
+        const query = list[0]!.name
+          .split(" ")[0]!
+          .normalize("NFD")
+          .replace(/\p{M}/gu, "")
+          .toLowerCase();
+        expect(searchDashboardGuests(list, ` ${query} `)).toEqual([list[0]]);
+      }
+      expect(searchDashboardGuests(list, "Família")).toEqual([]);
+    }
+    expect(searchDashboardGuests(d.lists.declined, "maria")).toEqual([]);
+    expect(JSON.stringify(d.counts)).toBe(before);
   });
 });

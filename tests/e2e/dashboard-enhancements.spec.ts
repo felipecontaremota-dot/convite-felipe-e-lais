@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { dashboardTooltips } from "../../src/features/admin/dashboardTooltips";
 for (const width of [320, 1280]) {
-  test(`all fourteen metric explanations and independent help targets at ${width}px`, async ({
+  test(`all fifteen metric explanations and independent help targets at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -9,7 +9,7 @@ for (const width of [320, 1280]) {
     await page
       .getByRole("button", { name: "Demo noivos", exact: true })
       .click();
-    await expect(page.locator("[data-metric]")).toHaveCount(14);
+    await expect(page.locator("[data-metric]")).toHaveCount(15);
     const contained = await page.locator("[data-metric]").evaluateAll((nodes) =>
       nodes.every((node) => {
         const outer = node.getBoundingClientRect(),

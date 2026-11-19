@@ -1,5 +1,7 @@
 // Descriptions match the snapshot predicates in HomeScreen/dashboard.
 export const dashboardTooltips: Record<string, string> = {
+  Crianças:
+    "Total de convidados atualmente marcados como criança, incluindo classificações anteriores. Não há recálculo de idade.",
   "Na lista": "Total de pessoas na lista geral de convidados.",
   Convidados:
     "Total de pessoas que estão na lista final de convidados. Não contam os que ‘Não irão’.",

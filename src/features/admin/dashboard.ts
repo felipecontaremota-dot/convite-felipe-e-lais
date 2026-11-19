@@ -2,6 +2,7 @@ import type { Guest, Snapshot } from "../../types/domain";
 import { effectiveResponse } from "../rsvp/presenceContent";
 
 export type DashboardCategory =
+  | "children"
   | "confirmed"
   | "declined"
   | "unanswered"
@@ -14,6 +15,11 @@ export const dashboardCategories: Record<
   DashboardCategory,
   { label: string; title: string; empty: string }
 > = {
+  children: {
+    label: "Crianças",
+    title: "Crianças",
+    empty: "Nenhum convidado está classificado como criança.",
+  },
   bride: {
     label: "Convidados da noiva",
     title: "Convidados da noiva",
@@ -59,6 +65,7 @@ export const dashboardCategories: Record<
 };
 export function dashboardDetails(snapshot: Snapshot | null | undefined) {
   const lists: Record<DashboardCategory, Guest[]> = {
+    children: [],
     bride: [],
     groom: [],
     confirmed: [],
@@ -73,6 +80,7 @@ export function dashboardDetails(snapshot: Snapshot | null | undefined) {
   const invitations = new Map(snapshot?.invitations.map((i) => [i.id, i]));
   const status = new Map<string, string>();
   for (const guest of guests) {
+    if (guest.is_child) lists.children.push(guest);
     const response = effectiveResponse(guest.id, records.get(guest.id), []);
     const category =
       response.status === "CONFIRMED"
@@ -124,6 +132,7 @@ export function dashboardDetails(snapshot: Snapshot | null | undefined) {
   // Keep the requested arithmetic, including double deductions. Never truncate
   // the eligible list or clamp the indicator to conceal an overlap.
   const counts = {
+    children: lists.children.length,
     ...originCounts,
     confirmed: lists.confirmed.length,
     declined: lists.declined.length,
@@ -148,4 +157,16 @@ export function dashboardDetails(snapshot: Snapshot | null | undefined) {
         !Object.values(originLabels).some((label) => label === g.group_label),
     ).length,
   };
+}
+
+// Visual search stays inside the already computed card universe; no RSVP or
+// indicator is recalculated from the search result.
+export function searchDashboardGuests(
+  guests: Guest[],
+  search: string,
+): Guest[] {
+  const normalize = (value: string) =>
+    value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pt-BR");
+  const query = normalize(search.trim());
+  return guests.filter((guest) => normalize(guest.name).includes(query));
 }

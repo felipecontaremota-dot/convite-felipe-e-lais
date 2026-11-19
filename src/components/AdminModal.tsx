@@ -57,6 +57,7 @@ export function AdminModal({
   registration = false,
   animationType,
   captureKeyboard = false,
+  borderlessClose = false,
 }: {
   title: string;
   children: React.ReactNode;
@@ -73,6 +74,7 @@ export function AdminModal({
   contentWidth?: number;
   registration?: boolean;
   captureKeyboard?: boolean;
+  borderlessClose?: boolean;
   animationType?: "none" | "fade" | "slide";
 }) {
   const { width } = useWindowDimensions();
@@ -305,6 +307,7 @@ export function AdminModal({
                 onPress={onClose}
                 style={[
                   styles.nav,
+                  borderlessClose && { borderWidth: 0 },
                   (premium || centerTitle) && {
                     position: "absolute",
                     right: 0,

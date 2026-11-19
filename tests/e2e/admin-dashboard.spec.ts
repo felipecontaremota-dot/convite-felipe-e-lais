@@ -102,7 +102,9 @@ for (const width of [320, 1280]) {
       expect(await page.evaluate(() => document.body.style.overflow)).toBe(
         "hidden",
       );
-      await dialog.getByRole("button").last().focus();
+      const selectors = dialog.getByRole("combobox");
+      if (await selectors.count()) await selectors.last().focus();
+      else await dialog.getByRole("button").last().focus();
       await page.keyboard.press("Tab");
       await expect(
         dialog.getByRole("button", { name: "Fechar modal", exact: true }),
@@ -425,6 +427,168 @@ for (const width of [320, 1280])
     ).toBe(true);
     await page.screenshot({
       path: `/tmp/rsvp-tag-order-${width}.png`,
+      animations: "disabled",
+    });
+  });
+
+for (const width of [320, 390, 768, 1280])
+  test(`children, scoped searches and dashboard RSVP use existing controls at ${width}px`, async ({
+    page,
+  }) => {
+    await setup(page, width);
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      db.snapshot.guests[0].is_child = true;
+      db.snapshot.guests[2].is_child = true;
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    });
+    await page.reload();
+    const before = await page.evaluate(() => localStorage.getItem("demo-db"));
+    await page
+      .getByRole("button", { name: "Crianças: 2", exact: true })
+      .click();
+    let dialog = page.locator("[data-admin-modal]");
+    await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(2);
+    await expect(
+      dialog.getByLabel("Buscar convidado por nome", { exact: true }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    for (const [label, title, names] of categories.filter(
+      (c) => c[0] !== "Convites não enviados",
+    )) {
+      await page
+        .getByRole("button", { name: `${label}: ${names.length}`, exact: true })
+        .click();
+      dialog = page.getByRole("dialog", {
+        name: `${title} — ${names.length}`,
+        exact: true,
+      });
+      const search = dialog.getByLabel("Buscar convidado por nome", {
+        exact: true,
+      });
+      await search.fill(names[0]!.split(" ")[0]!.toLowerCase());
+      await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(1);
+      await expect(dialog).toHaveAttribute(
+        "aria-label",
+        `${title} — ${names.length}`,
+      );
+      await search.fill("Pessoa que não pertence a este card");
+      await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(0);
+      await search.fill("");
+      await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(
+        names.length,
+      );
+      const close = dialog.getByRole("button", {
+        name: "Fechar modal",
+        exact: true,
+      });
+      expect(
+        await close.evaluate((n) => getComputedStyle(n).borderTopWidth),
+      ).toBe("0px");
+      const box = await close.boundingBox();
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      await close.focus();
+      await page.keyboard.press("Enter");
+      await expect(dialog).toHaveCount(0);
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+    }
+    expect(await page.evaluate(() => localStorage.getItem("demo-db"))).toBe(
+      before,
+    );
+    await page
+      .getByRole("button", { name: "Confirmados: 1", exact: true })
+      .click();
+    dialog = page.locator("[data-admin-modal]");
+    await dialog
+      .getByLabel("Alterar confirmação de presença de Ana Confirmada", {
+        exact: true,
+      })
+      .selectOption("DECLINED");
+    await expect(dialog.locator("[data-dashboard-guest]")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("button", { name: "Confirmados: 0", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Não irão: 2", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Não irão: 2", exact: true })
+      .click();
+    dialog = page.locator("[data-admin-modal]");
+    await expect(
+      dialog.getByLabel("Alterar confirmação de presença de Ana Confirmada", {
+        exact: true,
+      }),
+    ).toHaveValue("DECLINED");
+    await page.screenshot({
+      path: `/tmp/dashboard-rsvp-${width}.png`,
+      animations: "disabled",
+    });
+    expect(await dialog.evaluate((n) => n.scrollWidth <= n.clientWidth)).toBe(
+      true,
+    );
+    await page.keyboard.press("Escape");
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Não irão: 2", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Convidados", exact: true }).click();
+    await expect(
+      page.getByLabel("Alterar confirmação de presença de Ana Confirmada", {
+        exact: true,
+      }),
+    ).toHaveValue("DECLINED");
+  });
+
+for (const width of [320, 1280])
+  test(`children grid and long-name search retain layout at ${width}px`, async ({
+    page,
+  }) => {
+    await setup(page, width);
+    const name =
+      "Ana Confirmada de Albuquerque Cavalcante Pinto Paiva e Sobrenomes Extensos";
+    await page.evaluate((name) => {
+      const db = JSON.parse(localStorage.getItem("demo-db")!);
+      db.snapshot.guests[0].name = name;
+      db.snapshot.guests[0].is_child = true;
+      localStorage.setItem("demo-db", JSON.stringify(db));
+    }, name);
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Crianças: 1", exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `/tmp/dashboard-children-grid-${width}.png`,
+      animations: "disabled",
+    });
+    await page
+      .getByRole("button", { name: "Confirmados: 1", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Convidados confirmados — 1",
+      exact: true,
+    });
+    await dialog
+      .getByLabel("Buscar convidado por nome", { exact: true })
+      .fill("ALBUQUERQUE");
+    await expect(dialog.getByText(name, { exact: true })).toBeVisible();
+    await expect(
+      dialog.getByLabel(`Alterar confirmação de presença de ${name}`, {
+        exact: true,
+      }),
+    ).toHaveValue("CONFIRMED");
+    expect(await dialog.evaluate((n) => n.scrollWidth <= n.clientWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: `/tmp/dashboard-search-long-${width}.png`,
       animations: "disabled",
     });
   });
