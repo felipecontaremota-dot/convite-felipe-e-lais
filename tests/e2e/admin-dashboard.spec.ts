@@ -70,7 +70,6 @@ const categories = [
   ],
   ["Confirmados", "Convidados confirmados", ["Ana Confirmada"]],
   ["Não irão", "Convidados que não irão", ["Bruno Ausente"]],
-  ["Pendentes", "Convidados pendentes", ["Davi Pendente"]],
   ["Talvez irão", "Convidados que talvez irão", ["Carla Indecisa"]],
   ["Convites não enviados", "Convites não enviados", ["Ana Confirmada"]],
 ] as const;
@@ -130,7 +129,11 @@ for (const width of [320, 1280]) {
         "hidden",
       );
     }
-    for (const label of ["Presentes", "Check-ins", "Famílias já ativadas"])
+    for (const label of [
+      "Lista de presentes",
+      "Check-ins",
+      "Famílias já ativadas",
+    ])
       await expect(
         page.getByRole("button", { name: new RegExp(`^${label}:`) }),
       ).toHaveCount(0);
@@ -194,12 +197,6 @@ test("Dashboard updates after refresh and shows every empty category", async ({
       "Convidados que não irão",
       "",
       "Nenhum convidado informou que não poderá comparecer.",
-    ],
-    [
-      "Pendentes",
-      "Convidados pendentes",
-      "",
-      "Todos os convidados já responderam!",
     ],
     [
       "Talvez irão",

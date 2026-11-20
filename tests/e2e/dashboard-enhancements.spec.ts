@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { dashboardTooltips } from "../../src/features/admin/dashboardTooltips";
 for (const width of [320, 1280]) {
-  test(`all fifteen metric explanations and independent help targets at ${width}px`, async ({
+  test(`all fourteen metric explanations and independent help targets at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -9,7 +9,7 @@ for (const width of [320, 1280]) {
     await page
       .getByRole("button", { name: "Demo noivos", exact: true })
       .click();
-    await expect(page.locator("[data-metric]")).toHaveCount(15);
+    await expect(page.locator("[data-metric]")).toHaveCount(14);
     const contained = await page.locator("[data-metric]").evaluateAll((nodes) =>
       nodes.every((node) => {
         const outer = node.getBoundingClientRect(),
@@ -18,7 +18,10 @@ for (const width of [320, 1280]) {
       }),
     );
     expect(contained).toBe(true);
-    for (const [label, text] of Object.entries(dashboardTooltips)) {
+    for (const [key, text] of Object.entries(dashboardTooltips).filter(
+      ([key]) => key !== "Pendentes",
+    )) {
+      const label = key === "Presentes" ? "Lista de presentes" : key;
       const help = page.getByRole("button", {
         name: `Sobre ${label}`,
         exact: true,

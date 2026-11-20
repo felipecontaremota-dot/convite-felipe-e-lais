@@ -14,10 +14,12 @@ export function MetricTooltip({
   label,
   text,
   children,
+  featured = false,
 }: {
   label: string;
   text: string;
   children: ReactNode;
+  featured?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [shown, setShown] = useState(false);
@@ -87,8 +89,8 @@ export function MetricTooltip({
       style={{
         flexGrow: 1,
         alignSelf: "stretch",
-        minWidth: 145,
-        flexBasis: 145,
+        minWidth: featured ? 0 : 145,
+        flexBasis: featured ? "auto" : 145,
         position: "relative",
         display: "flex",
       }}
@@ -133,7 +135,7 @@ export function MetricTooltip({
           height: 44,
           border: 0,
           background: "transparent",
-          color: theme.colors.secondary,
+          color: featured ? theme.colors.card : theme.colors.secondary,
           borderRadius: 12,
           cursor: "help",
           fontSize: 17,

@@ -364,7 +364,9 @@ export function Screen({
           {slots.headerAccessory || slots.titleAccessory}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {focused && section === "guest" && pathname !== "/inicio" ? (
+          {focused &&
+          (section === "admin" ||
+            (section === "guest" && pathname !== "/inicio")) ? (
             <CompactCountdown
               startsAt={app.data?.event.starts_at || WEDDING_START}
             />

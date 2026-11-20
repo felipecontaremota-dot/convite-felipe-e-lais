@@ -66,6 +66,117 @@ export function AdminHome() {
       ).length,
     ],
   ];
+  const renderMetric = (label: string, featured = false) => {
+    const value = counts.find(([key]) => key === label)?.[1];
+    const displayLabel = label === "Presentes" ? "Lista de presentes" : label;
+    const category = categories[label],
+      action = navigate[label];
+    const content = (
+      <>
+        {featured ? (
+          <>
+            <Text
+              style={[
+                styles.text,
+                { color: theme.colors.card, paddingRight: 24 },
+              ]}
+            >
+              Confirmados
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "baseline",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              <Text
+                style={[
+                  styles.title,
+                  { color: theme.colors.card, fontSize: 46 },
+                ]}
+              >
+                {value || 0}
+              </Text>
+              <Text style={[styles.text, { color: theme.colors.card }]}>
+                convidados confirmados
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.title}>{value || 0}</Text>
+            <Text style={styles.text}>{displayLabel}</Text>
+          </>
+        )}
+      </>
+    );
+    const card =
+      category || action ? (
+        <Pressable
+          key={label}
+          accessibilityRole="button"
+          accessibilityLabel={`${displayLabel}: ${value || 0}`}
+          {...(Platform.OS === "web"
+            ? { dataSet: { dashboardCard: "true" } }
+            : {})}
+          onHoverIn={() => setHoveredCard(label)}
+          onHoverOut={() => setHoveredCard(null)}
+          onPress={() => {
+            if (action) action();
+            else {
+              if (Platform.OS === "web")
+                setTrigger(document.activeElement as HTMLElement | null);
+              setSelected(category!);
+            }
+          }}
+          style={({ pressed }) => [
+            styles.card,
+            {
+              flexGrow: 1,
+              minWidth: 0,
+              flexShrink: 1,
+              width: "100%",
+              borderColor: featured ? theme.colors.primary : theme.colors.line,
+              backgroundColor: featured
+                ? pressed
+                  ? theme.colors.primaryActive
+                  : hoveredCard === label
+                    ? theme.colors.primaryHover
+                    : theme.colors.primary
+                : pressed
+                  ? theme.colors.line
+                  : hoveredCard === label
+                    ? theme.colors.wash
+                    : theme.colors.card,
+            },
+          ]}
+        >
+          {content}
+        </Pressable>
+      ) : (
+        <View
+          key={label}
+          style={[
+            styles.card,
+            { flexGrow: 1, flexShrink: 1, minWidth: 0, width: "100%" },
+          ]}
+        >
+          {content}
+        </View>
+      );
+    return (
+      <MetricTooltip
+        key={label}
+        label={displayLabel}
+        featured={featured}
+        text={dashboardTooltips[label]!}
+      >
+        {card}
+      </MetricTooltip>
+    );
+  };
   return (
     <Screen section="admin" title="O nosso casamento, em cada detalhe">
       {Platform.OS === "web" &&
@@ -78,74 +189,23 @@ export function AdminHome() {
         @media(prefers-reduced-motion:reduce) { [data-dashboard-card], [data-metric-tooltip] { transition:none!important; animation:none!important; } }
       `,
         )}
-      <View style={styles.row}>
-        {counts.map(([label, value]) => {
-          const category = categories[label],
-            action = navigate[label];
-          const content = (
-            <>
-              <Text style={styles.title}>{value || 0}</Text>
-              <Text style={styles.text}>{label}</Text>
-            </>
-          );
-          const card =
-            category || action ? (
-              <Pressable
-                key={label}
-                accessibilityRole="button"
-                accessibilityLabel={`${label}: ${value || 0}`}
-                {...(Platform.OS === "web"
-                  ? { dataSet: { dashboardCard: "true" } }
-                  : {})}
-                onHoverIn={() => setHoveredCard(label)}
-                onHoverOut={() => setHoveredCard(null)}
-                onPress={() => {
-                  if (action) action();
-                  else {
-                    if (Platform.OS === "web")
-                      setTrigger(document.activeElement as HTMLElement | null);
-                    setSelected(category!);
-                  }
-                }}
-                style={({ pressed }) => [
-                  styles.card,
-                  {
-                    flexGrow: 1,
-                    minWidth: 0,
-                    flexShrink: 1,
-                    width: "100%",
-                    backgroundColor: pressed
-                      ? theme.colors.line
-                      : hoveredCard === label
-                        ? theme.colors.wash
-                        : theme.colors.card,
-                  },
-                ]}
-              >
-                {content}
-              </Pressable>
-            ) : (
-              <View
-                key={label}
-                style={[
-                  styles.card,
-                  { flexGrow: 1, flexShrink: 1, minWidth: 0, width: "100%" },
-                ]}
-              >
-                {content}
-              </View>
-            );
-          return (
-            <MetricTooltip
-              key={label}
-              label={label}
-              text={dashboardTooltips[label]!}
-            >
-              {card}
-            </MetricTooltip>
-          );
-        })}
-      </View>
+      {renderMetric("Confirmados", true)}
+      {[
+        ["Na lista", "Convidados", "Talvez irão", "Não irão"],
+        [
+          "Famílias",
+          "Crianças",
+          "Convidados da noiva",
+          "Convidados do noivo",
+          "Presentes",
+          "Mensagens não lidas",
+        ],
+        ["Check-ins", "Convites não enviados", "Famílias já ativadas"],
+      ].map((labels, index) => (
+        <View key={index} style={styles.row}>
+          {labels.map((label) => renderMetric(label))}
+        </View>
+      ))}
       {selected ? (
         <DashboardDetailsModal
           key={selected}
