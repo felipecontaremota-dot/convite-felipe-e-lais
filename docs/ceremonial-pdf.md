@@ -6,9 +6,12 @@
 snapshot/export data. It uses the canonical `adminRsvpStatus` (`CONFIRMED` only),
 `party_role`, invitation family name and `admin_notes`. It reuses existing export
 filter semantics without modifying the Excel writer, rows, filters or permissions.
-Sorting in pt-BR precedes numbering. The three summary counts use only the final
+Sorting in pt-BR precedes numbering. The four summary counts use only the final
 PDF projection. ADMIN and CEREMONIALIST get the same safe PDF fields; neither PDF
-contains contacts, links, PINs or QR data.
+contains contacts, links, PINs or QR data. Children are counted from the existing
+`is_child` flag within this confirmed projection and remain included in its total.
+No age calculation or reclassification is performed. The PDF columns are
+Nº, Convidado, Família, Criança, Padrinho, Check-in; child “Sim” is bold.
 
 The restricted RPC deliberately omits notes. `GuestExportButton` uses notes already
 authorized in the operational snapshot, matching guest ID and event, without a

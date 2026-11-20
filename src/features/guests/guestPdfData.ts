@@ -8,7 +8,7 @@ import {
 // Deliberately smaller than the Excel projection: no contacts/access credentials.
 export interface GuestPdfRow {
   name: string;
-  side: string;
+  child: boolean;
   family: string;
   party: boolean;
   note: string;
@@ -45,11 +45,7 @@ export function guestPdfRows(
       )
       .map((g) => ({
         name: g.name,
-        side: /\bnoiva\b/i.test(g.group_label)
-          ? "Noiva"
-          : /\bnoivo\b/i.test(g.group_label)
-            ? "Noivo"
-            : "—",
+        child: g.is_child === true,
         family:
           units.get(g.invitation_id)?.kind === "INDIVIDUAL"
             ? "—"
@@ -63,6 +59,7 @@ export function guestPdfRows(
 export function guestPdfSummary(rows: GuestPdfRow[]) {
   return {
     confirmed: rows.length,
+    children: rows.filter((r) => r.child).length,
     party: rows.filter((r) => r.party).length,
     notes: rows.filter((r) => r.note.trim()).length,
   };

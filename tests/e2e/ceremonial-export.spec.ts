@@ -159,7 +159,7 @@ for (const width of [320, 390, 768, 1280])
     expect(text).toContain("Ágata Operacional");
     expect(text).toContain("OBSERVAÇÃO: Orientação atualizada pelos noivos");
     expect(text).toContain(
-      "1 convidados confirmados | 0 Padrinhos | 1 Observações",
+      "1 convidados confirmados | 0 Crianças | 0 Padrinhos | 1 Observações",
     );
     expect(text).not.toMatch(
       /restricted@example.test|62999999999|WhatsApp|E-mail|Senha/,

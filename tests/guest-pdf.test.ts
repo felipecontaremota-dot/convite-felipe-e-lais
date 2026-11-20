@@ -15,7 +15,7 @@ const row = (name = "Cláudia & Laís", note = ""): GuestPdfRow => ({
   name,
   note,
   family: "Família Silva",
-  side: "Noiva",
+  child: false,
   party: true,
 });
 const data = {
@@ -136,9 +136,13 @@ describe("ceremonial PDF", () => {
     const rows = guestPdfRows(data, ["Todos"]);
     expect(rows.map((r) => r.name)).toEqual(["Ágata", "Zélia"]);
     expect(rows[0]!.note).toBe("  Nota integral\nSegunda linha  ");
-    expect(rows[0]!.side).toBe("Noiva");
-    expect(rows[1]!.side).toBe("Noivo");
-    expect(guestPdfSummary(rows)).toEqual({ confirmed: 2, party: 1, notes: 1 });
+    expect(rows.every((r) => r.child === false)).toBe(true);
+    expect(guestPdfSummary(rows)).toEqual({
+      confirmed: 2,
+      children: 0,
+      party: 1,
+      notes: 1,
+    });
     expect(JSON.stringify(rows)).not.toMatch(
       /private|4778|62999999999|secreta/,
     );
@@ -153,6 +157,86 @@ describe("ceremonial PDF", () => {
     expect(guestPdfRows(data, ["Padrinho/Madrinha"])).toHaveLength(1);
     expect(guestPdfRows(data, ["Convidado(a) da noiva"])).toHaveLength(1);
     expect(guestPdfRows(data, [])).toEqual([]);
+  });
+  it("counts only existing child flags among included confirmed guests, without reducing confirmed totals", () => {
+    const s = {
+      ...data,
+      guests: data.guests.map((g) => ({
+        ...g,
+        is_child: ["a", "b", "c", "d", "x"].includes(g.id),
+      })),
+    };
+    const before = JSON.stringify(s);
+    const rows = guestPdfRows(s, ["Todos"]);
+    expect(rows.map((r) => r.name)).toEqual(["Ágata", "Zélia"]);
+    expect(rows.map((r) => r.child)).toEqual([true, false]);
+    expect(guestPdfSummary(rows)).toEqual({
+      confirmed: 2,
+      children: 1,
+      party: 1,
+      notes: 1,
+    });
+    expect(
+      guestPdfRows({ ...s, role: "CEREMONIALIST", contacts: [] }, ["Todos"]),
+    ).toEqual(rows);
+    expect(
+      guestPdfSummary(guestPdfRows(s, ["Padrinho/Madrinha"])).children,
+    ).toBe(0);
+    expect(JSON.stringify(s)).toBe(before);
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      ...row(`Pessoa ${i}`),
+      child: i >= 58,
+      party: i < 7,
+      note: i < 10 ? "Nota" : "",
+    }));
+    expect(guestPdfSummary(many)).toEqual({
+      confirmed: 60,
+      children: 2,
+      party: 7,
+      notes: 10,
+    });
+  });
+  it("renders the new six columns, bold child Sim only and four summary indicators on one line", async () => {
+    const rows = [
+      {
+        ...row("Criança legada de 10 anos", "Observação integral"),
+        child: true,
+        party: false,
+      },
+      row("Adulto padrinho"),
+    ];
+    const pages = await readPdf(guestPdf(rows, date, pdfMonogram));
+    const page = pages[0]!;
+    expect(page.text).toContain(
+      "Nº Convidado Família Criança Padrinho Check-in",
+    );
+    expect(page.text).not.toContain("Convidado de");
+    expect(page.text).toContain(
+      "2 convidados confirmados | 1 Crianças | 1 Padrinhos | 1 Observações",
+    );
+    const mm = 72 / 25.4;
+    const childColumn = page.items.filter(
+      (t) =>
+        ["Sim", "Não"].includes(t.str) &&
+        Math.abs(t.transform[4] + t.width / 2 - 150.5 * mm) < 1,
+    );
+    expect(childColumn.map((t) => t.str)).toEqual(["Sim", "Não"]);
+    const normal = page.items.find(
+      (t) => t.str === "Adulto padrinho",
+    )!.fontName;
+    const bold = page.items.find((t) =>
+      t.str.includes("OBSERVAÇÃO:"),
+    )!.fontName;
+    expect(childColumn[0]!.fontName).toBe(bold);
+    expect(childColumn[1]!.fontName).toBe(normal);
+    expect(bold).not.toBe(normal);
+    const summary = page.items.find((t) =>
+      t.str.includes("convidados confirmados"),
+    )!;
+    expect(summary.str).toContain("Crianças");
+    expect(summary.str).toContain("Observações");
+    expect(summary.transform[4]).toBeGreaterThanOrEqual(15 * mm);
+    expect(summary.transform[4] + summary.width).toBeLessThanOrEqual(195 * mm);
   });
   it("keeps homonyms attached to their own unit and observation; absent family is an em dash", () => {
     const same = {
@@ -193,7 +277,7 @@ describe("ceremonial PDF", () => {
     expect(page.text).toContain("Lista de Convidados — Cerimonial");
     expect(page.text).toContain("15 · 12 · 2026");
     expect(page.text).toContain(
-      "0 convidados confirmados | 0 Padrinhos | 0 Observações",
+      "0 convidados confirmados | 0 Crianças | 0 Padrinhos | 0 Observações",
     );
     expect(page.text).toContain("Nenhum convidado confirmado até o momento.");
     expect(page.text).toContain("Lista gerada em: 10/11/2026 às 16:56");
@@ -255,8 +339,9 @@ describe("ceremonial PDF", () => {
     expect(text).toContain("125");
     pages.forEach((p, index) => {
       expect(p.text).toContain(
-        "Nº Convidado Convidado de Família Padrinho Check-in",
+        "Nº Convidado Família Criança Padrinho Check-in",
       );
+      expect(p.text).not.toContain("Convidado de");
       expect(p.text).toContain(`Página ${index + 1} de ${pages.length}`);
       if (index) {
         expect(p.text).toContain(

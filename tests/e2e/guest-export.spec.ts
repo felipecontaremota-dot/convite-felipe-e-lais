@@ -336,7 +336,7 @@ test("PDF lists only confirmed guests, canonical notes and no administrative fie
     /Bruno Alencar|Carla Silva|agata@example|WhatsApp|E-mail|Senha/,
   );
   expect(text).toContain(
-    "1 convidados confirmados | 1 Padrinhos | 1 Observações",
+    "1 convidados confirmados | 1 Crianças | 1 Padrinhos | 1 Observações",
   );
   expect(text).toContain(
     "OBSERVAÇÃO: Chegará acompanhada. Orientação integral dos noivos.",
@@ -357,7 +357,7 @@ test("PDF with no confirmed guests downloads an explicit empty document", async 
     .map((p) => p.text)
     .join(" ");
   expect(text).toContain(
-    "0 convidados confirmados | 0 Padrinhos | 0 Observações",
+    "0 convidados confirmados | 0 Crianças | 0 Padrinhos | 0 Observações",
   );
   expect(text).toContain("Nenhum convidado confirmado até o momento.");
   expect(text).not.toContain("Bruno Alencar");

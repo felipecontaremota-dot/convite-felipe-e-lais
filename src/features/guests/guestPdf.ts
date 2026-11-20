@@ -7,12 +7,12 @@ import {
   type GuestPdfRow,
 } from "./guestPdfData";
 
-const columns = [9, 62, 25, 47, 22, 15];
+const columns = [9, 68, 49, 19, 20, 15];
 const headers = [
   "Nº",
   "Convidado",
-  "Convidado de",
   "Família",
+  "Criança",
   "Padrinho",
   "Check-in",
 ];
@@ -71,7 +71,7 @@ export function guestPdf(
     font(true, 8.5);
     let x = left;
     headers.forEach((text, index) => {
-      const centered = [0, 4, 5].includes(index);
+      const centered = [0, 3, 4, 5].includes(index);
       doc.text(
         text,
         x + (centered ? columns[index]! / 2 : padding),
@@ -111,7 +111,7 @@ export function guestPdf(
   doc.setFillColor(colors.wash);
   doc.roundedRect(left, headingBottom + 32, width, 12, 2, 2, "F");
   center(
-    `${counts.confirmed} convidados confirmados  |  ${counts.party} Padrinhos  |  ${counts.notes} Observações`,
+    `${counts.confirmed} convidados confirmados  |  ${counts.children} Crianças  |  ${counts.party} Padrinhos  |  ${counts.notes} Observações`,
     headingBottom + 39.5,
     9.5,
   );
@@ -123,8 +123,8 @@ export function guestPdf(
     const values = [
       String(index + 1).padStart(2, "0"),
       row.name,
-      row.side,
       row.family,
+      row.child ? "Sim" : "Não",
       row.party ? "Sim" : "Não",
       "",
     ];
@@ -152,7 +152,8 @@ export function guestPdf(
     font();
     let x = left;
     lines.forEach((text, column) => {
-      const centered = [0, 4, 5].includes(column);
+      const centered = [0, 3, 4, 5].includes(column);
+      font(column === 3 && row.child);
       drawLines(
         text,
         x + (centered ? columns[column]! / 2 : padding),
