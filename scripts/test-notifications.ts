@@ -228,8 +228,10 @@ async function main() {
       scheduled_at: new Date(Date.now() + 3600000).toISOString(),
     };
     assert.throws(() => action(f.admin, "NOTIFICATION_SAVE", scheduled));
+    // Isolate manual scheduling from the seed's real wedding date. Automatic
+    // expiry/due rules are exercised below with explicit relative timestamps.
     db.sql(
-      `update events set notification_scheduling_enabled=true where id=${q(f.event)};`,
+      `update events set notification_scheduling_enabled=true,starts_at=now()+interval '365 days' where id=${q(f.event)};`,
     );
     action(f.admin, "NOTIFICATION_SAVE", scheduled);
     action(f.admin, "NOTIFICATION_SAVE", scheduled);
