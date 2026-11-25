@@ -1,3 +1,4 @@
+import { GuestActivityTracker } from "../src/features/activity/GuestActivityTracker";
 import { PartyProvider } from "../src/features/weddingParty/PartyProvider";
 import { ProfileConfirmationGate } from "../src/features/guests/ProfileConfirmationGate";
 import { FxToastProvider } from "../src/components/FxToastProvider";
@@ -17,6 +18,7 @@ export default function Layout() {
   return (
     <QueryClientProvider client={query}>
       <AppProvider>
+        <GuestActivityTracker />
         <InstallProvider>
           <FxToastProvider>
             <ThemeStyles />

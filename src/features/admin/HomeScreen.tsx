@@ -1,3 +1,4 @@
+import { Confirmations } from "../activity/Confirmations";
 import { router } from "expo-router";
 import { createElement, useMemo, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
@@ -178,7 +179,11 @@ export function AdminHome() {
     );
   };
   return (
-    <Screen section="admin" title="O nosso casamento, em cada detalhe">
+    <Screen
+      section="admin"
+      title="O nosso casamento, em cada detalhe"
+      afterLogout={<Confirmations />}
+    >
       {Platform.OS === "web" &&
         createElement(
           "style",

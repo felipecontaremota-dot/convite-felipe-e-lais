@@ -1,3 +1,4 @@
+import { parseActivityPage } from "../features/activity/domain";
 import { simpleError } from "../features/planning/simpleDomain";
 import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import { validMessageId } from "../features/messages/recipients";
@@ -129,6 +130,7 @@ export async function invitationAccess(
   code: string | null,
   pin?: string,
   name?: string,
+  requestId?: string,
 ): Promise<LinkedInvitation | IdentifiedInvitation> {
   const technical =
     pin === undefined
@@ -170,6 +172,7 @@ export async function invitationAccess(
         body: {
           ...(code === null ? { action: "name_pin", name } : { code }),
           event_id: eventId,
+          ...(requestId ? { request_id: requestId } : {}),
           ...(pin === undefined ? { action: "identify" } : { pin }),
         },
       },
@@ -221,8 +224,14 @@ export async function invitationAccess(
 }
 export const identifyInvitation = async (
   code: string,
+  requestId?: string,
 ): Promise<IdentifiedInvitation> =>
-  (await invitationAccess(code)) as IdentifiedInvitation;
+  (await invitationAccess(
+    code,
+    undefined,
+    undefined,
+    requestId,
+  )) as IdentifiedInvitation;
 export const redeem = async (
   code: string,
   pin: string,
@@ -507,3 +516,20 @@ export const guestListExport = () =>
     "guest_list_export",
     { p_event: eventId },
   );
+
+export const guestActivityHistory = async (
+  cursor: import("../features/activity/domain").ActivityCursor | null = null,
+) =>
+  parseActivityPage(
+    await rpc<unknown>("guest_activity_history", {
+      p_event: eventId,
+      p_before: cursor?.at || null,
+      p_cursor: cursor?.id || null,
+    }),
+  );
+export const recordGuestActivity = (kind: string, request: string) =>
+  rpc("record_guest_activity", {
+    p_event: eventId,
+    p_kind: kind,
+    p_request: request,
+  });

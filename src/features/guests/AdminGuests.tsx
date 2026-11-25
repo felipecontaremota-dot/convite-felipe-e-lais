@@ -47,7 +47,7 @@ import {
   listGuests,
   hasDuplicateGuestName,
 } from "./adminDomain";
-function GuestForm({
+export function GuestForm({
   guest,
   onClose,
   onSaved,

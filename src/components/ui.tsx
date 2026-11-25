@@ -314,6 +314,7 @@ const nav = {
   ],
 };
 export function Screen({
+  afterLogout,
   title,
   titleAccessory,
   videoSlots,
@@ -322,6 +323,7 @@ export function Screen({
   children,
 }: {
   title: string;
+  afterLogout?: React.ReactNode;
   titleAccessory?: React.ReactNode;
   videoSlots?: ProposalSlots;
   videoPosition?: "header";
@@ -556,6 +558,7 @@ export function Screen({
           />
         </>
       ) : null}
+      {!guard ? afterLogout : null}
       <Text style={styles.small}>
         Com carinho, Felipe & Laís · Seus dados são usados para organizar o
         casamento.

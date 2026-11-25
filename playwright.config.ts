@@ -17,6 +17,7 @@ export default defineConfig({
     {
       name: "demo",
       testIgnore: [
+        "guest-activity.spec.ts",
         "staff-and-pin.spec.ts",
         "database-admin.spec.ts",
         "access-stabilization.spec.ts",
@@ -32,6 +33,7 @@ export default defineConfig({
     {
       name: "auth",
       testMatch: [
+        "guest-activity.spec.ts",
         "staff-and-pin.spec.ts",
         "database-admin.spec.ts",
         "access-stabilization.spec.ts",

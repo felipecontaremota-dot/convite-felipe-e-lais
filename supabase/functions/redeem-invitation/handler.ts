@@ -9,12 +9,15 @@ interface Dependencies {
   rpc(
     name: string,
     args: Record<string, unknown>,
+    request?: Request,
+    activityRequest?: string,
   ): Promise<{ data: unknown; error: unknown }>;
 }
 export function accessHandler(deps: Dependencies) {
   return async (request: Request) => {
-    if (request.method === "OPTIONS")
+    if (request.method === "OPTIONS") {
       return new Response(null, { headers: cors });
+    }
     if (request.method !== "POST") return json({ code: "method" }, 405);
     let user;
     try {
@@ -39,18 +42,21 @@ export function accessHandler(deps: Dependencies) {
     if (
       !configuredEvent ||
       !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(configuredEvent)
-    )
+    ) {
       return json({ code: "technical" }, 503);
+    }
     if (
       typeof body?.event_id !== "string" ||
       body.event_id.toLowerCase() !== configuredEvent
-    )
+    ) {
       return json(
         { code: named ? "invalid_credentials" : "invalid_link" },
         400,
       );
-    if (body?.action === "password")
+    }
+    if (body?.action === "password") {
       return json({ code: "invalid_credentials" }, 400);
+    }
     if (named) {
       if (
         typeof body.name !== "string" ||
@@ -59,8 +65,9 @@ export function accessHandler(deps: Dependencies) {
         typeof body.pin !== "string" ||
         !/^[0-9]{4}$/.test(body.pin) ||
         body.code !== undefined
-      )
+      ) {
         return json({ code: "invalid_credentials" }, 400);
+      }
       try {
         const origin = deps.sourceAddress?.(request);
         const digest = await crypto.subtle.digest(
@@ -68,9 +75,10 @@ export function accessHandler(deps: Dependencies) {
           new TextEncoder().encode(origin || "unknown"),
         );
         const bucket = origin
-          ? Array.from(new Uint8Array(digest), (b) =>
-              b.toString(16).padStart(2, "0"),
-            ).join("")
+          ? Array.from(
+            new Uint8Array(digest),
+            (b) => b.toString(16).padStart(2, "0"),
+          ).join("")
           : "unknown";
         const { data, error } = await deps.rpc("redeem_invitation_by_name", {
           p_event: configuredEvent,
@@ -78,7 +86,7 @@ export function accessHandler(deps: Dependencies) {
           p_name: body.name,
           p_pin: body.pin,
           p_bucket: bucket,
-        });
+        }, request);
         if (error) return json({ code: "technical" }, 503);
         const bound = data as {
           linked?: boolean;
@@ -98,21 +106,24 @@ export function accessHandler(deps: Dependencies) {
       typeof body.event_id !== "string" ||
       !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(body.event_id) ||
       (body.action !== undefined && !identify)
-    )
+    ) {
       return json({ code: "invalid_link" }, 400);
+    }
     if (
       !identify &&
       (typeof body.pin !== "string" || !/^[0-9]{4}$/.test(body.pin))
-    )
+    ) {
       return json({ code: "invalid_password" }, 400);
+    }
     try {
       // No raw addresses, codes or passwords in logs.
       const digest = await crypto.subtle.digest(
         "SHA-256",
         new TextEncoder().encode(deps.sourceAddress?.(request) || "unknown"),
       );
-      const bucket = Array.from(new Uint8Array(digest), (b) =>
-        b.toString(16).padStart(2, "0"),
+      const bucket = Array.from(
+        new Uint8Array(digest),
+        (b) => b.toString(16).padStart(2, "0"),
       ).join("");
       const args = {
         p_event: body.event_id,
@@ -120,18 +131,31 @@ export function accessHandler(deps: Dependencies) {
         p_code: body.code,
         p_bucket: bucket,
       };
-      const lookup = await deps.rpc("identify_invitation", args);
+      const lookup = await deps.rpc(
+        "identify_invitation",
+        args,
+        request,
+        identify
+          ? (typeof body.request_id === "string" &&
+              /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(
+                body.request_id,
+              )
+            ? body.request_id
+            : crypto.randomUUID())
+          : undefined,
+      );
       if (lookup.error) return json({ code: "technical" }, 503);
       if (!lookup.data) return json({ code: "invalid_link" }, 404);
       if (identify) return json(lookup.data);
       const { data, error } = await deps.rpc("redeem_invitation_link", {
         ...args,
         p_pin: body.pin,
-      });
+      }, request);
       if (error) return json({ code: "technical" }, 503);
       const bound = data as { linked?: boolean; invitation_id?: string } | null;
-      if (bound?.linked !== true || typeof bound.invitation_id !== "string")
+      if (bound?.linked !== true || typeof bound.invitation_id !== "string") {
         return json({ code: "invalid_password" }, 400);
+      }
       return json({ linked: true, invitation_id: bound.invitation_id });
     } catch {
       return json({ code: "technical" }, 503);

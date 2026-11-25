@@ -1,3 +1,4 @@
+import { randomUUID } from "expo-crypto";
 import { theme } from "../../theme/tokens";
 import {
   router,
@@ -141,11 +142,15 @@ export function InvitationAccess() {
     [family, setFamily] = useState<{ code: string; name: string } | null>(null),
     [error, setError] = useState("");
   const identify = app.identify;
+  const visit = useRef<{ code: string; id: string } | null>(null);
   useEffect(() => {
     let active = true;
+    if (!visit.current || visit.current.code !== code)
+      visit.current = { code, id: randomUUID() };
+    const visitId = visit.current.id;
     // Preview never authorizes a new UID or reveals the roster.
     // An already verified link session recovers its responsible before entry.
-    void identify(code)
+    void identify(code, visitId)
       .then((result) => {
         if (!active) return;
         setFamily({ code, name: result.name });

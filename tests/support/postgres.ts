@@ -50,6 +50,7 @@ export class TestPostgres {
   async start(
     baseline:
       | "pre-planning"
+      | "pre-activity"
       | "main"
       | "pre-notifications"
       | "pre-notification-delete"
@@ -96,6 +97,11 @@ export class TestPostgres {
       );
       this.sql(bootstrap);
       const migrations = readdirSync("supabase/migrations");
+      const activityCutoff = migrations.find((f) =>
+        f.endsWith("_guest_activity_history.sql"),
+      );
+      if (baseline === "pre-activity" && !activityCutoff)
+        throw Error("Missing guest activity migration");
       const adminGuestCutoff = migrations.find((f) =>
         f.endsWith("_admin_guest_rsvp_sending.sql"),
       );
@@ -107,25 +113,27 @@ export class TestPostgres {
             f.endsWith(".sql") &&
             !f.endsWith("_notification_scheduler.sql") &&
             (baseline === "main" ||
-              (baseline === "pre-planning"
-                ? f < "20261028192221"
-                : baseline === "pre-notification-delete"
-                  ? f < "20261025201300"
-                  : baseline === "pre-notifications"
-                    ? f < "20261025135720"
-                    : baseline === "pre-party-content"
-                      ? f < "20261024215704"
-                      : baseline === "pre-ticket-replacement"
-                        ? f < "20261024052358"
-                        : baseline === "pre-checkin-actor-role"
-                          ? f < "20261024004410"
-                          : baseline === "pre-checkin-reversal"
-                            ? f < "20261023115359"
-                            : baseline === "pre-admin-guest"
-                              ? f < adminGuestCutoff!
-                              : baseline === "prod-profile"
-                                ? f < "20261013204105"
-                                : f < "20261015033043")),
+              (baseline === "pre-activity"
+                ? f < activityCutoff!
+                : baseline === "pre-planning"
+                  ? f < "20261028192221"
+                  : baseline === "pre-notification-delete"
+                    ? f < "20261025201300"
+                    : baseline === "pre-notifications"
+                      ? f < "20261025135720"
+                      : baseline === "pre-party-content"
+                        ? f < "20261024215704"
+                        : baseline === "pre-ticket-replacement"
+                          ? f < "20261024052358"
+                          : baseline === "pre-checkin-actor-role"
+                            ? f < "20261024004410"
+                            : baseline === "pre-checkin-reversal"
+                              ? f < "20261023115359"
+                              : baseline === "pre-admin-guest"
+                                ? f < adminGuestCutoff!
+                                : baseline === "prod-profile"
+                                  ? f < "20261013204105"
+                                  : f < "20261015033043")),
         )
         .sort()) {
         if (file.endsWith("_wedding_planning.sql"))
@@ -159,6 +167,8 @@ export class TestPostgres {
       `'${String(value).replaceAll("'", "''")}'`;
     const event = `${literal(args.p_event)}::uuid`;
     const expressions: Record<string, string> = {
+      guest_activity_history: `guest_activity_history(${event},${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_cursor == null ? "null" : literal(args.p_cursor)}::uuid)`,
+      record_guest_activity: `record_guest_activity(${event},${literal(args.p_kind)},${literal(args.p_request)}::uuid)`,
       planning_simple_snapshot: `planning_simple_snapshot(${event})`,
       planning_simple_action: `planning_simple_action(${event},${literal(args.p_kind)},${literal(args.p_id)}::uuid,${args.p_version == null ? "null" : literal(args.p_version)}::integer,${literal(JSON.stringify(args.p_values))}::jsonb,${literal(args.p_request)}::uuid)`,
       planning_history: `planning_history(${event},${args.p_entity == null ? "null" : literal(args.p_entity)}::uuid,${args.p_before == null ? "null" : literal(args.p_before)}::timestamptz,${args.p_cursor == null ? "null" : literal(args.p_cursor)}::uuid)`,

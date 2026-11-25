@@ -1,3 +1,4 @@
+import * as Crypto from "expo-crypto";
 import { loadEntrySnapshot, entryLoadMessage } from "../features/auth/entry";
 import type { InvitationSendResult } from "../features/guests/invitationDelivery";
 import React, {
@@ -47,7 +48,10 @@ interface ContextValue {
   enter: (code: string, pin: string) => Promise<void>;
   enterByName: (name: string, pin: string) => Promise<void>;
   resumeEntry: () => Promise<void>;
-  identify: (code: string) => Promise<{ name: string; activated: boolean }>;
+  identify: (
+    code: string,
+    requestId?: string,
+  ) => Promise<{ name: string; activated: boolean }>;
   logout: () => Promise<void>;
   send: (
     type: MutationType,
@@ -549,13 +553,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await writeCache("demo-session", role);
       setDemoRole(role);
     },
-    identify: async (code) => {
+    identify: async (code, requestId) => {
       if (demoEnabled && code === demo.DEMO_CODE)
         return {
           name: "Família Demo",
           activated: (await readCache<Role>("demo-session")) === "GUEST",
         };
-      const result = await api.identifyInvitation(code);
+      const result = await api.identifyInvitation(code, requestId);
       if (result.activated) {
         // Link recovery may bind the registered responsible on the server.
         // Refresh and validate the snapshot before exposing the guest gate.
@@ -595,6 +599,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     },
     logout: async () => {
+      if (!demoRole && projected?.role === "GUEST") {
+        // Best effort, bounded, only the explicit voluntary exit. Never unload/expiry.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          api
+            .recordGuestActivity("LOGOUT", Crypto.randomUUID())
+            .catch(() => undefined),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, 1500);
+          }),
+        ]).finally(() => clearTimeout(timer));
+      }
       entryEpoch.current++;
       await client.cancelQueries({ queryKey: ["snapshot"] });
       setEntryBlocked(false);
