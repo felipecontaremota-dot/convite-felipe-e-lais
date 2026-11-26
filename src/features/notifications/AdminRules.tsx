@@ -1,3 +1,4 @@
+import { TenDayReminder } from "./TenDayReminder";
 import { useState } from "react";
 import { Text } from "react-native";
 import {
@@ -79,6 +80,7 @@ export function RulesScreen() {
       ) : (
         <ScheduledNotifications />
       )}
+      <TenDayReminder />
       <Text style={styles.heading}>Lembretes relativos ao casamento</Text>
       {app.data?.rules.map((r) => (
         <RuleEditor key={r.id} rule={r} />

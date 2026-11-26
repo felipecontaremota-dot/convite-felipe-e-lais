@@ -38,7 +38,7 @@ Deno.test('Vault worker authentication accepts a valid server secret without req
  const {dispatchHandler}=await import('../dispatch-notifications/index.ts');const calls:string[]=[];
  const db={rpc:async(name:string)=>{calls.push(name);return {data:name==='notification_worker_authorized'?true:name==='claim_notifications'?[]:null,error:null};}} as unknown as ReturnType<typeof service>;
  const response=await dispatchHandler({service:()=>db,workerAuthorized:()=>false,eventAdmin:async()=>{throw Error('must not require browser');},provider:()=>{throw Error('must not send');}})(new Request('https://fixture.test',{method:'POST',headers:{'x-worker-secret':'fixture'}}));
- assert(response.status===200&&calls.join(',')==='notification_worker_authorized,schedule_notifications,claim_notifications','trusted background worker');
+ assert(response.status===200&&calls.join(',')==='notification_worker_authorized,schedule_notifications,ten_day_email_work,claim_notifications','trusted background worker');
 });
 
 Deno.test('Web Push library builds encrypted aes128gcm payload and signed VAPID offline in Deno',async()=>{

@@ -17,6 +17,7 @@ export default defineConfig({
     {
       name: "demo",
       testIgnore: [
+        "ten-day-reminder.spec.ts",
         "guest-activity.spec.ts",
         "staff-and-pin.spec.ts",
         "database-admin.spec.ts",
@@ -33,6 +34,7 @@ export default defineConfig({
     {
       name: "auth",
       testMatch: [
+        "ten-day-reminder.spec.ts",
         "guest-activity.spec.ts",
         "staff-and-pin.spec.ts",
         "database-admin.spec.ts",

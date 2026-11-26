@@ -155,7 +155,7 @@ Deno.test("non ADMIN cannot claim jobs; secret worker retains scheduling and ori
   await worker.handler(request());
   assert(
     worker.calls.filter((c) => !c.name.endsWith("notification_attempt")).map((c) => c.name).join(",") ===
-      "schedule_notifications,claim_notifications",
+      "schedule_notifications,ten_day_email_work,claim_notifications",
     "scheduler preserved",
   );
 });

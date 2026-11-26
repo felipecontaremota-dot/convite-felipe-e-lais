@@ -1,3 +1,4 @@
+import { deliverTenDay, scheduleTenDay, tenDayAdminHandler } from "./ten-day.ts";
 import {
   cors,
   eventAdmin,
@@ -18,6 +19,12 @@ export function dispatchHandler(
     }
     if (request.method !== "POST") {
       return json({ error: "unauthorized" }, 401);
+    }
+    // Route only the explicit campaign action; original message delivery stays unchanged.
+    const probe = await request.clone().json().catch(() => null);
+    if (probe?.ten_day) {
+      try { return await tenDayAdminHandler()(request, probe); }
+      catch { return json({ error: "reminder operation failed" }, 503); }
     }
     let worker = deps.workerAuthorized(request);
     // Cron authenticates with a Vault-backed secret. It is never delivered to the app.
@@ -59,6 +66,8 @@ export function dispatchHandler(
     if (worker) {
       const schedule = await db.rpc("schedule_notifications");
       if (schedule.error) return json({ error: "schedule failed" }, 500);
+      // Keep prior scheduling first; a campaign failure cannot block old notifications.
+      try { await scheduleTenDay(db); } catch { /* next tick or ADMIN status */ }
     }
     const { data: jobs, error } = await db.rpc(
       worker ? "claim_notifications" : "claim_event_notifications",
@@ -78,6 +87,12 @@ export function dispatchHandler(
         break;
       }
       const job = claimed[index];
+      if (job.ten_day_campaign_id) {
+        const status = await deliverTenDay(db, job);
+        counts[status]++;
+        results.push({ channel: "EMAIL", status });
+        continue;
+      }
       const lease = {
         p_event: job.event_id,
         p_job: job.id,
